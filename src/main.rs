@@ -9,6 +9,7 @@
 mod app;
 mod desktop;
 mod download;
+mod integration;
 mod server;
 mod updater;
 
@@ -20,6 +21,14 @@ use std::time::Duration;
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> eframe::Result {
+    #[cfg(windows)]
+    {
+        let app_id: Vec<u16> = "IDG.InternetDownloadGO\0".encode_utf16().collect();
+        // SAFETY: a null-terminated UTF-16 constant, valid for this call.
+        unsafe {
+            windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID(app_id.as_ptr());
+        }
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_name("idg-worker")

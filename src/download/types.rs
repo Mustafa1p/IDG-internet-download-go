@@ -66,6 +66,7 @@ pub struct DownloadItem {
     pub headers: reqwest::header::HeaderMap,
     pub awaiting_confirmation: bool,
     pub media_cookies: Option<String>,
+    pub media_options: super::media::MediaOptions,
     /// Resolved filename (from `Content-Disposition` or URL path).
     pub filename: String,
     /// Keep a filename explicitly selected by the user instead of server metadata.
@@ -121,6 +122,7 @@ impl DownloadItem {
             headers: reqwest::header::HeaderMap::new(),
             awaiting_confirmation: false,
             media_cookies: None,
+            media_options: super::media::MediaOptions::default(),
             filename,
             preserve_filename: true,
             save_path,

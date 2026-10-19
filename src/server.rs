@@ -55,6 +55,7 @@ pub struct AddDownloadRequest {
     pub referrer: Option<String>,
     pub cookies: Option<String>,
     pub media_cookies: Option<String>,
+    pub media_options: Option<crate::download::media::MediaOptions>,
     pub user_agent: Option<String>,
 }
 
@@ -150,8 +151,24 @@ async fn add_download(
     }
     item.awaiting_confirmation = req.show_dialog;
     item.media_cookies = req.media_cookies;
+    item.media_options = req.media_options.unwrap_or_default();
 
-    state.downloads.lock().unwrap().push(item);
+    {
+        let mut downloads = state.downloads.lock().unwrap();
+        if state
+            .egui_ctx
+            .data(|data| data.get_temp::<bool>(egui::Id::new("idg-installing")))
+            .unwrap_or(false)
+        {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(
+                    serde_json::json!({"error":"IDG is installing an update. Please retry after it restarts."}),
+                ),
+            );
+        }
+        downloads.push(item);
+    }
 
     let dl = state.downloads.clone();
     let client = state.client.clone();
@@ -208,9 +225,60 @@ async fn show_window(State(state): State<ServerState>) -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
+#[derive(Deserialize)]
+struct ExtensionHeartbeat {
+    version: String,
+    install_type: String,
+}
+async fn extension_heartbeat(
+    State(state): State<ServerState>,
+    Json(report): Json<ExtensionHeartbeat>,
+) -> impl IntoResponse {
+    if report.version.len() > 32 || report.install_type.len() > 32 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error":"Invalid extension report"})),
+        );
+    }
+    let automatic = state
+        .egui_ctx
+        .data(|data| data.get_temp::<bool>(egui::Id::new("extension-auto-update")))
+        .unwrap_or(true);
+    let error = if automatic && report.install_type == "development" {
+        tokio::task::spawn_blocking(crate::integration::synchronize)
+            .await
+            .ok()
+            .and_then(Result::err)
+            .map(|e| e.to_string())
+    } else {
+        None
+    };
+    let reload = automatic
+        && report.install_type == "development"
+        && report.version != crate::APP_VERSION
+        && error.is_none();
+    state.egui_ctx.data_mut(|data| {
+        data.insert_temp(
+            egui::Id::new("extension-connection"),
+            crate::integration::Connection {
+                version: report.version,
+                seen: std::time::Instant::now(),
+                install_type: report.install_type,
+                error,
+            },
+        )
+    });
+    state.egui_ctx.request_repaint();
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"reload":reload,"version":crate::APP_VERSION})),
+    )
+}
+
 pub fn build_router(state: ServerState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/extension/heartbeat", post(extension_heartbeat))
         .route("/show", post(show_window))
         .route("/downloads", post(add_download).get(list_downloads))
         .layer(
@@ -418,6 +486,47 @@ mod tests {
         assert!(bytes.starts_with(b"PK\x03\x04"));
         assert_eq!(item.downloaded_bytes, bytes.len() as u64);
         println!("Downloaded {} ({} bytes)", item.filename, bytes.len());
+    }
+
+    #[tokio::test]
+    async fn installation_defers_browser_downloads_and_extension_sync_can_be_disabled() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = state(directory.path());
+        let context = state.egui_ctx.clone();
+        let downloads = state.downloads.clone();
+        context.data_mut(|data| {
+            data.insert_temp(egui::Id::new("idg-installing"), true);
+            data.insert_temp(egui::Id::new("extension-auto-update"), false);
+        });
+        let (address, task) = serve(build_router(state)).await;
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!("{address}/downloads"))
+            .json(&serde_json::json!({"url":"https://example.com/file.zip"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(downloads.lock().unwrap().is_empty());
+        let response: serde_json::Value = client
+            .post(format!("{address}/extension/heartbeat"))
+            .json(&serde_json::json!({"version":"1.2.1","install_type":"development"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(response["reload"], false);
+        let connection = context
+            .data(|data| {
+                data.get_temp::<crate::integration::Connection>(egui::Id::new(
+                    "extension-connection",
+                ))
+            })
+            .unwrap();
+        assert_eq!(connection.version, "1.2.1");
+        task.abort();
     }
 
     async fn authenticated_file(method: Method, headers: HeaderMap) -> impl IntoResponse {

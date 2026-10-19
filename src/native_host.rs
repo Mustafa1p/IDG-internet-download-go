@@ -1,4 +1,6 @@
 //! Chrome's length-prefixed stdio bridge. Keep stdout exclusively for frames.
+mod update_install;
+
 use serde_json::{Value, json};
 use std::io::{self, Read, Write};
 use std::time::Duration;
@@ -93,6 +95,12 @@ async fn dispatch(client: &reqwest::Client, message: Value) -> anyhow::Result<Va
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("--apply-update") {
+        let plan = std::env::args_os()
+            .nth(2)
+            .ok_or_else(|| anyhow::anyhow!("Update plan is missing"))?;
+        return update_install::supervise(std::path::Path::new(&plan));
+    }
     let client = reqwest::Client::builder()
         .no_proxy()
         .timeout(Duration::from_secs(3))

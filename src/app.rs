@@ -10,10 +10,11 @@ use crate::{
     download::{
         connections::{ConnectionSettings, SharedConnectionSettings},
         engine::start_download,
+        media::{self, MediaFormat, MediaInfo, MediaOptions},
         types::{DownloadItem, Downloads, Status, safe_filename},
     },
     server::{ServerState, run_server},
-    updater::{UpdateInfo, check_for_update},
+    updater::{PreparedUpdate, UpdateInfo, check_for_update},
 };
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -78,6 +79,12 @@ struct AddDialog {
     save_dir: String,
     filename: String,
     filename_edited: bool,
+    media_options: MediaOptions,
+    inspected_url: String,
+    media_info: Option<MediaInfo>,
+    media_error: Option<String>,
+    media_rx: Option<tokio::sync::oneshot::Receiver<Result<MediaInfo, String>>>,
+    media_task: Option<tokio::task::JoinHandle<()>>,
 }
 impl AddDialog {
     fn new(dir: &str) -> Self {
@@ -86,6 +93,20 @@ impl AddDialog {
             save_dir: dir.to_owned(),
             filename: String::new(),
             filename_edited: false,
+            media_options: MediaOptions::default(),
+            inspected_url: String::new(),
+            media_info: None,
+            media_error: None,
+            media_rx: None,
+            media_task: None,
+        }
+    }
+}
+
+impl Drop for AddDialog {
+    fn drop(&mut self) {
+        if let Some(task) = self.media_task.take() {
+            task.abort();
         }
     }
 }
@@ -115,7 +136,16 @@ pub struct IDGApp {
     /// Set by the background update checker when a new version is available.
     update_info: Option<UpdateInfo>,
     /// Receiver for update check results.
-    update_rx: Option<tokio::sync::oneshot::Receiver<Option<UpdateInfo>>>,
+    update_rx: Option<tokio::sync::oneshot::Receiver<Result<Option<UpdateInfo>, String>>>,
+    update_download_rx: Option<tokio::sync::oneshot::Receiver<Result<PreparedUpdate, String>>>,
+    update_progress: Option<tokio::sync::watch::Receiver<f32>>,
+    prepared_update: Option<PreparedUpdate>,
+    update_error: Option<String>,
+    update_status: String,
+    last_update_check: std::time::Instant,
+    auto_download_updates: bool,
+    auto_install_updates: bool,
+    auto_extension_updates: bool,
 }
 
 impl IDGApp {
@@ -139,6 +169,10 @@ impl IDGApp {
         #[cfg(windows)]
         if let Err(error) = desktop::repair_browser_integration() {
             desktop_error = Some(format!("Browser integration: {error}"));
+        }
+        #[cfg(windows)]
+        if let Err(error) = desktop::ensure_startup_default() {
+            desktop_error = Some(format!("Windows startup: {error}"));
         }
         let startup_enabled = desktop::startup_enabled().unwrap_or_else(|error| {
             desktop_error = Some(format!("Could not read Windows startup setting: {error}"));
@@ -177,11 +211,42 @@ impl IDGApp {
         };
         rt.spawn(run_server(srv_state));
 
+        let auto_download_updates = cc
+            .storage
+            .and_then(|s| eframe::get_value(s, "auto_download_updates"))
+            .unwrap_or(true);
+        let auto_install_updates = cc
+            .storage
+            .and_then(|s| eframe::get_value(s, "auto_install_updates"))
+            .unwrap_or(false);
+        let auto_extension_updates = cc
+            .storage
+            .and_then(|s| eframe::get_value(s, "auto_extension_updates"))
+            .unwrap_or(true);
+        cc.egui_ctx.data_mut(|data| {
+            data.insert_temp(
+                egui::Id::new("extension-auto-update"),
+                auto_extension_updates,
+            )
+        });
+        if auto_extension_updates {
+            let context = cc.egui_ctx.clone();
+            rt.spawn_blocking(move || {
+                if let Err(error) = crate::integration::synchronize() {
+                    context.data_mut(|data| {
+                        data.insert_temp(egui::Id::new("idg-extension-error"), error.to_string())
+                    });
+                }
+                context.request_repaint();
+            });
+        }
         // ── Start update checker ─────────────────────────────────────────────
         let (update_tx, update_rx) = tokio::sync::oneshot::channel();
         let update_client = client.clone();
         rt.spawn(async move {
-            let info = check_for_update(&update_client, APP_VERSION).await;
+            let info = check_for_update(&update_client, APP_VERSION)
+                .await
+                .map_err(|e| e.to_string());
             let _ = update_tx.send(info);
         });
 
@@ -208,13 +273,36 @@ impl IDGApp {
             connection_settings_error,
             update_info: None,
             update_rx: Some(update_rx),
+            update_download_rx: None,
+            update_progress: None,
+            prepared_update: None,
+            update_error: dirs::config_dir().and_then(|config| {
+                let path = config.join("IDG/update-error.txt");
+                let error = std::fs::read_to_string(&path).ok();
+                if error.is_some() {
+                    let _ = std::fs::remove_file(path);
+                }
+                error
+            }),
+            update_status: "Checking for updates…".into(),
+            last_update_check: std::time::Instant::now(),
+            auto_download_updates,
+            auto_install_updates,
+            auto_extension_updates,
         }
     }
 
-    fn enqueue(&self, url: String, save_path: PathBuf, preserve_filename: bool) {
+    fn enqueue(
+        &self,
+        url: String,
+        save_path: PathBuf,
+        preserve_filename: bool,
+        options: MediaOptions,
+    ) {
         let segments = self.connection_settings.lock().unwrap().requested_count();
         let mut item = DownloadItem::new(url, save_path, segments);
         item.preserve_filename = preserve_filename;
+        item.media_options = options;
         let id = item.id.clone();
         self.downloads.lock().unwrap().push(item);
         let dl = self.downloads.clone();
@@ -483,7 +571,7 @@ impl IDGApp {
                                     ui.painter()
                                         .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
                                     ui.label(
-                                        RichText::new(if !item.supports_pause() { "Video".into() } else if item.num_segments == 0 {
+                                        RichText::new(if !item.supports_pause() { if item.media_options.format.audio() { "Audio".into() } else { "Video".into() } } else if item.num_segments == 0 {
                                             "Auto".into()
                                         } else {
                                             item.num_segments.to_string()
@@ -597,6 +685,38 @@ impl IDGApp {
             }
         }
 
+        let canonical = media::video_url(&self.dialog.url).unwrap_or_default();
+        if canonical != self.dialog.inspected_url {
+            if let Some(task) = self.dialog.media_task.take() {
+                task.abort();
+            }
+            self.dialog.inspected_url = canonical.clone();
+            self.dialog.media_info = None;
+            self.dialog.media_error = None;
+            self.dialog.media_rx = None;
+            if !canonical.is_empty() {
+                self.inspect_media(ctx);
+            }
+        }
+        if let Some(rx) = self.dialog.media_rx.as_mut()
+            && let Ok(result) = rx.try_recv()
+        {
+            self.dialog.media_rx = None;
+            match result {
+                Ok(info) => {
+                    if !self.dialog.filename_edited {
+                        self.dialog.filename = format!(
+                            "{}.{}",
+                            safe_filename(&info.title),
+                            self.dialog.media_options.format.extension()
+                        );
+                    }
+                    self.dialog.media_info = Some(info);
+                }
+                Err(error) => self.dialog.media_error = Some(error),
+            }
+        }
+
         let mut should_close = false;
 
         egui::Window::new("New download")
@@ -636,6 +756,44 @@ impl IDGApp {
                         self.dialog.filename_edited = false;
                     }
                 });
+
+                if media::video_url(&self.dialog.url).is_some() {
+                    ui.separator();
+                    ui.label(RichText::new("YouTube · choose what to save").strong());
+                    let old_format = self.dialog.media_options.format;
+                    ui.horizontal(|ui| {
+                        ui.label("File type");
+                        egui::ComboBox::from_id_salt("youtube-format")
+                            .selected_text(self.dialog.media_options.format.label())
+                            .show_ui(ui, |ui| { for format in MediaFormat::ALL { ui.selectable_value(&mut self.dialog.media_options.format, format, format.label()); } });
+                        if matches!(self.dialog.media_options.format, MediaFormat::Wav | MediaFormat::Flac) {
+                            ui.label("Lossless conversion (source quality)");
+                        } else if self.dialog.media_options.format.audio() {
+                            ui.label("Audio quality");
+                            let selected = self.dialog.media_options.audio_bitrate.map(|b| format!("{b} kbps")).unwrap_or_else(|| "Best available".into());
+                            egui::ComboBox::from_id_salt("audio-quality").selected_text(selected).show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.dialog.media_options.audio_bitrate, None, "Best available");
+                                for rate in [320, 256, 192, 128, 96] { ui.selectable_value(&mut self.dialog.media_options.audio_bitrate, Some(rate), format!("{rate} kbps")); }
+                            });
+                        } else {
+                            ui.label("Video quality");
+                            let selected = self.dialog.media_options.height.map(|h|format!("Up to {h}p")).unwrap_or_else(||"Best available".into());
+                            egui::ComboBox::from_id_salt("video-quality").selected_text(selected).show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.dialog.media_options.height, None, "Best available");
+                                let heights = self.dialog.media_info.as_ref().map(|info|info.heights.clone()).unwrap_or_else(||vec![2160,1440,1080,720,480,360,240,144]);
+                                for height in heights { ui.selectable_value(&mut self.dialog.media_options.height, Some(height), format!("Up to {height}p")); }
+                            });
+                        }
+                    });
+                    if old_format != self.dialog.media_options.format {
+                        let name = PathBuf::from(&self.dialog.filename).with_extension(self.dialog.media_options.format.extension());
+                        self.dialog.filename = name.to_string_lossy().into_owned();
+                    }
+                    if self.dialog.media_rx.is_some() { ui.horizontal(|ui| { ui.spinner(); ui.label("Checking available video qualities…"); }); }
+                    if let Some(error) = &self.dialog.media_error { ui.colored_label(ORANGE, error); if ui.button("Retry format check").clicked() { self.inspect_media(ctx); } }
+                    ui.label(RichText::new("Video includes audio. MP3 and other audio types are converted; quality is limited by the source.").size(11.0).color(TEXT_DIM));
+                    ui.separator();
+                }
 
                 ui.horizontal(|ui| {
                     ui.add_sized(
@@ -715,6 +873,7 @@ impl IDGApp {
                                         item.filename = safe_filename(&name);
                                         item.save_path = save_path;
                                         item.preserve_filename = self.dialog.filename_edited;
+                                        item.media_options = self.dialog.media_options.clone();
                                         item.awaiting_confirmation = false;
                                     }
                                     drop(downloads);
@@ -736,7 +895,7 @@ impl IDGApp {
                                         }
                                     });
                                 } else {
-                                    self.enqueue(url, save_path, self.dialog.filename_edited);
+                                    self.enqueue(url, save_path, self.dialog.filename_edited, self.dialog.media_options.clone());
                                 }
                                 should_close = true;
                             }
@@ -751,6 +910,192 @@ impl IDGApp {
                 self.downloads.lock().unwrap().retain(|item| item.id != id);
             }
             self.show_add = false;
+            if let Some(task) = self.dialog.media_task.take() {
+                task.abort();
+            }
+        }
+    }
+
+    fn inspect_media(&mut self, ctx: &egui::Context) {
+        if let Some(task) = self.dialog.media_task.take() {
+            task.abort();
+        }
+        let url = self.dialog.url.clone();
+        let cookies = self.pending_browser_id.as_ref().and_then(|id| {
+            self.downloads
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|i| &i.id == id)
+                .and_then(|i| i.media_cookies.clone())
+        });
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.dialog.media_rx = Some(rx);
+        self.dialog.media_error = None;
+        let ctx = ctx.clone();
+        self.dialog.media_task = Some(self.rt.spawn(async move {
+            let result = media::inspect(&url, cookies.as_deref())
+                .await
+                .map_err(|e| e.to_string());
+            let _ = tx.send(result);
+            ctx.request_repaint();
+        }));
+    }
+
+    fn check_updates(&mut self, ctx: &egui::Context) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.update_rx = Some(rx);
+        self.last_update_check = std::time::Instant::now();
+        self.update_error = None;
+        self.update_status = "Checking for updates…".into();
+        let client = self.client.clone();
+        let ctx = ctx.clone();
+        self.rt.spawn(async move {
+            let _ = tx.send(
+                check_for_update(&client, APP_VERSION)
+                    .await
+                    .map_err(|e| e.to_string()),
+            );
+            ctx.request_repaint();
+        });
+    }
+
+    fn download_update(&mut self, ctx: &egui::Context) {
+        let Some(info) = self.update_info.clone() else {
+            return;
+        };
+        if self.update_download_rx.is_some() || self.prepared_update.is_some() {
+            return;
+        }
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (progress_tx, progress_rx) = tokio::sync::watch::channel(0.0);
+        self.update_download_rx = Some(rx);
+        self.update_progress = Some(progress_rx);
+        self.update_error = None;
+        self.update_status = format!("Downloading and verifying IDG {}…", info.version);
+        let client = self.client.clone();
+        let ctx = ctx.clone();
+        self.rt.spawn(async move {
+            let result = crate::updater::prepare_update(&client, &info, progress_tx)
+                .await
+                .map_err(|e| e.to_string());
+            let _ = tx.send(result);
+            ctx.request_repaint();
+        });
+    }
+
+    fn can_install_update(&self) -> bool {
+        !self.show_add
+            && self.downloads.lock().unwrap().iter().all(|item| {
+                matches!(
+                    item.status,
+                    Status::Completed | Status::Failed | Status::Cancelled
+                )
+            })
+    }
+
+    fn install_update(&mut self, ctx: &egui::Context) {
+        ctx.data_mut(|data| data.insert_temp(egui::Id::new("idg-installing"), true));
+        if !self.can_install_update() {
+            ctx.data_mut(|data| data.insert_temp(egui::Id::new("idg-installing"), false));
+            return;
+        }
+        if let Some(update) = self.prepared_update.take() {
+            match crate::updater::install_update(update, self.startup_enabled) {
+                Ok(()) => {
+                    self.exiting = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                Err(error) => {
+                    ctx.data_mut(|data| data.insert_temp(egui::Id::new("idg-installing"), false));
+                    self.update_error = Some(error.to_string());
+                }
+            }
+        }
+    }
+
+    fn poll_updates(&mut self, ctx: &egui::Context) {
+        if let Some(rx) = self.update_rx.as_mut()
+            && let Ok(result) = rx.try_recv()
+        {
+            self.update_rx = None;
+            match result {
+                Ok(info) => {
+                    self.update_status = info
+                        .as_ref()
+                        .map(|info| format!("IDG {} is available", info.version))
+                        .unwrap_or_else(|| "IDG is up to date".into());
+                    self.update_info = info;
+                    if self.auto_download_updates {
+                        self.download_update(ctx);
+                    }
+                }
+                Err(error) => self.update_error = Some(format!("Update check failed: {error}")),
+            }
+        }
+        if let Some(rx) = self.update_download_rx.as_mut()
+            && let Ok(result) = rx.try_recv()
+        {
+            self.update_download_rx = None;
+            self.update_progress = None;
+            match result {
+                Ok(update) => {
+                    self.prepared_update = Some(update);
+                    self.update_status =
+                        "Update verified and ready. IDG will restart after installation.".into();
+                }
+                Err(error) => {
+                    self.update_error = Some(error);
+                }
+            }
+        }
+        if self.auto_install_updates
+            && self.prepared_update.is_some()
+            && self.update_error.is_none()
+            && self.can_install_update()
+        {
+            self.install_update(ctx);
+        }
+        if self.last_update_check.elapsed() > Duration::from_secs(6 * 60 * 60)
+            && self.update_rx.is_none()
+            && self.update_info.is_none()
+        {
+            self.check_updates(ctx);
+        }
+    }
+
+    fn update_controls(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        ui.label(&self.update_status);
+        if let Some(progress) = &self.update_progress {
+            ui.add(
+                egui::ProgressBar::new(*progress.borrow())
+                    .show_percentage()
+                    .animate(true),
+            );
+        }
+        if let Some(error) = &self.update_error {
+            ui.colored_label(RED, error);
+        }
+        if self.prepared_update.is_some() {
+            let ready = self.can_install_update();
+            if ui
+                .add_enabled(ready, egui::Button::new("Install update and restart IDG"))
+                .clicked()
+            {
+                self.install_update(ctx);
+            }
+            if !ready {
+                ui.label("Finish or remove pending and paused downloads before restarting.");
+            }
+        } else if self.update_info.is_some() && self.update_download_rx.is_none() {
+            if ui.button("Update inside IDG").clicked() {
+                self.download_update(ctx);
+            }
+        } else if self.update_error.is_some() && ui.button("Retry update check").clicked() {
+            self.check_updates(ctx);
+        }
+        if let Some(info) = &self.update_info {
+            ui.hyperlink_to("Release notes", &info.release_url);
         }
     }
 
@@ -764,6 +1109,7 @@ impl IDGApp {
             .default_width(460.0)
             .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
             .show(ctx, |ui| {
+                egui::ScrollArea::vertical().max_height((ctx.screen_rect().height() - 120.0).max(220.0)).show(ui, |ui| {
                 ui.style_mut().spacing.item_spacing = Vec2::new(8.0, 8.0);
 
                 ui.horizontal(|ui| {
@@ -829,6 +1175,41 @@ impl IDGApp {
                 }
                 ui.label(RichText::new("Closing the window keeps downloads and browser integration active. Use Quit IDG in the tray menu to exit.").color(TEXT_DIM).size(11.0));
 
+                ui.separator();
+                ui.label(RichText::new("Application updates").strong());
+                ui.checkbox(&mut self.auto_download_updates, "Download and verify new updates automatically");
+                ui.checkbox(&mut self.auto_install_updates, "Install updates automatically when downloads are finished");
+                self.update_controls(ui, ctx);
+                if ui.add_enabled(self.update_rx.is_none() && self.update_download_rx.is_none(), egui::Button::new("Check for updates now")).clicked() { self.check_updates(ctx); }
+                ui.separator();
+                ui.label(RichText::new("IDG Integration Module").strong());
+                ui.label(RichText::new("Reload v1.2.x once after upgrading. Future updates can reload automatically.").size(11.0).color(TEXT_DIM));
+                if let Some(error) = ctx.data(|data| data.get_temp::<String>(egui::Id::new("idg-extension-error"))) { ui.colored_label(RED, error); }
+                if ui.checkbox(&mut self.auto_extension_updates, "Update the detected Chrome / Edge extension with IDG").changed() {
+                    ctx.data_mut(|data| data.insert_temp(egui::Id::new("extension-auto-update"), self.auto_extension_updates));
+                }
+                let connection = ctx.data(|data| data.get_temp::<crate::integration::Connection>(egui::Id::new("extension-connection")));
+                if let Some(connection) = connection.filter(|c| c.seen.elapsed() < Duration::from_secs(150)) {
+                    ui.label(format!("Connected: v{} ({})", connection.version, connection.install_type));
+                    if let Some(error) = connection.error { ui.colored_label(RED, error); }
+                } else {
+                    ui.label("Open the extension popup to connect and report its version.");
+                }
+                if ui.button("Detect and update extension now").clicked() {
+                    self.desktop_error = match crate::integration::synchronize() {
+                        Ok(count) if count > 0 => Some(format!("Updated {count} extension folder(s). Open its popup to reload.")),
+                        Ok(_) => Some("No older unpacked extension found. It may be current; otherwise select its folder below.".into()),
+                        Err(error) => Some(error.to_string()),
+                    };
+                }
+                if ui.button("Choose existing extension folder…").clicked()
+                    && let Some(folder) = rfd::FileDialog::new().pick_folder() {
+                    self.desktop_error = Some(match crate::integration::sync_folder(&folder).and_then(|updated| { crate::integration::remember_folder(&folder)?; Ok(updated) }) {
+                        Ok(_) => "Extension files are current. Reload it in chrome://extensions or edge://extensions, then refresh open pages.".into(),
+                        Err(error) => error.to_string(),
+                    });
+                }
+
                 ui.add_space(4.0);
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -852,6 +1233,7 @@ impl IDGApp {
                             }
                         }
                     });
+                });
                 });
             });
         self.show_settings = open && !saved;
@@ -1008,6 +1390,17 @@ impl IDGApp {
 impl eframe::App for IDGApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, "close_to_tray", &self.close_to_tray);
+        eframe::set_value(
+            storage,
+            "auto_download_updates",
+            &self.auto_download_updates,
+        );
+        eframe::set_value(storage, "auto_install_updates", &self.auto_install_updates);
+        eframe::set_value(
+            storage,
+            "auto_extension_updates",
+            &self.auto_extension_updates,
+        );
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -1039,68 +1432,28 @@ impl eframe::App for IDGApp {
         if !self.show_add
             && let Some(item) = items.iter().find(|item| item.awaiting_confirmation)
         {
-            self.dialog = AddDialog {
-                url: item.url.clone(),
-                filename: item.filename.clone(),
-                filename_edited: item.preserve_filename,
-                save_dir: self.default_save_dir.clone(),
-            };
+            self.dialog = AddDialog::new(&self.default_save_dir);
+            self.dialog.url = item.url.clone();
+            self.dialog.filename = item.filename.clone();
+            self.dialog.filename_edited = item.preserve_filename;
+            self.dialog.media_options = item.media_options.clone();
             self.pending_browser_id = Some(item.id.clone());
             self.selected_id = Some(item.id.clone());
             self.show_add = true;
         }
 
-        // ── Poll update checker ───────────────────────────────────────────────
-        if let Some(rx) = self.update_rx.as_mut()
-            && let Ok(result) = rx.try_recv()
+        self.poll_updates(ctx);
+        if self.update_info.is_some()
+            || self.update_error.is_some()
+            || self.prepared_update.is_some()
         {
-            self.update_info = result;
-            self.update_rx = None;
-        }
-
-        // ── Update available banner ───────────────────────────────────────────
-        if let Some(ref info) = self.update_info.clone() {
             egui::TopBottomPanel::top("update_banner")
                 .frame(
                     Frame::none()
-                        .fill(Color32::from_rgb(30, 80, 40))
-                        .inner_margin(Margin::symmetric(10.0, 4.0)),
+                        .fill(PANEL)
+                        .inner_margin(Margin::symmetric(12.0, 8.0)),
                 )
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new(format!("🆕 IDG {} is available!", info.version))
-                                .size(12.0)
-                                .color(GREEN)
-                                .strong(),
-                        );
-                        let url = info
-                            .installer_url
-                            .clone()
-                            .unwrap_or_else(|| info.release_url.clone());
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new("  Download Update  ").color(Color32::WHITE),
-                                )
-                                .fill(Color32::from_rgb(40, 160, 60))
-                                .rounding(4.0),
-                            )
-                            .clicked()
-                        {
-                            // Start downloading the installer through IDG itself.
-                            let save = PathBuf::from(&self.default_save_dir)
-                                .join(format!("IDG-Setup-v{}.exe", info.version));
-                            self.enqueue(url, save, true);
-                            self.update_info = None;
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("✕").clicked() {
-                                self.update_info = None;
-                            }
-                        });
-                    });
-                });
+                .show(ctx, |ui| self.update_controls(ui, ctx));
         }
 
         if let Some(error) =

@@ -1,3 +1,13 @@
+## 1.3.0 — 2026-10-19
+
+- Add verified in-app update downloads, installation/restart, optional automatic installation when idle, and periodic checks.
+- Reject incomplete/checksum-mismatched update installers; defer browser handoffs during installation and keep queued/paused downloads from being interrupted.
+- Detect and update IDG's existing unpacked Chrome/Edge extension; support a saved custom folder, version reporting, safe reloads, and an automatic-update setting.
+- Add YouTube format/quality choices: MP4/MKV/WebM video with source resolution discovery and MP3/M4A/Opus/WAV/FLAC audio conversion.
+- Embed Windows executable/installer icons, add a consistent taskbar AppUserModelID, and match shortcut identity.
+- Enable tray startup on first portable run and preserve the user's later startup choice.
+- Verify selected 480p MP4/WebM and MP3 conversion with the supplied live YouTube video.
+
 ## 1.2.1 — 2026-10-19
 
 - Resolve redirected download filenames from server metadata instead of saving GitHub archives as main or main.zip.

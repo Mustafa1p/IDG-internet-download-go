@@ -42,6 +42,7 @@ let serverOnline = false;
 let installed = false;
 let connectionError = "";
 let lastHealth = null;
+let activeHandoffs = 0;
 const settingsReady = chrome.storage.local.get({ interceptEnabled: true }).then(settings => {
   interceptEnabled = settings.interceptEnabled;
 });
@@ -71,8 +72,34 @@ async function pingServer() {
   } catch { return false; }
 }
 
+async function reportIntegration() {
+  try {
+    const self = await chrome.management.getSelf();
+    const response = await fetch(`${API_BASE}/extension/heartbeat`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: chrome.runtime.getManifest().version, install_type: self.installType }),
+      signal: AbortSignal.timeout(4000),
+    });
+    if (response.ok) {
+      const update = await response.json();
+      if (update.reload === true && self.installType === "development" && activeHandoffs === 0) {
+        const disk = await fetch(chrome.runtime.getURL("manifest.json"), { cache: "no-store" });
+        const manifest = await disk.json();
+        if (manifest.version === update.version && chrome.runtime.getManifest().version !== update.version && activeHandoffs === 0) chrome.runtime.reload();
+      }
+    }
+  } catch { /* IDG may be closed; polling never launches it. */ }
+}
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === "idg-integration") void reportIntegration();
+});
+chrome.alarms.create("idg-integration", { periodInMinutes: 1 });
+chrome.runtime.onStartup.addListener(() => void reportIntegration());
+void reportIntegration();
+
 async function updateServerStatus() {
   serverOnline = await pingServer();
+  if (serverOnline) await reportIntegration();
   try {
     const response = await nativeRequest({ type: "ping" });
     installed = response.installed;
@@ -113,7 +140,12 @@ function nativeError(message) {
   return message;
 }
 
-async function sendDownloadToIDG(url, filename, referrer, userAgent) {
+async function sendDownloadToIDG(...args) {
+  activeHandoffs++;
+  try { return await sendDownloadRequest(...args); }
+  finally { activeHandoffs--; }
+}
+async function sendDownloadRequest(url, filename, referrer, userAgent) {
   if (!validUrl(url)) return { ok: false, error: "Only HTTP and HTTPS links can be sent to IDG." };
   const youtube = youtubeVideoUrl(url);
   if (youtube) url = youtube;
@@ -166,6 +198,8 @@ chrome.downloads.onCreated.addListener(async item => {
   await settingsReady;
   const url = item.finalUrl || item.url;
   if (item.byExtensionId === chrome.runtime.id || !shouldIntercept(url, item.mime, item.fileSize)) return;
+  activeHandoffs++;
+  try {
   // Leave the original browser download intact if IDG cannot be reached.
   let paused = false;
   try { await chrome.downloads.pause(item.id); paused = true; } catch { return; }
@@ -178,6 +212,7 @@ chrome.downloads.onCreated.addListener(async item => {
   } else if (paused) {
     try { await chrome.downloads.resume(item.id); } catch (error) { console.warn("[IDG] Resume the download in Chrome", error); }
   }
+  } finally { activeHandoffs--; }
 });
 
 chrome.runtime.onInstalled.addListener(async () => {

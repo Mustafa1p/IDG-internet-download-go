@@ -47,6 +47,8 @@ jobs:
         run: node --test tests/extension.test.cjs
       - name: Build release binaries
         run: cargo build --locked --release --bins
+      - name: Test update handover
+        run: python tests/update-smoke.py
       - name: Cache verified media tools
         uses: actions/cache@v4
         with:

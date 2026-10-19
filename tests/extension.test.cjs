@@ -4,12 +4,13 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, native = true, youtube = true } = {}) {
-  const events = {}, calls = [];
+function worker({ online = true, accepts = true, enabled = true, native = true, youtube = true, reload = false, diskVersion = "1.3.1" } = {}) {
+  const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
     runtime: {
-      id: 'idg-test', onInstalled: event('installed'), onMessage: event('message'),
+      id: 'idg-test', onInstalled: event('installed'), onMessage: event('message'), onStartup: event('startup'),
+      getManifest: () => ({ version: '1.3.0' }), getURL: path => `chrome-extension://idg-test/${path}`, reload: () => reports.push('reload'),
       sendNativeMessage(name, message, callback) {
         calls.push(['native', message]);
         if (!native) this.lastError = { message: 'Native host missing' };
@@ -17,6 +18,8 @@ function worker({ online = true, accepts = true, enabled = true, native = true, 
         delete this.lastError;
       },
     },
+    management: { getSelf: async () => ({ installType: 'development' }) },
+    alarms: { onAlarm: event('alarm'), create() {} },
     storage: { local: { get: async () => ({ interceptEnabled: enabled }), set: async value => calls.push(['settings', value]) } },
     action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
     cookies: { getAll: async () => [{ name: 'session', value: 'test-cookie' }] },
@@ -30,6 +33,11 @@ function worker({ online = true, accepts = true, enabled = true, native = true, 
     contextMenus: { onClicked: event('context'), create() {}, removeAll: async () => {} },
   };
   const context = vm.createContext({ chrome, console, URL, AbortSignal, navigator: { userAgent: 'test-agent' }, fetch: async (url, options) => {
+    if (url.endsWith('/extension/heartbeat')) {
+      reports.push(JSON.parse(options.body));
+      return { ok: online, json: async () => ({ reload, version: '1.3.1' }) };
+    }
+    if (url.startsWith('chrome-extension://')) return { ok: true, json: async () => ({ version: diskVersion }) };
     if (url.endsWith('/health')) {
       if (!online) throw new Error('Offline');
       return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube } }) };
@@ -39,7 +47,7 @@ function worker({ online = true, accepts = true, enabled = true, native = true, 
   } });
   vm.runInContext(fs.readFileSync('extension/background.js', 'utf8'), context);
   const message = value => new Promise(resolve => events.message(value, { id: 'idg-test' }, resolve));
-  return { events, calls, message, context };
+  return { events, calls, message, context, reports };
 }
 const download = { id: 17, url: 'https://example.com/file.zip', filename: 'C:\\Downloads\\file.zip', referrer: 'https://example.com/source', mime: 'application/zip', fileSize: 200000 };
 
@@ -137,4 +145,23 @@ test('YouTube blob-player button follows the current SPA video URL', async () =>
   location.href = 'https://www.youtube.com/watch?v=BaW_jenozKc';
   await elements[0].handlers.click({ isTrusted: true, preventDefault() {}, stopPropagation() {} });
   assert.equal(sent[1].url, location.href);
+});
+
+test('extension reports its version and reloads only when its own updated files match', async () => {
+  const updated = worker({ reload: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(updated.reports[0].version, '1.3.0');
+  assert.equal(updated.reports[0].install_type, 'development');
+  assert.ok(updated.reports.includes('reload'));
+  const stale = worker({ reload: true, diskVersion: '1.3.0' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(!stale.reports.includes('reload'));
+});
+
+test('extension reload waits until browser handoffs have finished', async () => {
+  const active = worker({ reload: true });
+  await new Promise(resolve => setImmediate(resolve));
+  active.reports.length = 0;
+  await vm.runInContext('activeHandoffs = 1; reportIntegration()', active.context);
+  assert.ok(!active.reports.includes('reload'));
 });

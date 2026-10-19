@@ -14,6 +14,199 @@ use tokio::{
     process::Command,
 };
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MediaFormat {
+    #[default]
+    Mp4,
+    Mkv,
+    Webm,
+    Mp3,
+    M4a,
+    Opus,
+    Wav,
+    Flac,
+}
+impl MediaFormat {
+    pub const ALL: [Self; 8] = [
+        Self::Mp4,
+        Self::Mkv,
+        Self::Webm,
+        Self::Mp3,
+        Self::M4a,
+        Self::Opus,
+        Self::Wav,
+        Self::Flac,
+    ];
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Mp4 => "mp4",
+            Self::Mkv => "mkv",
+            Self::Webm => "webm",
+            Self::Mp3 => "mp3",
+            Self::M4a => "m4a",
+            Self::Opus => "opus",
+            Self::Wav => "wav",
+            Self::Flac => "flac",
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Mp4 => "MP4 video",
+            Self::Mkv => "MKV video",
+            Self::Webm => "WebM video",
+            Self::Mp3 => "MP3 audio",
+            Self::M4a => "M4A audio",
+            Self::Opus => "Opus audio",
+            Self::Wav => "WAV audio",
+            Self::Flac => "FLAC audio",
+        }
+    }
+    pub fn audio(self) -> bool {
+        !matches!(self, Self::Mp4 | Self::Mkv | Self::Webm)
+    }
+}
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct MediaOptions {
+    pub format: MediaFormat,
+    pub height: Option<u32>,
+    pub audio_bitrate: Option<u32>,
+}
+#[derive(Debug, Clone)]
+pub struct MediaInfo {
+    pub title: String,
+    pub heights: Vec<u32>,
+}
+fn info_from_json(value: &Value) -> MediaInfo {
+    let mut heights: Vec<u32> = value["formats"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|format| {
+            format["vcodec"].as_str().is_some_and(|v| v != "none")
+                && format["has_drm"].as_bool() != Some(true)
+        })
+        .filter_map(|format| {
+            format["height"]
+                .as_u64()
+                .filter(|h| *h > 0 && *h <= 16384)
+                .map(|h| h as u32)
+        })
+        .collect();
+    heights.sort_unstable();
+    heights.dedup();
+    heights.reverse();
+    MediaInfo {
+        title: value["title"].as_str().unwrap_or("YouTube video").into(),
+        heights,
+    }
+}
+fn cookie_file(contents: Option<&str>) -> Result<Option<tempfile::TempPath>> {
+    use std::io::Write;
+    if let Some(contents) = contents {
+        let mut file = tempfile::Builder::new()
+            .prefix("idg-youtube-")
+            .suffix(".txt")
+            .tempfile()?;
+        file.write_all(contents.as_bytes())?;
+        Ok(Some(file.into_temp_path()))
+    } else {
+        Ok(None)
+    }
+}
+pub async fn inspect(url: &str, cookies: Option<&str>) -> Result<MediaInfo> {
+    let tools = tools_dir();
+    inspect_with_tools(url, cookies, &tools).await
+}
+async fn inspect_with_tools(url: &str, cookies: Option<&str>, tools: &Path) -> Result<MediaInfo> {
+    anyhow::ensure!(
+        available_at(tools),
+        "YouTube tools are missing. Install the complete IDG package."
+    );
+    let url = video_url(url).context("Invalid YouTube video URL")?;
+    let cookies = cookie_file(cookies)?;
+    let mut command = Command::new(tools.join("yt-dlp.exe"));
+    #[cfg(windows)]
+    command.creation_flags(0x08000000);
+    command
+        .args([
+            "--ignore-config",
+            "--no-cache-dir",
+            "--no-playlist",
+            "--dump-single-json",
+            "--skip-download",
+            "--socket-timeout",
+            "15",
+            "--retries",
+            "1",
+            "--js-runtimes",
+        ])
+        .arg(format!("deno:{}", tools.join("deno.exe").display()));
+    if let Some(cookies) = cookies.as_deref() {
+        command.arg("--cookies").arg(cookies);
+    }
+    command
+        .arg("--")
+        .arg(url)
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+    let output = tokio::time::timeout(Duration::from_secs(60), command.output())
+        .await
+        .context("Format check timed out. Retry or choose a format below.")??;
+    anyhow::ensure!(
+        output.status.success(),
+        "Could not list formats: {}",
+        String::from_utf8_lossy(&output.stderr)
+            .chars()
+            .take(700)
+            .collect::<String>()
+    );
+    Ok(info_from_json(&serde_json::from_slice(&output.stdout)?))
+}
+fn format_args(options: &MediaOptions) -> Vec<String> {
+    let extension = options.format.extension();
+    if options.format.audio() {
+        let mut args: Vec<String> = [
+            "--format",
+            "ba/b",
+            "--extract-audio",
+            "--audio-format",
+            extension,
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        args.extend([
+            "--audio-quality".into(),
+            options
+                .audio_bitrate
+                .map(|n| format!("{}K", n.clamp(64, 320)))
+                .unwrap_or_else(|| "0".into()),
+        ]);
+        return args;
+    }
+    let limit = options
+        .height
+        .map(|height| format!("[height<={}]", height.clamp(144, 16384)))
+        .unwrap_or_default();
+    let selector = if options.format == MediaFormat::Webm {
+        format!("bv*[ext=webm]{limit}+ba[ext=webm]/b[ext=webm]{limit}")
+    } else if options.format == MediaFormat::Mp4 {
+        format!("bv*[ext=mp4]{limit}+ba[ext=m4a]/b[ext=mp4]{limit}/bv*{limit}+ba/b{limit}")
+    } else {
+        format!("bv*{limit}+ba/b{limit}")
+    };
+    vec![
+        "--format".into(),
+        selector,
+        "--merge-output-format".into(),
+        extension.into(),
+        "--remux-video".into(),
+        extension.into(),
+    ]
+}
+
 /// Strip playlists/radio/tracking parameters. Only supported video pages route to yt-dlp.
 pub fn video_url(value: &str) -> Option<String> {
     let url = reqwest::Url::parse(value).ok()?;
@@ -85,6 +278,7 @@ fn command(
     output: &Path,
     connections: usize,
     cookies: Option<&Path>,
+    options: &MediaOptions,
 ) -> Command {
     let mut command = Command::new(tools.join("yt-dlp.exe"));
     #[cfg(windows)]
@@ -111,14 +305,7 @@ fn command(
     command
         .arg("--js-runtimes")
         .arg(format!("deno:{}", tools.join("deno.exe").display()));
-    command.args([
-        "--format",
-        "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
-        "--merge-output-format",
-        "mp4",
-        "--remux-video",
-        "mp4",
-    ]);
+    command.args(format_args(options));
     command.arg("--concurrent-fragments").arg(
         if connections == 0 {
             8
@@ -188,7 +375,7 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
     tokio::fs::create_dir_all(directory).await?;
     let directory = tokio::fs::canonicalize(directory).await?;
     let filename = safe_filename(&item.filename);
-    let filename = Path::new(&filename).with_extension("mp4");
+    let filename = Path::new(&filename).with_extension(item.media_options.format.extension());
     let output = directory.join(filename);
     anyhow::ensure!(
         !output.exists(),
@@ -217,9 +404,16 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
         item.save_path = output.clone();
         item.filename = output.file_name().unwrap().to_string_lossy().into_owned();
     });
-    let mut child = command(&tools, &url, &output, item.num_segments, cookies.as_deref())
-        .spawn()
-        .context("Could not start the bundled YouTube downloader")?;
+    let mut child = command(
+        &tools,
+        &url,
+        &output,
+        item.num_segments,
+        cookies.as_deref(),
+        &item.media_options,
+    )
+    .spawn()
+    .context("Could not start the bundled YouTube downloader")?;
     let process_id = child.id();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let errors = Arc::new(Mutex::new(VecDeque::<String>::new()));
@@ -342,6 +536,91 @@ mod tests {
     }
 
     #[test]
+    fn format_choices_keep_quality_caps_and_audio_conversion() {
+        for format in MediaFormat::ALL {
+            let options = MediaOptions {
+                format,
+                height: Some(480),
+                audio_bitrate: Some(128),
+            };
+            let args = format_args(&options);
+            if format.audio() {
+                assert!(args.iter().any(|arg| arg == "--extract-audio"));
+                assert!(args.iter().any(|arg| arg == format.extension()));
+                assert!(args.iter().any(|arg| arg == "128K"));
+                assert!(!args.iter().any(|arg| arg == "--remux-video"));
+            } else {
+                assert!(
+                    args[1]
+                        .split('/')
+                        .all(|alternative| alternative.contains("[height<=480]"))
+                );
+                assert!(args.iter().any(|arg| arg == "--remux-video"));
+            }
+        }
+        let info = info_from_json(&serde_json::json!({"title":"Example", "formats":[
+            {"height":1080,"vcodec":"avc1"}, {"height":480,"vcodec":"vp9"},
+            {"height":1080,"vcodec":"vp9"}, {"height":2160,"vcodec":"avc1","has_drm":true},
+            {"height":90,"vcodec":"none"}]}));
+        assert_eq!(info.heights, vec![1080, 480]);
+    }
+
+    #[tokio::test]
+    #[ignore = "Live YouTube format, conversion, and media probe test"]
+    async fn supplied_video_supports_selected_video_quality_and_mp3() {
+        let tools = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/tools");
+        let url = "https://www.youtube.com/watch?v=5TBlPQrcweQ";
+        let info = inspect_with_tools(url, None, &tools).await.unwrap();
+        println!("Available video qualities: {:?}", info.heights);
+        assert!(!info.heights.is_empty());
+        let directory = tempfile::tempdir().unwrap();
+        for format in [MediaFormat::Mp4, MediaFormat::Mp3, MediaFormat::Webm] {
+            let output = directory
+                .path()
+                .join(format!("selected.{}", format.extension()));
+            let mut item = super::super::types::DownloadItem::new(url.into(), output.clone(), 0);
+            item.media_options = MediaOptions {
+                format,
+                height: Some(480),
+                audio_bitrate: Some(128),
+            };
+            let id = item.id.clone();
+            let downloads = Arc::new(Mutex::new(vec![item]));
+            download_with_tools(downloads.clone(), id, tools.clone())
+                .await
+                .unwrap();
+            assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+            let mut command = Command::new(tools.join("ffprobe.exe"));
+            #[cfg(windows)]
+            command.creation_flags(0x08000000);
+            let probe = command
+                .args([
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "stream=codec_type,codec_name,height",
+                    "-of",
+                    "json",
+                ])
+                .arg(&output)
+                .output()
+                .await
+                .unwrap();
+            assert!(probe.status.success());
+            let value: Value = serde_json::from_slice(&probe.stdout).unwrap();
+            let streams = value["streams"].as_array().unwrap();
+            assert!(streams.iter().any(|s| s["codec_type"] == "audio"));
+            if format.audio() {
+                assert!(streams.iter().all(|s| s["codec_type"] != "video"));
+                assert!(streams.iter().any(|s| s["codec_name"] == "mp3"));
+            } else {
+                assert!(streams.iter().any(|s|s["codec_type"] == "video" && s["height"].as_u64().unwrap() <= 480));
+            }
+            println!("Verified {}: {}", format.extension(), value);
+        }
+    }
+
+    #[test]
     fn youtube_pages_are_canonicalized_without_playlists_or_host_spoofing() {
         let expected = "https://www.youtube.com/watch?v=5TBlPQrcweQ";
         assert_eq!(
@@ -371,6 +650,7 @@ mod tests {
             Path::new(r"C:\Downloads\100% video.mp4"),
             0,
             None,
+            &MediaOptions::default(),
         );
         let args: Vec<_> = cmd
             .as_std()

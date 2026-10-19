@@ -152,6 +152,8 @@ pub fn repair_browser_integration() -> anyhow::Result<()> {
 
 #[cfg(windows)]
 pub fn set_startup(enabled: bool) -> std::io::Result<()> {
+    let (preferences, _) = winreg::HKCU.create_subkey(r"Software\IDG")?;
+    preferences.set_value("StartupConfigured", &1u32)?;
     let (key, _) = winreg::HKCU.create_subkey(RUN_KEY)?;
     if enabled {
         key.set_value("IDG", &startup_command(&std::env::current_exe()?))
@@ -174,6 +176,20 @@ pub fn set_startup(_enabled: bool) -> std::io::Result<()> {
         std::io::ErrorKind::Unsupported,
         "Windows startup is unavailable on this platform",
     ))
+}
+
+/// Enable background startup on first portable run; preserve the user's later choice.
+#[cfg(windows)]
+pub fn ensure_startup_default() -> std::io::Result<()> {
+    let (key, _) = winreg::HKCU.create_subkey(r"Software\IDG")?;
+    if key.get_value::<u32, _>("StartupConfigured").unwrap_or(0) == 0 {
+        set_startup(true)?;
+        key.set_value("StartupConfigured", &1u32)?;
+    } else if startup_enabled()? {
+        // Keep the startup entry valid when a portable installation is moved.
+        set_startup(true)?;
+    }
+    Ok(())
 }
 
 /// Capture only our own window handle; it remains valid for the GUI lifetime.
