@@ -1,11 +1,15 @@
 [package]
 name = "idg"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2024"
 
 [[bin]]
 name = "IDG"
 path = "src/main.rs"
+
+[[bin]]
+name = "IDG-native"
+path = "src/native_host.rs"
 
 [profile.release]
 opt-level   = 3
@@ -33,3 +37,9 @@ serde_json = "1.0.154"
 axum = "0.8.9"
 tower-http = { version = "0.7.1", features = ["cors"] }
 
+
+[target.'cfg(windows)'.dependencies]
+tray-icon = "0.26.1"
+winreg = "0.56"
+raw-window-handle = "0.6"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

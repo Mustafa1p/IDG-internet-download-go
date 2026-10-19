@@ -23,9 +23,10 @@ use futures::future::join_all;
 use tokio::{fs::OpenOptions, sync::Mutex};
 
 use crate::download::{
+    connections::choose_count,
     probe::probe,
     segment::{SegmentArgs, run_segment},
-    types::{Downloads, Status, with_item},
+    types::{Downloads, Status, safe_filename, with_item},
 };
 
 // ---------------------------------------------------------------------------
@@ -54,7 +55,7 @@ pub async fn start_download(
     id: String,
 ) -> Result<()> {
     // ── Read the configuration from shared state ─────────────────────────────
-    let (url, save_path, num_segments, cancel, pause) = {
+    let (url, save_path, num_segments, cancel, pause, headers) = {
         let guard = downloads
             .lock()
             .map_err(|_| anyhow::anyhow!("lock poisoned"))?;
@@ -68,10 +69,22 @@ pub async fn start_download(
             item.num_segments,
             item.cancel_flag.clone(),
             item.pause_flag.clone(),
+            item.headers.clone(),
         )
     };
 
     // ── Step 1: Probe ─────────────────────────────────────────────────────────
+    let client = if headers.is_empty() {
+        client
+    } else {
+        Arc::new(
+            reqwest::Client::builder()
+                .default_headers(headers)
+                .connect_timeout(std::time::Duration::from_secs(15))
+                .timeout(std::time::Duration::from_secs(60))
+                .build()?,
+        )
+    };
     with_item(&downloads, &id, |i| i.status = Status::Probing);
 
     let probe_result = probe(&client, &url).await.context("URL probe failed")?;
@@ -80,12 +93,18 @@ pub async fn start_download(
     // different filename via Content-Disposition.
     with_item(&downloads, &id, |i| {
         i.total_bytes = probe_result.content_length;
-        if let Some(ref server_name) = probe_result.filename {
+        if let Some(ref server_name) = probe_result.filename
+            && i.filename == "download"
+        {
             let dir = i.save_path.parent().unwrap_or(std::path::Path::new("."));
-            i.save_path = dir.join(server_name);
-            i.filename = server_name.clone();
+            i.save_path = dir.join(safe_filename(server_name));
+            i.filename = safe_filename(server_name);
         }
-        i.status = Status::Downloading;
+        i.status = if pause.load(std::sync::atomic::Ordering::Relaxed) {
+            Status::Paused
+        } else {
+            Status::Downloading
+        };
     });
 
     // Re-read the (possibly updated) save path.
@@ -108,7 +127,7 @@ pub async fn start_download(
     let file = OpenOptions::new()
         .write(true)
         .create(true)
-        .truncate(false)
+        .truncate(true)
         .open(&save_path)
         .await
         .with_context(|| format!("cannot open output file: {}", save_path.display()))?;
@@ -124,11 +143,12 @@ pub async fn start_download(
     let file = Arc::new(Mutex::new(file));
 
     // ── Step 3 & 4: Divide and spawn segments ─────────────────────────────────
-    let seg_count = if probe_result.supports_multipart() {
-        num_segments
-    } else {
-        1
-    };
+    let seg_count = choose_count(
+        num_segments,
+        probe_result.content_length,
+        probe_result.supports_multipart(),
+    );
+    with_item(&downloads, &id, |item| item.num_segments = seg_count);
     let segments = build_segments(seg_count, probe_result.content_length);
     let final_url = probe_result.final_url.clone();
 
@@ -150,10 +170,15 @@ pub async fn start_download(
             let id = id.clone();
 
             let args = SegmentArgs {
+                client: client.clone(),
                 id: seg_id,
                 url,
                 start,
-                end: Some(end),
+                end: if probe_result.content_length.is_some() && probe_result.accepts_ranges {
+                    Some(end)
+                } else {
+                    None
+                },
                 file,
                 cancel,
                 pause,
@@ -209,6 +234,7 @@ pub async fn start_download(
 fn build_segments(count: usize, total: Option<u64>) -> Vec<(u64, u64)> {
     match total {
         None => vec![(0, u64::MAX / 2)],
+        Some(0) => vec![],
         Some(size) => {
             let chunk = size / count as u64;
             (0..count)

@@ -1,9 +1,9 @@
 {
-  "description": "IDG – Internet Download GO native messaging host",
-  "allowed_origins": [
-    "chrome-extension://REPLACE_WITH_YOUR_EXTENSION_ID/"
-  ],
+  "name": "com.rust_idm.host",
+  "description": "IDG browser integration",
+  "path": "IDG-native.exe",
   "type": "stdio",
-  "path": "C:\\\\Users\\\\User\\\\Desktop\\\\IDG.exe",
-  "name": "com.rust_idm.host"
+  "allowed_origins": [
+    "chrome-extension://blmjnmockbofpnipcniflmalfmiaolcj/"
+  ]
 }

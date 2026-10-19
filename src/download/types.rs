@@ -5,10 +5,7 @@
 
 use std::{
     path::PathBuf,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, Mutex, atomic::AtomicBool},
     time::Instant,
 };
 
@@ -66,6 +63,8 @@ pub struct DownloadItem {
     pub id: String,
     /// Original URL.
     pub url: String,
+    pub headers: reqwest::header::HeaderMap,
+    pub awaiting_confirmation: bool,
     /// Resolved filename (from `Content-Disposition` or URL path).
     pub filename: String,
     /// Absolute path of the output file.
@@ -78,7 +77,7 @@ pub struct DownloadItem {
     pub speed_bps: f64,
     /// Current lifecycle state.
     pub status: Status,
-    /// Number of parallel HTTP segments to use.
+    /// Requested parallel connections (0 = automatic); resolved to the actual count after probing.
     pub num_segments: usize,
     /// Human-readable error message, set when `status == Failed`.
     pub error: Option<String>,
@@ -107,6 +106,8 @@ impl DownloadItem {
         Self {
             id: Uuid::new_v4().to_string(),
             url,
+            headers: reqwest::header::HeaderMap::new(),
+            awaiting_confirmation: false,
             filename,
             save_path,
             total_bytes: None,
@@ -161,16 +162,6 @@ impl DownloadItem {
         let total_in_window: u64 = self.speed_window.iter().map(|(_, b)| b).sum();
         self.speed_bps = total_in_window as f64 / window.as_secs_f64();
     }
-
-    /// Whether the cancel flag has been set.
-    pub fn is_cancelled(&self) -> bool {
-        self.cancel_flag.load(Ordering::Relaxed)
-    }
-
-    /// Whether the pause flag has been set.
-    pub fn is_paused(&self) -> bool {
-        self.pause_flag.load(Ordering::Relaxed)
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -185,9 +176,52 @@ pub fn with_item<F>(downloads: &Downloads, id: &str, f: F)
 where
     F: FnOnce(&mut DownloadItem),
 {
-    if let Ok(mut guard) = downloads.lock() {
-        if let Some(item) = guard.iter_mut().find(|i| i.id == id) {
-            f(item);
+    if let Ok(mut guard) = downloads.lock()
+        && let Some(item) = guard.iter_mut().find(|i| i.id == id)
+    {
+        f(item);
+    }
+}
+
+/// Keep browser and server supplied names inside the selected directory.
+pub fn safe_filename(name: &str) -> String {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or("download");
+    let clean: String = base
+        .chars()
+        .map(|c| {
+            if c.is_control() || "<>:\"|?*".contains(c) {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let clean = clean.trim().trim_end_matches(['.', ' ']);
+    if clean.is_empty() {
+        "download".into()
+    } else {
+        let stem = clean.split('.').next().unwrap_or("").to_ascii_uppercase();
+        if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+            || (stem.len() == 4
+                && (stem.starts_with("COM") || stem.starts_with("LPT"))
+                && matches!(stem.as_bytes()[3], b'1'..=b'9'))
+        {
+            format!("_{clean}")
+        } else {
+            clean.into()
         }
+    }
+}
+
+#[cfg(test)]
+mod filename_tests {
+    use super::*;
+    #[test]
+    fn strips_browser_paths_and_traversal() {
+        assert_eq!(safe_filename(r"C:\Users\me\Downloads\file.zip"), "file.zip");
+        assert_eq!(safe_filename("../../file.zip"), "file.zip");
+        assert_eq!(safe_filename(".."), "download");
+        assert_eq!(safe_filename("CON.txt"), "_CON.txt");
+        assert_eq!(safe_filename("bad:name.zip"), "bad_name.zip");
     }
 }

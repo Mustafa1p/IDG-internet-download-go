@@ -12,7 +12,7 @@ $root = Split-Path $PSScriptRoot -Parent
 # ── 1. Build release binary ──────────────────────────────────────────────────
 Write-Host "`n[1/3] Building IDG release binary..." -ForegroundColor Cyan
 Push-Location $root
-cargo build --release
+cargo build --release --bins
 if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 Pop-Location
 
@@ -31,7 +31,7 @@ if (-not $iscc) {
     Invoke-WebRequest -Uri $innoUrl -OutFile $innoInstaller -UseBasicParsing
 
     Write-Host "     Installing Inno Setup silently..."
-    Start-Process -FilePath $innoInstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+    Start-Process -FilePath $innoInstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -WindowStyle Hidden -Wait
     Remove-Item $innoInstaller -Force
 
     $iscc = @(

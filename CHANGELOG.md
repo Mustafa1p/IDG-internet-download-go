@@ -1,3 +1,24 @@
+## 1.1.0 — 2026-10-19
+
+- Select parallel connections automatically, scaling to 32 for larger files after verifying server byte-range support.
+- Move manual connection counts to Settings and persist them for desktop and browser downloads.
+- Remove the per-download connection slider and show the actual connection count after probing.
+- Use one stream when file size is unknown or a server advertises ranges but ignores them.
+- Publish reproducible locked builds, checked release assets, portable packages, and SHA-256 checksums.
+
+- Keep IDG running in the Windows system tray when its window is closed; add Open IDG and Quit IDG tray actions.
+- Add a current-user Windows startup setting and background startup mode; enable startup by default in the installer.
+- Reopen the existing app on a second launch and restore hidden windows for browser download confirmation.
+
+- Redesigned desktop library and browser popup with clearer actions, search, calmer selection, and connection feedback.
+- Display transfer rates as decimal Mbps and make filenames editable before downloading.
+- Add a real native messaging bridge and stable unpacked extension identity; register Chrome/Edge integration during installation.
+- Pause browser downloads during handoff; resume them if IDG cannot accept the request.
+- Open an IDG confirmation window for browser downloads and forward cookies, referrer, and user agent through probe and segment requests.
+- Correct popup API fields, retain interception settings across worker restarts, and add regression tests.
+- Move the browser API to port 17843 to avoid a verified port 1001 conflict; show bind failures in the desktop UI.
+- Fix duplicate release workflow definitions and package the native bridge.
+
 # Changelog
 
 All notable changes to IDG are documented here.  

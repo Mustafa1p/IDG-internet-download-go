@@ -53,6 +53,7 @@ impl ProbeResult {
 pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     let resp = client
         .head(url)
+        .header("Accept-Encoding", "identity")
         .send()
         .await
         .context("HEAD request failed")?;
@@ -67,6 +68,7 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     ) {
         client
             .get(url)
+            .header("Accept-Encoding", "identity")
             .header("Range", "bytes=0-0")
             .send()
             .await
@@ -75,19 +77,58 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         resp
     };
 
+    let resp = resp
+        .error_for_status()
+        .context("Server rejected download probe")?;
     let final_url = resp.url().to_string();
     let headers = resp.headers().clone();
 
-    let accepts_ranges = headers
+    let mut accepts_ranges = headers
         .get("accept-ranges")
         .and_then(|v| v.to_str().ok())
         .map(|v| v.to_ascii_lowercase().contains("bytes"))
         .unwrap_or(false);
 
     let content_length = headers
-        .get("content-length")
+        .get("content-range")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.trim().parse::<u64>().ok());
+        .and_then(|v| v.rsplit('/').next())
+        .and_then(|v| v.parse::<u64>().ok())
+        .or_else(|| {
+            headers
+                .get("content-length")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.trim().parse::<u64>().ok())
+        });
+
+    // Verify range semantics before spawning workers; advertised support alone
+    // can be incorrect on CDNs/proxies. Never write a full response at a range offset.
+    if let Some(size) = content_length.filter(|size| *size > 0) {
+        if resp.status() == StatusCode::PARTIAL_CONTENT {
+            accepts_ranges = headers
+                .get("content-range")
+                .and_then(|value| value.to_str().ok())
+                .is_some_and(|value| value.trim() == format!("bytes 0-0/{size}"));
+        } else if accepts_ranges {
+            accepts_ranges = match client
+                .get(&final_url)
+                .header("Accept-Encoding", "identity")
+                .header("Range", "bytes=0-0")
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    response.status() == StatusCode::PARTIAL_CONTENT
+                        && response
+                            .headers()
+                            .get("content-range")
+                            .and_then(|value| value.to_str().ok())
+                            .is_some_and(|value| value.trim() == format!("bytes 0-0/{size}"))
+                }
+                Err(_) => false,
+            };
+        }
+    }
 
     let filename = headers
         .get("content-disposition")
@@ -117,13 +158,13 @@ fn filename_from_content_disposition(cd: &str) -> Option<String> {
 
         if lower.starts_with("filename*=") {
             // RFC 5987 extended value: filename*=UTF-8''encoded%20name.zip
-            let val = part.splitn(2, '=').nth(1)?;
+            let val = part.split_once('=')?.1;
             let decoded = percent_decode(val.trim().trim_matches('\''));
             if !decoded.is_empty() {
                 return Some(decoded);
             }
         } else if lower.starts_with("filename=") {
-            let val = part.splitn(2, '=').nth(1)?;
+            let val = part.split_once('=')?.1;
             let clean = val.trim().trim_matches('"').trim_matches('\'');
             if !clean.is_empty() {
                 return Some(clean.to_owned());

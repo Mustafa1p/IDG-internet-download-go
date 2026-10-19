@@ -1,112 +1,37 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>rust-idm</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      width: 320px;
-      font-family: "Segoe UI", sans-serif;
-      background: #1a1a2e;
-      color: #e0e0e0;
-    }
-    header {
-      background: #1976d2;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    header h1 { font-size: 16px; font-weight: 600; }
-    header span { font-size: 12px; opacity: .8; }
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid #2a2a4a;
-    }
-    .toggle-label { font-size: 13px; }
-    /* Toggle switch */
-    .switch { position:relative; display:inline-block; width:42px; height:24px; }
-    .switch input { opacity:0; width:0; height:0; }
-    .slider {
-      position:absolute; cursor:pointer; inset:0;
-      background:#555; border-radius:24px; transition:.3s;
-    }
-    .slider:before {
-      content:""; position:absolute;
-      height:18px; width:18px; left:3px; bottom:3px;
-      background:#fff; border-radius:50%; transition:.3s;
-    }
-    input:checked + .slider { background:#1976d2; }
-    input:checked + .slider:before { transform: translateX(18px); }
+<!doctype html>
 
-    #url-form { padding: 12px 16px; border-bottom: 1px solid #2a2a4a; }
-    #url-form label { font-size: 12px; opacity: .7; }
-    #url-form input {
-      width: 100%; margin-top: 4px; padding: 6px 8px;
-      background: #2a2a4a; border: 1px solid #3a3a6a;
-      border-radius: 4px; color: #e0e0e0; font-size: 13px;
-    }
-    #url-form button {
-      margin-top: 8px; width: 100%; padding: 7px;
-      background: #1976d2; border: none; border-radius: 4px;
-      color: #fff; font-size: 13px; cursor: pointer;
-    }
-    #url-form button:hover { background: #1565c0; }
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 
-    #downloads-list { padding: 8px; max-height: 300px; overflow-y: auto; }
-    .dl-item {
-      background: #2a2a4a; border-radius: 6px; padding: 8px 10px;
-      margin-bottom: 6px; font-size: 12px;
-    }
-    .dl-item .name { font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .dl-item progress { width: 100%; height: 6px; border-radius: 3px; }
-    .dl-item .meta { display: flex; justify-content: space-between; margin-top: 3px; opacity: .7; }
-    .state-badge {
-      display: inline-block; padding: 1px 6px; border-radius: 10px;
-      font-size: 10px; font-weight: 600; text-transform: uppercase;
-    }
-    .state-queued    { background:#455a64; }
-    .state-probing   { background:#f57c00; color:#000; }
-    .state-downloading{ background:#1976d2; }
-    .state-completed { background:#388e3c; }
-    .state-failed    { background:#c62828; }
-    .state-paused    { background:#616161; }
-    footer { padding: 8px 16px; font-size: 11px; opacity: .5; text-align: center; }
-  </style>
-</head>
-<body>
-  <header>
-    <div>
-      <h1>rust-idm</h1>
-      <span>Multi-segment Download Manager</span>
-    </div>
-  </header>
+<title>IDG Integration Module</title>
 
-  <div class="toggle-row">
-    <span class="toggle-label">Intercept downloads</span>
-    <label class="switch">
-      <input type="checkbox" id="toggleIntercept" checked />
-      <span class="slider"></span>
-    </label>
-  </div>
+<style>
 
-  <div id="url-form">
-    <label for="manual-url">Manual URL</label>
-    <input type="text" id="manual-url" placeholder="https://example.com/file.zip" />
-    <button id="add-btn">Add Download</button>
-  </div>
+:root{color-scheme:dark;--bg:#10191e;--surface:#19262d;--border:#33464f;--text:#ecf3f5;--muted:#acbdc5;--accent:#62debf}
 
-  <div id="downloads-list">
-    <p style="opacity:.5; font-size:12px; padding:4px;">No active downloads.</p>
-  </div>
+*{box-sizing:border-box}body{width:380px;margin:0;background:var(--bg);color:var(--text);font:13px/1.5 "Segoe UI",system-ui,sans-serif}
 
-  <footer>rust-idm v1.0 — API: 127.0.0.1:1001</footer>
+header{padding:22px 22px 16px;display:flex;gap:12px;align-items:center}header img{width:40px;height:40px}h1{font-size:18px;margin:0;letter-spacing:0}header p{margin:0;color:var(--muted);font-size:12px}
 
-  <script src="popup.js"></script>
-</body>
-</html>
+main{padding:0 20px 20px}.connection{border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface)}#connection-status{font-weight:600;color:var(--accent)}#connection-detail{font-size:12px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:16px 0}input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);cursor:pointer}
+
+form{border-top:1px solid var(--border);padding-top:16px}label{display:block;margin-bottom:6px}input[type=url]{width:100%;padding:11px 12px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;font:inherit}
+
+button{width:100%;min-height:42px;border:0;border-radius:8px;background:var(--accent);color:#10271f;font:inherit;font-weight:600;cursor:pointer;margin-top:10px;transition:background .18s}button:hover{background:#8cebd3}button:disabled{opacity:.6;cursor:wait}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}#feedback{min-height:20px;color:var(--muted);margin:8px 0}
+
+h2{font-size:12px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);margin-top:18px}.dl-item{padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-top:8px}.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}progress{width:100%;height:5px;accent-color:var(--accent);margin:9px 0}.meta{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:11px}#downloads-list{max-height:270px;overflow:auto}.empty{color:var(--muted)}footer{border-top:1px solid var(--border);padding:12px 20px;color:var(--muted);font-size:11px}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+</style></head><body>
+
+<header><img src="images/icon48.png" alt=""><div><h1>IDG Integration Module</h1><p>Your downloads. In one place.</p></div></header>
+
+<main><div class="connection" role="status"><div id="connection-status">Connecting…</div><div id="connection-detail">Checking the desktop app</div></div>
+
+<div class="toggle-row"><label for="toggleIntercept">Capture browser downloads</label><input type="checkbox" id="toggleIntercept" checked></div>
+
+<form id="url-form"><label for="manual-url">Download link</label><input type="url" id="manual-url" placeholder="https://example.com/file.zip" required><button id="add-btn" type="submit">Download with IDG</button><p id="feedback" role="status" aria-live="polite"></p></form>
+
+<h2>Recent downloads</h2><div id="downloads-list"><p class="empty">Loading downloads…</p></div></main>
+
+<footer>Choose the filename and save location in the IDG window.</footer><script src="popup.js"></script></body></html>

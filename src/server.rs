@@ -1,4 +1,4 @@
-//! Local HTTP API server — listens on `127.0.0.1:1001`.
+//! Local HTTP API server — listens on `127.0.0.1:17843`.
 //!
 //! The browser extension connects here to:
 //! - Check IDG is running (`GET /health`)
@@ -21,8 +21,9 @@ use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 
 use crate::download::{
+    connections::SharedConnectionSettings,
     engine::start_download,
-    types::{DownloadItem, Downloads, Status},
+    types::{DownloadItem, Downloads, Status, safe_filename},
 };
 
 // ---------------------------------------------------------------------------
@@ -35,6 +36,8 @@ pub struct ServerState {
     pub client: Arc<reqwest::Client>,
     pub rt_handle: tokio::runtime::Handle,
     pub default_dir: String,
+    pub egui_ctx: egui::Context,
+    pub connection_settings: SharedConnectionSettings,
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +47,8 @@ pub struct ServerState {
 #[derive(Debug, Deserialize)]
 pub struct AddDownloadRequest {
     pub url: String,
+    #[serde(default)]
+    pub show_dialog: bool,
     pub filename: Option<String>,
     pub save_dir: Option<String>,
     pub segments: Option<usize>,
@@ -78,21 +83,44 @@ async fn add_download(
     State(state): State<ServerState>,
     Json(req): Json<AddDownloadRequest>,
 ) -> impl IntoResponse {
+    if !reqwest::Url::parse(&req.url).is_ok_and(|url| matches!(url.scheme(), "http" | "https")) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Use an HTTP or HTTPS download URL"})),
+        );
+    }
     let save_dir = req.save_dir.unwrap_or(state.default_dir.clone());
     let filename = req
         .filename
         .filter(|f| !f.is_empty())
         .unwrap_or_else(|| filename_from_url(&req.url));
 
-    let save_path = PathBuf::from(&save_dir).join(&filename);
-    let segments = req.segments.unwrap_or(8).clamp(1, 32);
+    let save_path = PathBuf::from(&save_dir).join(safe_filename(&filename));
+    let segments = req
+        .segments
+        .unwrap_or_else(|| state.connection_settings.lock().unwrap().requested_count())
+        .min(32);
 
     let mut item = DownloadItem::new(req.url, save_path, segments);
     let id = item.id.clone();
 
-    // Attach extra headers the extension may have forwarded
-    // (stored in the item for the engine to use; extend DownloadItem if needed)
-    let _ = (req.referrer, req.cookies, req.user_agent); // reserved for future
+    for (name, value) in [
+        ("referer", req.referrer),
+        ("cookie", req.cookies),
+        ("user-agent", req.user_agent),
+    ] {
+        if let Some(value) = value {
+            let Ok(value) = reqwest::header::HeaderValue::from_str(&value) else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": "Invalid request header"})),
+                );
+            };
+            item.headers
+                .insert(reqwest::header::HeaderName::from_static(name), value);
+        }
+    }
+    item.awaiting_confirmation = req.show_dialog;
 
     state.downloads.lock().unwrap().push(item);
 
@@ -100,16 +128,24 @@ async fn add_download(
     let client = state.client.clone();
     let id2 = id.clone();
 
-    state.rt_handle.spawn(async move {
-        if let Err(e) = start_download(client, dl.clone(), id2.clone()).await {
-            crate::download::types::with_item(&dl, &id2, |i| {
-                i.status = Status::Failed;
-                i.error = Some(e.to_string());
-            });
-        }
-    });
-
-    (StatusCode::CREATED, Json(AddDownloadResponse { id }))
+    if !req.show_dialog {
+        state.rt_handle.spawn(async move {
+            if let Err(e) = start_download(client, dl.clone(), id2.clone()).await {
+                crate::download::types::with_item(&dl, &id2, |i| {
+                    i.status = Status::Failed;
+                    i.error = Some(e.to_string());
+                });
+            }
+        });
+    }
+    if req.show_dialog {
+        crate::desktop::show_window(&state.egui_ctx);
+    }
+    state.egui_ctx.request_repaint();
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!(AddDownloadResponse { id })),
+    )
 }
 
 async fn list_downloads(State(state): State<ServerState>) -> impl IntoResponse {
@@ -125,6 +161,7 @@ async fn list_downloads(State(state): State<ServerState>) -> impl IntoResponse {
                 "downloaded_bytes": i.downloaded_bytes,
                 "speed_bps":        i.speed_bps,
                 "status":           format!("{:?}", i.status),
+                "added_at": i.added_at.to_rfc3339(),
             })
         })
         .collect();
@@ -136,25 +173,44 @@ async fn list_downloads(State(state): State<ServerState>) -> impl IntoResponse {
 // ---------------------------------------------------------------------------
 
 /// Build the Axum router.
+async fn show_window(State(state): State<ServerState>) -> StatusCode {
+    crate::desktop::show_window(&state.egui_ctx);
+    StatusCode::NO_CONTENT
+}
+
 pub fn build_router(state: ServerState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/show", post(show_window))
         .route("/downloads", post(add_download).get(list_downloads))
-        .layer(CorsLayer::permissive())
+        .layer(
+            CorsLayer::new()
+                .allow_origin(tower_http::cors::AllowOrigin::predicate(|origin, _| {
+                    origin.as_bytes().starts_with(b"chrome-extension://")
+                }))
+                .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
+                .allow_headers([axum::http::header::CONTENT_TYPE]),
+        )
         .with_state(state)
 }
 
-/// Start the API server in the background.  Binds to `127.0.0.1:1001`.
+/// Start the API server in the background.  Binds to `127.0.0.1:17843`.
 pub async fn run_server(state: ServerState) {
+    let ctx = state.egui_ctx.clone();
     let app = build_router(state);
-    match tokio::net::TcpListener::bind("127.0.0.1:1001").await {
+    match tokio::net::TcpListener::bind("127.0.0.1:17843").await {
         Ok(listener) => {
-            eprintln!("[IDG] API server listening on http://127.0.0.1:1001");
+            eprintln!("[IDG] API server listening on http://127.0.0.1:17843");
             if let Err(e) = axum::serve(listener, app).await {
                 eprintln!("[IDG] API server error: {e}");
             }
         }
-        Err(e) => eprintln!("[IDG] Cannot bind port 1001: {e}"),
+        Err(e) => {
+            let error = format!("Browser integration could not start on port 17843: {e}");
+            eprintln!("[IDG] {error}");
+            ctx.data_mut(|data| data.insert_temp(egui::Id::new("idg-api-error"), error));
+            ctx.request_repaint();
+        }
     }
 }
 
@@ -169,4 +225,278 @@ fn filename_from_url(url: &str) -> String {
         .filter(|s| !s.is_empty())
         .unwrap_or("download")
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::download::connections::ConnectionSettings;
+    use axum::http::{HeaderMap, Method};
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    async fn serve(router: Router) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        let task = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        (address, task)
+    }
+
+    fn state(directory: &std::path::Path) -> ServerState {
+        ServerState {
+            downloads: Arc::new(Mutex::new(Vec::new())),
+            client: Arc::new(reqwest::Client::new()),
+            rt_handle: tokio::runtime::Handle::current(),
+            default_dir: directory.to_string_lossy().into_owned(),
+            egui_ctx: egui::Context::default(),
+            connection_settings: Arc::new(Mutex::new(ConnectionSettings::default())),
+        }
+    }
+
+    #[tokio::test]
+    async fn browser_request_waits_for_confirmation_and_reports_popup_schema() {
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let state = state(&directory);
+        let downloads = state.downloads.clone();
+        let (address, server) = serve(build_router(state)).await;
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!("{address}/downloads"))
+            .json(&serde_json::json!({
+                "url": "https://example.com/file.zip", "filename": "C:\\Downloads\\file.zip",
+                "show_dialog": true, "cookies": "session=abc", "segments": 100
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        {
+            let items = downloads.lock().unwrap();
+            assert!(items[0].awaiting_confirmation);
+            assert_eq!(items[0].status, Status::Queued);
+            assert_eq!(items[0].save_path, directory.join("file.zip"));
+            assert_eq!(items[0].headers["cookie"], "session=abc");
+            assert_eq!(items[0].num_segments, 32);
+            assert!(!directory.exists());
+        }
+        let list: serde_json::Value = client
+            .get(format!("{address}/downloads"))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(list[0]["downloaded_bytes"], 0);
+        assert_eq!(list[0]["status"], "Queued");
+        assert!(list[0]["added_at"].is_string());
+        let bad = client
+            .post(format!("{address}/downloads"))
+            .json(&serde_json::json!({"url": "file:///secret"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
+        server.abort();
+    }
+
+    async fn authenticated_file(method: Method, headers: HeaderMap) -> impl IntoResponse {
+        if headers.get("cookie").and_then(|v| v.to_str().ok()) != Some("session=abc")
+            || headers.get("referer").and_then(|v| v.to_str().ok())
+                != Some("https://example.com/source")
+            || headers.get("user-agent").and_then(|v| v.to_str().ok()) != Some("IDG-test")
+        {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+        let data: Vec<u8> = (0..10_003).map(|n| (n % 251) as u8).collect();
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert("accept-ranges", "bytes".parse().unwrap());
+        response_headers.insert("content-length", data.len().to_string().parse().unwrap());
+        if method == Method::HEAD {
+            return (response_headers, Vec::<u8>::new()).into_response();
+        }
+        if let Some(range) = headers.get("range") {
+            let (start, end) = range
+                .to_str()
+                .unwrap()
+                .strip_prefix("bytes=")
+                .unwrap()
+                .split_once('-')
+                .unwrap();
+            let start: usize = start.parse().unwrap();
+            let end: usize = end.parse().unwrap();
+            let bytes = data[start..=end].to_vec();
+            response_headers.insert("content-length", bytes.len().to_string().parse().unwrap());
+            response_headers.insert(
+                "content-range",
+                format!("bytes {start}-{end}/{}", data.len())
+                    .parse()
+                    .unwrap(),
+            );
+            return (StatusCode::PARTIAL_CONTENT, response_headers, bytes).into_response();
+        }
+        (response_headers, data).into_response()
+    }
+
+    #[tokio::test]
+    async fn authenticated_browser_download_preserves_headers_and_exact_file_bytes() {
+        let (source, source_task) =
+            serve(Router::new().route("/file", get(authenticated_file))).await;
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let state = state(&directory);
+        let downloads = state.downloads.clone();
+        let (address, api_task) = serve(build_router(state)).await;
+        let response = reqwest::Client::new().post(format!("{address}/downloads")).json(&serde_json::json!({
+            "url": format!("{source}/file"), "filename": "chosen.zip", "segments": 8,
+            "cookies": "session=abc", "referrer": "https://example.com/source", "user_agent": "IDG-test"
+        })).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let item = downloads.lock().unwrap()[0].clone();
+                assert_ne!(item.status, Status::Failed, "{:?}", item.error);
+                if item.status == Status::Completed {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let expected: Vec<u8> = (0..10_003).map(|n| (n % 251) as u8).collect();
+        assert_eq!(
+            tokio::fs::read(directory.join("chosen.zip")).await.unwrap(),
+            expected
+        );
+        assert_eq!(
+            downloads.lock().unwrap()[0].downloaded_bytes,
+            expected.len() as u64
+        );
+        api_task.abort();
+        source_task.abort();
+        tokio::fs::remove_dir_all(directory).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_server_without_ranges_or_known_size_downloads_to_eof() {
+        async fn stream_file(headers: HeaderMap) -> impl IntoResponse {
+            assert!(!headers.contains_key("range"));
+            let chunks = futures::stream::iter([
+                Ok::<_, std::io::Error>(bytes::Bytes::from_static(b"first chunk\n")),
+                Ok(bytes::Bytes::from_static(b"last chunk\n")),
+            ]);
+            axum::body::Body::from_stream(chunks)
+        }
+        let (source, source_task) = serve(Router::new().route("/stream", get(stream_file))).await;
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let state = state(&directory);
+        let item = DownloadItem::new(format!("{source}/stream"), directory.join("stream.txt"), 8);
+        let id = item.id.clone();
+        state.downloads.lock().unwrap().push(item);
+        start_download(state.client, state.downloads.clone(), id)
+            .await
+            .unwrap();
+        assert_eq!(state.downloads.lock().unwrap()[0].status, Status::Completed);
+        assert_eq!(
+            tokio::fs::read(directory.join("stream.txt")).await.unwrap(),
+            b"first chunk\nlast chunk\n"
+        );
+        source_task.abort();
+        tokio::fs::remove_dir_all(directory).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn browser_downloads_use_the_saved_connection_policy() {
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let state = state(&directory);
+        let settings = state.connection_settings.clone();
+        let downloads = state.downloads.clone();
+        settings.lock().unwrap().parallel_segments = Some(12);
+        let (address, server) = serve(build_router(state)).await;
+        let client = reqwest::Client::new();
+        for expected in [12, 0] {
+            let response = client.post(format!("{address}/downloads"))
+                .json(&serde_json::json!({"url": "https://example.com/file.zip", "show_dialog": true}))
+                .send().await.unwrap();
+            assert_eq!(response.status(), StatusCode::CREATED);
+            assert_eq!(
+                downloads.lock().unwrap().last().unwrap().num_segments,
+                expected
+            );
+            settings.lock().unwrap().parallel_segments = None;
+        }
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn automatic_download_uses_32_ranges_and_falls_back_when_ranges_are_ignored() {
+        const SIZE: u64 = 64 * 1024 * 1024;
+        async fn file(
+            uri: axum::http::Uri,
+            method: Method,
+            headers: HeaderMap,
+        ) -> impl IntoResponse {
+            let mut result = HeaderMap::new();
+            result.insert("accept-ranges", "bytes".parse().unwrap());
+            result.insert("content-length", SIZE.to_string().parse().unwrap());
+            if method == Method::HEAD {
+                return (result, Vec::<u8>::new()).into_response();
+            }
+            if uri.path() != "/ignores-ranges"
+                && let Some(range) = headers.get("range")
+            {
+                let (start, end) = range
+                    .to_str()
+                    .unwrap()
+                    .strip_prefix("bytes=")
+                    .unwrap()
+                    .split_once('-')
+                    .unwrap();
+                let (start, end): (u64, u64) = (start.parse().unwrap(), end.parse().unwrap());
+                let data: Vec<u8> = (start..=end).map(|offset| (offset % 251) as u8).collect();
+                result.insert("content-length", data.len().to_string().parse().unwrap());
+                result.insert(
+                    "content-range",
+                    format!("bytes {start}-{end}/{SIZE}").parse().unwrap(),
+                );
+                return (StatusCode::PARTIAL_CONTENT, result, data).into_response();
+            }
+            let data: Vec<u8> = (0..SIZE).map(|offset| (offset % 251) as u8).collect();
+            (result, data).into_response()
+        }
+        let (source, task) = serve(
+            Router::new()
+                .route("/parallel", get(file))
+                .route("/ignores-ranges", get(file)),
+        )
+        .await;
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let state = state(&directory);
+        for (route, expected) in [("parallel", 32), ("ignores-ranges", 1)] {
+            let path = directory.join(route);
+            let item = DownloadItem::new(format!("{source}/{route}"), path.clone(), 0);
+            let id = item.id.clone();
+            state.downloads.lock().unwrap().push(item);
+            start_download(state.client.clone(), state.downloads.clone(), id)
+                .await
+                .unwrap();
+            let item = state.downloads.lock().unwrap().last().unwrap().clone();
+            assert_eq!(item.status, Status::Completed);
+            assert_eq!(item.num_segments, expected);
+            assert_eq!(item.downloaded_bytes, SIZE);
+            let bytes = tokio::fs::read(&path).await.unwrap();
+            assert_eq!(bytes.len() as u64, SIZE);
+            assert!(
+                bytes
+                    .iter()
+                    .enumerate()
+                    .all(|(offset, byte)| *byte == (offset % 251) as u8)
+            );
+            tokio::fs::remove_file(path).await.unwrap();
+        }
+        task.abort();
+        tokio::fs::remove_dir(directory).await.unwrap();
+    }
 }

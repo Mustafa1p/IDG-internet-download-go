@@ -37,6 +37,7 @@ use tokio::{
 
 /// Arguments passed to a single segment worker.
 pub struct SegmentArgs {
+    pub client: Arc<Client>,
     /// Segment index (used in error messages).
     pub id: usize,
     /// URL to request (already resolved after redirects).
@@ -65,33 +66,13 @@ pub struct SegmentArgs {
 /// Returns an error after `max_retries` failed attempts, or immediately if
 /// the segment is cancelled.
 pub async fn run_segment(args: SegmentArgs, max_retries: u32) -> Result<()> {
-    // Each segment builds its own lightweight client so the connection pool
-    // is not shared with other segments (mirrors IDM's per-connection model).
-    let client = Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-        .timeout(Duration::from_secs(60))
-        .tcp_keepalive(Duration::from_secs(30))
-        .build()
-        .context("failed to build HTTP client for segment")?;
-
     let mut attempts = 0u32;
     // `resume_at` advances after each successful chunk write, enabling
     // within-segment resume across retries.
     let mut resume_at = args.start;
 
     loop {
-        let result = download_range(
-            &client,
-            &args.url,
-            resume_at,
-            args.end,
-            &args.file,
-            &args.cancel,
-            &args.pause,
-            &args.on_progress,
-            &mut resume_at,
-        )
-        .await;
+        let result = download_range(&args, resume_at, &mut resume_at).await;
 
         match result {
             Ok(()) => return Ok(()),
@@ -132,34 +113,39 @@ pub async fn run_segment(args: SegmentArgs, max_retries: u32) -> Result<()> {
 ///
 /// `cursor` is updated as bytes are written so the caller can resume
 /// from the correct offset on the next attempt.
-async fn download_range(
-    client: &Client,
-    url: &str,
-    start: u64,
-    end: Option<u64>,
-    file: &Arc<Mutex<File>>,
-    cancel: &AtomicBool,
-    pause: &AtomicBool,
-    on_progress: &(dyn Fn(u64) + Send + Sync),
-    cursor: &mut u64,
-) -> Result<()> {
+async fn download_range(args: &SegmentArgs, start: u64, cursor: &mut u64) -> Result<()> {
+    let SegmentArgs {
+        client,
+        url,
+        end,
+        file,
+        cancel,
+        pause,
+        on_progress,
+        ..
+    } = args;
+    let end = *end;
     // Build the Range header value.
     let range = match end {
         Some(e) => format!("bytes={start}-{e}"),
         None => format!("bytes={start}-"),
     };
 
-    let resp = client
-        .get(url)
-        .header("Range", &range)
-        .send()
-        .await
-        .context("GET request failed")?;
+    let request = client.get(url).header("Accept-Encoding", "identity");
+    let request = if end.is_some() || start > 0 {
+        request.header("Range", &range)
+    } else {
+        request
+    };
+    let resp = request.send().await.context("GET request failed")?;
 
     if !resp.status().is_success() {
         bail!("server returned HTTP {}", resp.status());
     }
 
+    if (end.is_some() || start > 0) && resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
+        bail!("Server ignored the requested byte range");
+    }
     let mut stream = resp.bytes_stream();
 
     while let Some(chunk_result) = stream.next().await {
@@ -174,7 +160,11 @@ async fn download_range(
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
 
-        let chunk: Bytes = chunk_result.context("stream read error")?;
+        let mut chunk: Bytes = chunk_result.context("stream read error")?;
+        if let Some(end) = end {
+            let remaining = (end + 1).saturating_sub(*cursor) as usize;
+            chunk = chunk.slice(..chunk.len().min(remaining));
+        }
         let chunk_len = chunk.len() as u64;
 
         // Seek to the current write position and flush the chunk.
@@ -190,12 +180,15 @@ async fn download_range(
         on_progress(chunk_len);
 
         // Stop consuming once we have written past the segment boundary.
-        if let Some(e) = end {
-            if *cursor > e {
-                break;
-            }
+        if let Some(e) = end
+            && *cursor > e
+        {
+            break;
         }
     }
 
+    if end.is_some_and(|end| *cursor <= end) {
+        bail!("Response ended before the requested range was complete");
+    }
     Ok(())
 }

@@ -1,9 +1,9 @@
 ; IDG – Internet Download GO  –  Inno Setup 6 script
 ; Build: ISCC installer\setup.iss
-; Produces: IDG-Setup-1.0.0.exe
+; Produces: IDG-Setup-1.1.0.exe
 
 #define AppName      "IDG – Internet Download GO"
-#define AppVersion   "1.0.0"
+#define AppVersion   "1.1.0"
 #define AppPublisher "IDG Project"
 #define AppURL       "https://github.com/Mustafa1p/IDG-internet-download-go"
 #define AppExeName   "IDG.exe"
@@ -39,9 +39,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startupicon"; Description: "Start IDG when Windows starts"; GroupDescription: "Startup"; Flags: unchecked
+Name: "startupicon"; Description: "Start IDG when Windows starts"; GroupDescription: "Startup"
 
 [Files]
+Source: "..\target\release\IDG-native.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\release\IDG.exe";   DestDir: "{app}"; Flags: ignoreversion
 Source: "..\extension\*";              DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md";                DestDir: "{app}"; Flags: ignoreversion
@@ -50,23 +51,34 @@ Source: "..\README.md";                DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\IDG";              Filename: "{app}\{#AppExeName}"
 Name: "{group}\Uninstall IDG";    Filename: "{uninstallexe}"
 Name: "{autodesktop}\IDG";        Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
-Name: "{userstartup}\IDG";        Filename: "{app}\{#AppExeName}"; Tasks: startupicon
+
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,IDG}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{app}"
+Type: files; Name: "{userappdata}\IDG\com.rust_idm.host.json"
+Type: dirifempty; Name: "{userappdata}\IDG"
+
+[InstallDelete]
+Type: files; Name: "{userstartup}\IDG.lnk"
 
 [Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "IDG"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "IDG"; ValueData: """{app}\{#AppExeName}"" --background"; Tasks: startupicon; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "IDG"; Flags: deletevalue; Check: not WizardIsTaskSelected('startupicon')
 Root: HKCU; Subkey: "Software\IDG"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\IDG"; ValueType: string; ValueName: "InstallDir"; ValueData: "{app}"; Flags: uninsdeletekey
+
+Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.rust_idm.host"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Edge\NativeMessagingHosts\com.rust_idm.host"; Flags: uninsdeletekey
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ExtJsonPath: string;
   ExtJson:     string;
+  ExtJsonLines: TArrayOfString;
   ExePath:     string;
   EscapedPath: string;
 begin
@@ -75,7 +87,7 @@ begin
     ExtJsonPath := ExpandConstant('{userappdata}\IDG\com.rust_idm.host.json');
     ForceDirectories(ExtractFilePath(ExtJsonPath));
 
-    ExePath     := ExpandConstant('{app}\IDG.exe');
+    ExePath     := ExpandConstant('{app}\IDG-native.exe');
     EscapedPath := '';
     begin
       // replace single backslash with double
@@ -89,9 +101,12 @@ begin
       '  "description": "IDG Internet Download GO native host",' + #13#10 +
       '  "type": "stdio",' + #13#10 +
       '  "path": "' + EscapedPath + '",' + #13#10 +
-      '  "allowed_origins": ["chrome-extension://REPLACE_WITH_EXTENSION_ID/"]' + #13#10 +
+      '  "allowed_origins": ["chrome-extension://blmjnmockbofpnipcniflmalfmiaolcj/"]' + #13#10 +
       '}';
-    SaveStringToFile(ExtJsonPath, ExtJson, False);
+    SetArrayLength(ExtJsonLines, 1);
+    ExtJsonLines[0] := ExtJson;
+    if not SaveStringsToUTF8FileWithoutBOM(ExtJsonPath, ExtJsonLines, False) then
+      RaiseException('Could not write IDG browser integration manifest.');
 
     RegWriteStringValue(HKCU,
       'Software\Google\Chrome\NativeMessagingHosts\com.rust_idm.host', '',

@@ -1,4 +1,4 @@
-name: Build & Release
+name: Build and Release
 
 on:
   push:
@@ -6,292 +6,111 @@ on:
     tags: ["v*.*.*"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # ── Build ────────────────────────────────────────────────────────────────────
   build:
-    name: Build (Windows x64)
+    name: Test and build Windows x64
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build release binary
-        run: cargo build --release
-
-      - name: Package extension ZIP
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path extension\* `
-            -DestinationPath dist\IDG-extension.zip -Force
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: IDG-windows-x64
-          path: |
-            target/release/IDG.exe
-            dist/IDG-extension.zip
-          if-no-files-found: error
-
-  # ── Release (tag push only) ──────────────────────────────────────────────────
-  release:
-    name: GitHub Release
-    runs-on: windows-latest
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build release binary
-        run: cargo build --release
-
-      - name: Prepare release files
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-
-          # Portable EXE
-          Copy-Item target\release\IDG.exe `
-            dist\IDG-${{ github.ref_name }}.exe
-
-          # Extension ZIP
-          Compress-Archive -Path extension\* `
-            -DestinationPath dist\IDG-extension-${{ github.ref_name }}.zip -Force
-
-      - name: Install Inno Setup 6
-        shell: pwsh
-        run: |
-          Invoke-WebRequest `
-            -Uri "https://jrsoftware.org/download.php/is.exe" `
-            -OutFile "$env:TEMP\inno.exe" -UseBasicParsing
-          Start-Process -FilePath "$env:TEMP\inno.exe" `
-            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
-
-      - name: Build Windows installer
-        shell: pwsh
-        run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
-          # Rename to include version tag
-          Get-ChildItem dist\IDG-Setup-*.exe | Rename-Item `
-            -NewName { "IDG-Setup-${{ github.ref_name }}.exe" }
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "IDG ${{ github.ref_name }}"
-          body: |
-            ## IDG – Internet Download GO ${{ github.ref_name }}
-
-            > A fast, lightweight download manager for Windows — built with Rust.
-
-            ---
-
-            ### ⬇️ Downloads
-
-            | File | Description |
-            |------|-------------|
-            | **[IDG-Setup-${{ github.ref_name }}.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/IDG-Setup-${{ github.ref_name }}.exe)** | ✅ **Windows Installer** — recommended |
-            | [IDG-${{ github.ref_name }}.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/IDG-${{ github.ref_name }}.exe) | Portable EXE (no install needed) |
-            | [IDG-extension-${{ github.ref_name }}.zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/IDG-extension-${{ github.ref_name }}.zip) | Browser Extension for Chrome / Edge |
-
-            ---
-
-            ### 🚀 How to install
-
-            1. Download `IDG-Setup-${{ github.ref_name }}.exe`
-            2. Run the installer and follow the wizard
-            3. IDG opens automatically after install
-
-            ### 🔌 How to install the browser extension
-
-            1. Download `IDG-extension-${{ github.ref_name }}.zip` and extract it
-            2. Open Chrome/Edge → go to `chrome://extensions`
-            3. Enable **Developer mode** (top right toggle)
-            4. Click **Load unpacked** → select the extracted folder
-            5. The IDG icon will appear in your browser toolbar
-
-            ---
-
-            **Full changelog:** https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md
-          files: |
-            dist/IDG-Setup-${{ github.ref_name }}.exe
-            dist/IDG-${{ github.ref_name }}.exe
-            dist/IDG-extension-${{ github.ref_name }}.zip
-          draft: false
-          prerelease: false
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-on:
-  push:
-    branches: [main]
-    tags:     ["v*.*.*"]
-  pull_request:
-    branches: [main]
-
-env:
-  CARGO_TERM_COLOR: always
-
-jobs:
-  # ── Build ────────────────────────────────────────────────────────────────────
-  build:
-    name: Build (Windows x64)
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
       - name: Check formatting
         run: cargo fmt --check
-
-      - name: Clippy
-        run: cargo clippy -- -D warnings
-
-      - name: Build release binary
-        run: cargo build --release
-
-      - name: Package extension as ZIP
-        shell: pwsh
-        run: |
-          Compress-Archive -Path extension\* -DestinationPath dist\IDG-extension.zip -Force
-
-      - name: Upload EXE artifact
+      - name: Check warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Rust regression tests
+        run: cargo test --locked --bins
+      - name: Extension regression tests
+        run: node --test tests/extension.test.cjs
+      - name: Build release binaries
+        run: cargo build --locked --release --bins
+      - name: Package portable app and extension
+        run: python installer/package.py
+      - name: Upload tested build
         uses: actions/upload-artifact@v4
         with:
           name: IDG-windows-x64
           path: |
             target/release/IDG.exe
-            dist/IDG-extension.zip
+            target/release/IDG-native.exe
+            dist/IDG-extension-v*.zip
+            dist/IDG-portable-v*.zip
           if-no-files-found: error
 
-  # ── Release (tag push only) ──────────────────────────────────────────────────
   release:
-    name: GitHub Release
+    name: Publish GitHub release
     runs-on: windows-latest
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
-
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - uses: actions/setup-python@v5
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build release binary
-        run: cargo build --release
-
-      - name: Package extension ZIP
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: IDG-windows-x64
+      - name: Validate release version and prepare assets
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path extension\* -DestinationPath dist\IDG-extension-${{ github.ref_name }}.zip -Force
-          Copy-Item target\release\IDG.exe dist\IDG-${{ github.ref_name }}.exe
-
-      - name: Install Inno Setup
+          python installer/package.py "${{ github.ref_name }}"
+          if ($LASTEXITCODE -ne 0) { throw "Release version validation failed" }
+          Copy-Item -LiteralPath target/release/IDG.exe -Destination "dist/IDG-${{ github.ref_name }}.exe"
+      - name: Find Inno Setup
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" `
-            -OutFile "$env:TEMP\inno.exe" -UseBasicParsing
-          Start-Process -FilePath "$env:TEMP\inno.exe" `
-            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
-
+          $compiler = @("C:/Program Files (x86)/Inno Setup 6/ISCC.exe", "C:/Program Files/Inno Setup 6/ISCC.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Could not install Inno Setup" }
+            $compiler = @("C:/Program Files (x86)/Inno Setup 6/ISCC.exe", "C:/Program Files/Inno Setup 6/ISCC.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          }
+          if (-not $compiler) { throw "Inno Setup compiler not found" }
+          "IDG_ISCC=$compiler" >> $env:GITHUB_ENV
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          & $iscc installer\setup.iss
-          # Rename installer to include version tag
-          $installer = Get-ChildItem dist\IDG-Setup-*.exe | Select-Object -First 1
-          if ($installer) {
-            Rename-Item $installer.FullName "dist\IDG-Setup-${{ github.ref_name }}.exe"
-          }
-
-      - name: Create GitHub Release
+          & $env:IDG_ISCC installer/setup.iss
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          Move-Item -LiteralPath "dist/IDG-Setup-$version.exe" -Destination "dist/IDG-Setup-${{ github.ref_name }}.exe"
+      - name: Verify assets and create checksums
+        run: python installer/checksums.py "${{ github.ref_name }}"
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          name: "IDG ${{ github.ref_name }}"
-          body: |
-            ## IDG – Internet Download GO ${{ github.ref_name }}
-
-            ### 📥 Downloads
-
-            | File | Description |
-            |------|-------------|
-            | `IDG-Setup-${{ github.ref_name }}.exe` | **Windows Installer** (recommended) — installs IDG, creates shortcuts, registers browser extension host |
-            | `IDG-${{ github.ref_name }}.exe` | Portable EXE — run directly, no installation needed |
-            | `IDG-extension-${{ github.ref_name }}.zip` | Browser Extension — load unpacked in Chrome or Edge |
-
-            ### 🚀 Quick install
-            1. Download `IDG-Setup-${{ github.ref_name }}.exe`
-            2. Run it — follow the wizard
-            3. Load the extension: `chrome://extensions` → Developer mode → Load unpacked → select the installed `extension/` folder
-
-            ### 🔗 Links
-            - [README](https://github.com/${{ github.repository }}#readme)
-            - [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
-            - [Report a bug](https://github.com/${{ github.repository }}/issues)
+          name: "IDG ${{ github.ref_name }} — Automatic connections and browser integration"
+          body_path: docs/release-notes.md
           files: |
             dist/IDG-Setup-${{ github.ref_name }}.exe
             dist/IDG-${{ github.ref_name }}.exe
             dist/IDG-extension-${{ github.ref_name }}.zip
+            dist/IDG-portable-${{ github.ref_name }}.zip
+            dist/SHA256SUMS.txt
           draft: false
           prerelease: false
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          fail_on_unmatched_files: true

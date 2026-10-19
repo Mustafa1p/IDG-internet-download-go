@@ -1,95 +1,63 @@
-/**
- * rust-idm popup script
- * Communicates with background.js and the local API server.
- */
-
-const API_BASE = "http://127.0.0.1:1001";
-const LIST_INTERVAL = 2000; // ms
-
-// ── Toggle intercept ────────────────────────────────────────────────────────
 const toggle = document.getElementById("toggleIntercept");
-
-chrome.runtime.sendMessage({ type: "getStatus" }, (resp) => {
-  if (resp) toggle.checked = resp.interceptEnabled;
-});
-
-toggle.addEventListener("change", () => {
-  chrome.runtime.sendMessage({ type: "toggleIntercept", enabled: toggle.checked });
-});
-
-// ── Manual URL form ─────────────────────────────────────────────────────────
-document.getElementById("add-btn").addEventListener("click", async () => {
-  const url = document.getElementById("manual-url").value.trim();
-  if (!url) return;
-
+const feedback = document.getElementById("feedback");
+async function refreshStatus() {
   try {
-    const resp = await fetch(`${API_BASE}/downloads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-    if (resp.ok) {
-      document.getElementById("manual-url").value = "";
-      await refreshList();
-    } else {
-      alert("Failed to add download: " + resp.status);
-    }
-  } catch (e) {
-    alert("Cannot reach rust-idm server.\nMake sure rust-idm server is running.");
-  }
-});
-
-// ── Downloads list ──────────────────────────────────────────────────────────
-async function refreshList() {
-  const container = document.getElementById("downloads-list");
-  try {
-    const resp = await fetch(`${API_BASE}/downloads`);
-    if (!resp.ok) throw new Error(resp.status);
-    const list = await resp.json();
-
-    if (!list.length) {
-      container.innerHTML = '<p style="opacity:.5;font-size:12px;padding:4px;">No active downloads.</p>';
-      return;
-    }
-
-    // Sort by creation date, newest first
-    list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    container.innerHTML = list.map(dl => {
-      const name = dl.filename || dl.url.split("/").pop().split("?")[0] || "unknown";
-      const pct  = dl.total_bytes ? Math.round(dl.bytes_downloaded / dl.total_bytes * 100) : 0;
-      const speed = formatSpeed(dl.speed_bps);
-      const total = dl.total_bytes ? formatBytes(dl.total_bytes) : "?";
-      const done  = formatBytes(dl.bytes_downloaded);
-      const stateClass = `state-${dl.state}`;
-
-      return `
-        <div class="dl-item">
-          <div class="name" title="${dl.url}">${name}</div>
-          <progress max="100" value="${pct}"></progress>
-          <div class="meta">
-            <span>${done} / ${total}</span>
-            <span>${speed}</span>
-            <span class="state-badge ${stateClass}">${dl.state}</span>
-          </div>
-        </div>`;
-    }).join("");
-  } catch (_) {
-    container.innerHTML = '<p style="opacity:.5;font-size:12px;padding:4px;color:#f88;">Server offline</p>';
-  }
+    const status = await chrome.runtime.sendMessage({ type: "getStatus" });
+    toggle.checked = status.interceptEnabled;
+    document.getElementById("connection-status").textContent = status.serverOnline ? "IDG is connected" : status.installed ? "IDG is ready" : "IDG is not connected";
+    document.getElementById("connection-detail").textContent = status.serverOnline ? "Downloads open in the desktop app." : status.installed ? "The app will open when you send a download." : "Open IDG, or reinstall it to register browser integration. " + (status.error || "");
+  } catch { feedback.textContent = "Reload the extension to reconnect."; }
 }
-
+toggle.addEventListener("change", async () => {
+  await chrome.runtime.sendMessage({ type: "toggleIntercept", enabled: toggle.checked });
+});
+document.getElementById("url-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const input = document.getElementById("manual-url");
+  const button = document.getElementById("add-btn");
+  button.disabled = true;
+  feedback.textContent = "Opening the IDG download window…";
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "download", url: input.value.trim() });
+    feedback.textContent = result.ok ? "Ready. Start your download in IDG." : result.error;
+    if (result.ok) input.value = "";
+    await refreshStatus();
+    await refreshList();
+  } catch { feedback.textContent = "Could not connect. Open IDG and retry."; }
+  finally { button.disabled = false; }
+});
 function formatBytes(n) {
+  n = Number(n) || 0;
   if (n >= 1e9) return (n / 1e9).toFixed(2) + " GB";
   if (n >= 1e6) return (n / 1e6).toFixed(2) + " MB";
   if (n >= 1e3) return (n / 1e3).toFixed(1) + " KB";
   return n + " B";
 }
-
-function formatSpeed(bps) {
-  if (!bps) return "";
-  return formatBytes(bps) + "/s";
+function formatSpeed(bytesPerSecond) { return ((Number(bytesPerSecond) || 0) * 8 / 1e6).toFixed(2) + " Mbps"; }
+async function refreshList() {
+  const container = document.getElementById("downloads-list");
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "list" });
+    container.replaceChildren();
+    if (!result.ok || !result.data.length) {
+      const empty = document.createElement("p"); empty.className = "empty";
+      empty.textContent = result.ok ? "Your next download starts here." : "Open IDG to view recent downloads.";
+      container.append(empty); return;
+    }
+    for (const download of result.data.slice().reverse().slice(0, 20)) {
+      const item = document.createElement("div"); item.className = "dl-item";
+      const name = document.createElement("div"); name.className = "name";
+      name.textContent = download.filename || "Download"; name.title = download.url;
+      const progress = document.createElement("progress"); progress.max = 100;
+      progress.value = download.total_bytes ? Math.min(100, download.downloaded_bytes / download.total_bytes * 100) : 0;
+      progress.setAttribute("aria-label", `${name.textContent} progress`);
+      const meta = document.createElement("div"); meta.className = "meta";
+      for (const text of [formatBytes(download.downloaded_bytes) + " / " + (download.total_bytes == null ? "Unknown size" : formatBytes(download.total_bytes)), formatSpeed(download.speed_bps), download.status]) {
+        const span = document.createElement("span"); span.textContent = text; meta.append(span);
+      }
+      item.append(name, progress, meta); container.append(item);
+    }
+  } catch { container.textContent = "Could not load downloads."; }
 }
-
-refreshList();
-setInterval(refreshList, LIST_INTERVAL);
+refreshStatus(); refreshList();
+setInterval(() => { refreshStatus(); refreshList(); }, 3000);
