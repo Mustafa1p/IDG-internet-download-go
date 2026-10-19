@@ -21,7 +21,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use futures::StreamExt;
 use reqwest::Client;
@@ -103,15 +103,20 @@ pub async fn run_segment(args: SegmentArgs, max_retries: u32) -> Result<()> {
                 if attempts > max_retries {
                     bail!(
                         "segment {} failed after {} retries: {}",
-                        args.id, attempts, e
+                        args.id,
+                        attempts,
+                        e
                     );
                 }
                 // Exponential back-off: 300ms, 600ms, 900ms, …
                 let backoff = Duration::from_millis(300 * u64::from(attempts));
                 eprintln!(
                     "[IDG] segment {} retry {}/{} after {}ms: {}",
-                    args.id, attempts, max_retries,
-                    backoff.as_millis(), e
+                    args.id,
+                    attempts,
+                    max_retries,
+                    backoff.as_millis(),
+                    e
                 );
                 tokio::time::sleep(backoff).await;
             }
@@ -141,7 +146,7 @@ async fn download_range(
     // Build the Range header value.
     let range = match end {
         Some(e) => format!("bytes={start}-{e}"),
-        None    => format!("bytes={start}-"),
+        None => format!("bytes={start}-"),
     };
 
     let resp = client

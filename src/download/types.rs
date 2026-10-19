@@ -126,9 +126,7 @@ impl DownloadItem {
     /// Download progress as a value in `[0.0, 1.0]`.
     pub fn progress(&self) -> f32 {
         match self.total_bytes {
-            Some(total) if total > 0 => {
-                (self.downloaded_bytes as f32 / total as f32).min(1.0)
-            }
+            Some(total) if total > 0 => (self.downloaded_bytes as f32 / total as f32).min(1.0),
             _ => 0.0,
         }
     }

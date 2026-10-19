@@ -76,7 +76,7 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     };
 
     let final_url = resp.url().to_string();
-    let headers   = resp.headers().clone();
+    let headers = resp.headers().clone();
 
     let accepts_ranges = headers
         .get("accept-ranges")
@@ -95,7 +95,12 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .and_then(filename_from_content_disposition)
         .or_else(|| filename_from_url(&final_url));
 
-    Ok(ProbeResult { content_length, accepts_ranges, filename, final_url })
+    Ok(ProbeResult {
+        content_length,
+        accepts_ranges,
+        filename,
+        final_url,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +147,11 @@ fn filename_from_url(url: &str) -> Option<String> {
 /// Minimal percent-decoder for `Content-Disposition` filenames.
 fn percent_decode(s: &str) -> String {
     // Strip the charset prefix "UTF-8''" if present.
-    let s = if let Some(pos) = s.find("''") { &s[pos + 2..] } else { s };
+    let s = if let Some(pos) = s.find("''") {
+        &s[pos + 2..]
+    } else {
+        s
+    };
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {

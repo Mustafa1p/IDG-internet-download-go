@@ -11,9 +11,9 @@
 mod app;
 mod download;
 
+use eframe::egui;
 use std::sync::Arc;
 use std::time::Duration;
-use eframe::egui;
 
 fn main() -> eframe::Result {
     // Build a multi-threaded Tokio runtime.  We create it manually so we can
@@ -26,22 +26,20 @@ fn main() -> eframe::Result {
 
     // Build a shared HTTP client inside the runtime context.
     // Reusing one client across all downloads enables connection pooling.
-    let http_client = Arc::new(
-        runtime.block_on(async {
-            reqwest::Client::builder()
-                .user_agent(concat!(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ",
-                    "AppleWebKit/537.36 (KHTML, like Gecko) ",
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ))
-                .pool_max_idle_per_host(16)
-                .tcp_keepalive(Duration::from_secs(30))
-                .timeout(Duration::from_secs(60))
-                .connect_timeout(Duration::from_secs(15))
-                .build()
-                .expect("failed to build HTTP client")
-        }),
-    );
+    let http_client = Arc::new(runtime.block_on(async {
+        reqwest::Client::builder()
+            .user_agent(concat!(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ",
+                "AppleWebKit/537.36 (KHTML, like Gecko) ",
+                "Chrome/124.0.0.0 Safari/537.36"
+            ))
+            .pool_max_idle_per_host(16)
+            .tcp_keepalive(Duration::from_secs(30))
+            .timeout(Duration::from_secs(60))
+            .connect_timeout(Duration::from_secs(15))
+            .build()
+            .expect("failed to build HTTP client")
+    }));
 
     let runtime_handle = runtime.handle().clone();
 
@@ -63,8 +61,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "IDG",
         options,
-        Box::new(move |cc| {
-            Ok(Box::new(app::IDGApp::new(cc, runtime_handle, http_client)))
-        }),
+        Box::new(move |cc| Ok(Box::new(app::IDGApp::new(cc, runtime_handle, http_client)))),
     )
 }

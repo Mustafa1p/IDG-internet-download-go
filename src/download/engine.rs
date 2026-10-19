@@ -55,8 +55,12 @@ pub async fn start_download(
 ) -> Result<()> {
     // ── Read the configuration from shared state ─────────────────────────────
     let (url, save_path, num_segments, cancel, pause) = {
-        let guard = downloads.lock().map_err(|_| anyhow::anyhow!("lock poisoned"))?;
-        let item  = guard.iter().find(|i| i.id == id)
+        let guard = downloads
+            .lock()
+            .map_err(|_| anyhow::anyhow!("lock poisoned"))?;
+        let item = guard
+            .iter()
+            .find(|i| i.id == id)
             .context("download item not found in queue")?;
         (
             item.url.clone(),
@@ -70,26 +74,28 @@ pub async fn start_download(
     // ── Step 1: Probe ─────────────────────────────────────────────────────────
     with_item(&downloads, &id, |i| i.status = Status::Probing);
 
-    let probe_result = probe(&client, &url)
-        .await
-        .context("URL probe failed")?;
+    let probe_result = probe(&client, &url).await.context("URL probe failed")?;
 
     // Persist probe results; update the save path if the server suggested a
     // different filename via Content-Disposition.
     with_item(&downloads, &id, |i| {
         i.total_bytes = probe_result.content_length;
         if let Some(ref server_name) = probe_result.filename {
-            let dir        = i.save_path.parent().unwrap_or(std::path::Path::new("."));
-            i.save_path    = dir.join(server_name);
-            i.filename     = server_name.clone();
+            let dir = i.save_path.parent().unwrap_or(std::path::Path::new("."));
+            i.save_path = dir.join(server_name);
+            i.filename = server_name.clone();
         }
         i.status = Status::Downloading;
     });
 
     // Re-read the (possibly updated) save path.
     let save_path = {
-        let guard = downloads.lock().map_err(|_| anyhow::anyhow!("lock poisoned"))?;
-        guard.iter().find(|i| i.id == id)
+        let guard = downloads
+            .lock()
+            .map_err(|_| anyhow::anyhow!("lock poisoned"))?;
+        guard
+            .iter()
+            .find(|i| i.id == id)
             .map(|i| i.save_path.clone())
             .unwrap_or(save_path)
     };
@@ -118,9 +124,13 @@ pub async fn start_download(
     let file = Arc::new(Mutex::new(file));
 
     // ── Step 3 & 4: Divide and spawn segments ─────────────────────────────────
-    let seg_count  = if probe_result.supports_multipart() { num_segments } else { 1 };
-    let segments   = build_segments(seg_count, probe_result.content_length);
-    let final_url  = probe_result.final_url.clone();
+    let seg_count = if probe_result.supports_multipart() {
+        num_segments
+    } else {
+        1
+    };
+    let segments = build_segments(seg_count, probe_result.content_length);
+    let final_url = probe_result.final_url.clone();
 
     eprintln!(
         "[IDG] starting download id={} segments={} size={:?}",
@@ -131,13 +141,13 @@ pub async fn start_download(
         .into_iter()
         .enumerate()
         .map(|(seg_id, (start, end))| {
-            let client    = client.clone();
-            let url       = final_url.clone();
-            let file      = file.clone();
-            let cancel    = cancel.clone();
-            let pause     = pause.clone();
+            let client = client.clone();
+            let url = final_url.clone();
+            let file = file.clone();
+            let cancel = cancel.clone();
+            let pause = pause.clone();
             let downloads = downloads.clone();
-            let id        = id.clone();
+            let id = id.clone();
 
             let args = SegmentArgs {
                 id: seg_id,
@@ -152,9 +162,7 @@ pub async fn start_download(
                 }),
             };
 
-            tokio::spawn(async move {
-                run_segment(args, MAX_RETRIES).await
-            })
+            tokio::spawn(async move { run_segment(args, MAX_RETRIES).await })
         })
         .collect();
 
@@ -175,10 +183,14 @@ pub async fn start_download(
     if cancel.load(std::sync::atomic::Ordering::Relaxed) {
         with_item(&downloads, &id, |i| i.status = Status::Cancelled);
     } else {
-        eprintln!("[IDG] download complete id={} path={}", id, save_path.display());
+        eprintln!(
+            "[IDG] download complete id={} path={}",
+            id,
+            save_path.display()
+        );
         with_item(&downloads, &id, |i| {
-            i.status       = Status::Completed;
-            i.speed_bps    = 0.0;
+            i.status = Status::Completed;
+            i.speed_bps = 0.0;
             i.completed_at = Some(chrono::Utc::now());
         });
     }
@@ -202,7 +214,11 @@ fn build_segments(count: usize, total: Option<u64>) -> Vec<(u64, u64)> {
             (0..count)
                 .map(|i| {
                     let start = i as u64 * chunk;
-                    let end   = if i == count - 1 { size - 1 } else { start + chunk - 1 };
+                    let end = if i == count - 1 {
+                        size - 1
+                    } else {
+                        start + chunk - 1
+                    };
                     (start, end)
                 })
                 .collect()
