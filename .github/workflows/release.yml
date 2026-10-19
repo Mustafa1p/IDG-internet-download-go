@@ -11,7 +11,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # ── Build on Windows ────────────────────────────────────────────────────────
+  # ── Build ────────────────────────────────────────────────────────────────────
   build:
     name: Build (Windows x64)
     runs-on: windows-latest
@@ -24,7 +24,7 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      - name: Cache cargo registry
+      - name: Cache cargo
         uses: actions/cache@v4
         with:
           path: |
@@ -33,22 +33,32 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Check formatting
+        run: cargo fmt --check
+
       - name: Clippy
         run: cargo clippy -- -D warnings
 
-      - name: Build release
+      - name: Build release binary
         run: cargo build --release
+
+      - name: Package extension as ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path extension\* -DestinationPath dist\IDG-extension.zip -Force
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           name: IDG-windows-x64
-          path: target/release/IDG.exe
+          path: |
+            target/release/IDG.exe
+            dist/IDG-extension.zip
           if-no-files-found: error
 
-  # ── Release (only on tag push) ───────────────────────────────────────────────
+  # ── Release (tag push only) ──────────────────────────────────────────────────
   release:
-    name: Create GitHub Release
+    name: GitHub Release
     runs-on: windows-latest
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
@@ -56,41 +66,78 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
         with:
-          name: IDG-windows-x64
-          path: dist/
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Package extension ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path extension\* -DestinationPath dist\IDG-extension-${{ github.ref_name }}.zip -Force
+          Copy-Item target\release\IDG.exe dist\IDG-${{ github.ref_name }}.exe
 
       - name: Install Inno Setup
+        shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:TEMP\inno.exe" -UseBasicParsing
-          Start-Process -FilePath "$env:TEMP\inno.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" `
+            -OutFile "$env:TEMP\inno.exe" -UseBasicParsing
+          Start-Process -FilePath "$env:TEMP\inno.exe" `
+            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
 
-      - name: Build installer
+      - name: Build Windows installer
+        shell: pwsh
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          & $iscc installer/setup.iss
+          & $iscc installer\setup.iss
+          # Rename installer to include version tag
+          $installer = Get-ChildItem dist\IDG-Setup-*.exe | Select-Object -First 1
+          if ($installer) {
+            Rename-Item $installer.FullName "dist\IDG-Setup-${{ github.ref_name }}.exe"
+          }
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: IDG ${{ github.ref_name }}
+          name: "IDG ${{ github.ref_name }}"
           body: |
             ## IDG – Internet Download GO ${{ github.ref_name }}
 
-            ### Downloads
+            ### 📥 Downloads
+
             | File | Description |
             |------|-------------|
-            | `IDG-Setup-*.exe` | Windows installer (recommended) |
-            | `IDG.exe` | Portable executable |
+            | `IDG-Setup-${{ github.ref_name }}.exe` | **Windows Installer** (recommended) — installs IDG, creates shortcuts, registers browser extension host |
+            | `IDG-${{ github.ref_name }}.exe` | Portable EXE — run directly, no installation needed |
+            | `IDG-extension-${{ github.ref_name }}.zip` | Browser Extension — load unpacked in Chrome or Edge |
 
-            ### What's new
-            See [CHANGELOG](https://github.com/${{ github.repository }}/commits/main) for details.
+            ### 🚀 Quick install
+            1. Download `IDG-Setup-${{ github.ref_name }}.exe`
+            2. Run it — follow the wizard
+            3. Load the extension: `chrome://extensions` → Developer mode → Load unpacked → select the installed `extension/` folder
+
+            ### 🔗 Links
+            - [README](https://github.com/${{ github.repository }}#readme)
+            - [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
+            - [Report a bug](https://github.com/${{ github.repository }}/issues)
           files: |
-            dist/IDG.exe
-            dist/IDG-Setup-*.exe
+            dist/IDG-Setup-${{ github.ref_name }}.exe
+            dist/IDG-${{ github.ref_name }}.exe
+            dist/IDG-extension-${{ github.ref_name }}.zip
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

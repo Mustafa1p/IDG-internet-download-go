@@ -58,3 +58,4 @@ if ($output) {
 } else {
     Write-Host "`n⚠  Installer file not found in dist\" -ForegroundColor Yellow
 }
+

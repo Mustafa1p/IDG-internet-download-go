@@ -6,14 +6,14 @@
 
 Built in Rust · Native UI · Browser Extension · MIT License
 
-[![Build](https://img.shields.io/github/actions/workflow/status/mustafa1p/IDG/release.yml?branch=main&style=flat-square&logo=github)](https://github.com/mustafa1p/IDG/actions)
-[![Release](https://img.shields.io/github/v/release/mustafa1p/IDG?style=flat-square&color=0bc&label=latest)](https://github.com/mustafa1p/IDG/releases/latest)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?style=flat-square&logo=windows)](https://github.com/mustafa1p/IDG/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/mustafa1p/IDG-internet-download-go/release.yml?branch=main&style=flat-square&logo=github)](https://github.com/mustafa1p/IDG-internet-download-go/actions)
+[![Release](https://img.shields.io/github/v/release/mustafa1p/IDG-internet-download-go?style=flat-square&color=0bc&label=latest)](https://github.com/mustafa1p/IDG-internet-download-go/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?style=flat-square&logo=windows)](https://github.com/mustafa1p/IDG-internet-download-go/releases)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange?style=flat-square&logo=rust)](https://rustup.rs)
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
-[**Download Installer**](https://github.com/mustafa1p/IDG/releases/latest) · [Report Bug](https://github.com/mustafa1p/IDG/issues) · [Request Feature](https://github.com/mustafa1p/IDG/issues)
+[**Download Installer**](https://github.com/mustafa1p/IDG-internet-download-go/releases/latest) · [Report Bug](https://github.com/mustafa1p/IDG-internet-download-go/issues) · [Request Feature](https://github.com/mustafa1p/IDG-internet-download-go/issues)
 
 ---
 
@@ -57,7 +57,7 @@ IDG is a desktop download manager that accelerates file downloads by splitting e
 
 ### Recommended — Windows Installer
 
-Download `IDG-Setup-x.x.x.exe` from the [latest release](https://github.com/mustafa1p/IDG/releases/latest).
+Download `IDG-Setup-x.x.x.exe` from the [latest release](https://github.com/mustafa1p/IDG-internet-download-go/releases/latest).
 
 The installer will:
 - Install IDG to `%ProgramFiles%\IDG`
@@ -184,7 +184,7 @@ IDG-internet-download-go/
 ### Steps
 
 ```powershell
-git clone https://github.com/mustafa1p/IDG.git
+git clone https://github.com/mustafa1p/IDG-internet-download-go.git
 cd IDG
 
 # Debug build (fast compile, unoptimised)
@@ -220,3 +220,4 @@ cargo test                    # all tests must pass
 ## License
 
 [MIT](LICENSE) © 2026 mustafa1p
+

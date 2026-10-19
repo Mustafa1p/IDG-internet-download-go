@@ -5,7 +5,7 @@
 #define AppName      "IDG – Internet Download GO"
 #define AppVersion   "1.0.0"
 #define AppPublisher "IDG Project"
-#define AppURL       "https://github.com/mustafa1p/IDG"
+#define AppURL       "https://github.com/Mustafa1p/IDG-internet-download-go"
 #define AppExeName   "IDG.exe"
 #define AppId        "{{A8B3C4D5-E6F7-4890-ABCD-EF1234567890}"
 
