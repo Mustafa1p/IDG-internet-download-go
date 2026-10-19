@@ -126,25 +126,89 @@ test('YouTube extraction does not accept spoofed domains', () => {
   const { context } = worker();
   assert.equal(vm.runInContext('youtubeVideoUrl("https://youtube.com.evil.test/watch?v=5TBlPQrcweQ")', context), null);
 });
-test('YouTube blob-player button follows the current SPA video URL', async () => {
-  const sent = [], elements = [];
-  const parent = { style: {}, appendChild: element => elements.push(element) };
-  const media = { parentElement: parent, currentSrc: 'blob:https://www.youtube.com/player', querySelector: () => null };
+function overlayPage(reply = async () => ({ ok: true })) {
+  const sent = [], events = {};
+  function element(tag) {
+    return { tagName: tag.toUpperCase(), nodeType: 1, style: {}, handlers: {}, attributes: {}, children: [],
+      setAttribute(name, value) { this.attributes[name] = value; }, hasAttribute(name) { return name in this.attributes; },
+      addEventListener(name, handler) { this.handlers[name] = handler; },
+      appendChild(child) { child.parentElement = this; this.children.push(child); },
+      remove() { const index = this.parentElement?.children.indexOf(this); if (index >= 0) this.parentElement.children.splice(index, 1); },
+      querySelectorAll: () => [],
+    };
+  }
+  const parent = element('div'), media = element('video');
+  media.parentElement = parent; media.currentSrc = 'blob:https://www.youtube.com/player'; media.querySelector = () => null;
   const location = { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=5TBlPQrcweQ&list=radio' };
   const document = { readyState: 'complete', documentElement: {}, title: 'Sample video - YouTube',
-    querySelectorAll: () => [media], addEventListener() {},
-    createElement: tag => ({ tag, style: {}, handlers: {}, setAttribute() {}, addEventListener(name, handler) { this.handlers[name] = handler; }, remove() {} }),
+    querySelectorAll: () => [media], addEventListener: (name, handler) => { events[name] = handler; }, createElement: element,
   };
-  const context = vm.createContext({ document, location, window: {}, URL, MutationObserver: class { observe() {} }, getComputedStyle: () => ({ position: 'relative' }),
-    chrome: { runtime: { sendMessage: async message => { sent.push(message); return { ok: true }; } } },
+  let mutation;
+  const context = vm.createContext({ document, location, window: {}, URL,
+    MutationObserver: class { constructor(callback) { mutation = callback; } observe() {} }, getComputedStyle: () => ({ position: 'relative' }),
+    chrome: { runtime: { sendMessage: async message => { sent.push(message); return reply(message); } } },
   });
   vm.runInContext(fs.readFileSync('extension/content.js', 'utf8'), context);
-  await elements[0].handlers.click({ isTrusted: true, preventDefault() {}, stopPropagation() {} });
-  assert.equal(sent[0].url, location.href);
-  assert.equal(sent[0].filename, 'Sample video.mp4');
-  location.href = 'https://www.youtube.com/watch?v=BaW_jenozKc';
-  await elements[0].handlers.click({ isTrusted: true, preventDefault() {}, stopPropagation() {} });
-  assert.equal(sent[1].url, location.href);
+  const event = overrides => ({ isTrusted: true, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }, ...overrides });
+  return { sent, parent, media, location, event, get overlay() { return parent.children[0]; },
+    scan: () => mutation([{ addedNodes: [{ nodeType: 1, tagName: 'DIV', hasAttribute: () => false, querySelectorAll: () => [media] }] }]),
+    navigate: () => events['yt-navigate-finish'](),
+  };
+}
+
+test('YouTube blob-player button follows the current SPA video URL', async () => {
+  const page = overlayPage();
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.sent[0].url, page.location.href);
+  assert.equal(page.sent[0].filename, 'Sample video.mp4');
+  page.location.href = 'https://www.youtube.com/watch?v=BaW_jenozKc';
+  page.navigate();
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.sent[1].url, page.location.href);
+});
+
+test('slim overlay can be closed without downloading or immediately reappearing', () => {
+  const page = overlayPage(), overlay = page.overlay, close = overlay.children[1], event = page.event();
+  assert.equal(overlay.style.height, '28px');
+  assert.ok(close.attributes['aria-label'].includes('Hide'));
+  close.handlers.click(event);
+  assert.ok(event.prevented && event.stopped);
+  assert.equal(page.sent.length, 0);
+  assert.equal(page.parent.children.length, 0);
+  page.scan(); page.navigate();
+  assert.equal(page.parent.children.length, 0);
+  page.location.href = 'https://www.youtube.com/watch?v=BaW_jenozKc';
+  page.navigate();
+  assert.equal(page.parent.children.length, 1);
+});
+
+test('closing during a handoff also suppresses later errors and notices', async () => {
+  let finish;
+  const page = overlayPage(() => new Promise(resolve => { finish = resolve; }));
+  const pending = page.overlay.children[0].handlers.click(page.event());
+  page.overlay.children[1].handlers.click(page.event());
+  finish({ ok: false, error: 'App is offline' });
+  await pending;
+  assert.equal(page.parent.children.length, 0);
+  assert.equal(page.sent.length, 1);
+});
+
+test('Escape and close remove error notices along with the media overlay', async () => {
+  const page = overlayPage(async () => ({ ok: false, error: 'Open IDG and retry' }));
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.overlay.children[2].attributes.role, 'alert');
+  page.overlay.handlers.keydown(page.event({ key: 'Escape' }));
+  assert.equal(page.parent.children.length, 0);
+  page.scan();
+  assert.equal(page.parent.children.length, 0);
+});
+
+test('page scripts cannot activate or dismiss the media overlay', async () => {
+  const page = overlayPage();
+  await page.overlay.children[0].handlers.click(page.event({ isTrusted: false }));
+  page.overlay.children[1].handlers.click(page.event({ isTrusted: false }));
+  assert.equal(page.sent.length, 0);
+  assert.equal(page.parent.children.length, 1);
 });
 
 test('extension reports its version and reloads only when its own updated files match', async () => {

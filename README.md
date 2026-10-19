@@ -12,7 +12,7 @@ Splits every file into multiple parallel connections — just like IDM, but free
 <br/>
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Mustafa1p/IDG-internet-download-go/release.yml?branch=main&style=for-the-badge&logo=github&label=Build)](https://github.com/Mustafa1p/IDG-internet-download-go/actions)
-[![Release](https://img.shields.io/badge/Latest_Release-v1.4.0-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
+[![Release](https://img.shields.io/badge/Latest_Release-v1.4.1-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078d4?style=for-the-badge&logo=windows)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 
@@ -20,11 +20,11 @@ Splits every file into multiple parallel connections — just like IDM, but free
 
 ## ⬇️ Download
 
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.4.0.exe">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.4.1.exe">
   <img src="https://img.shields.io/badge/Download%20Installer-Setup%20.exe-1976d2?style=for-the-badge&logo=windows&logoColor=white" height="42"/>
 </a>
 &nbsp;&nbsp;
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.0.zip">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.1.zip">
   <img src="https://img.shields.io/badge/Download%20Extension-Chrome%20%2F%20Edge-F4B400?style=for-the-badge&logo=googlechrome&logoColor=white" height="42"/>
 </a>
 
@@ -64,7 +64,7 @@ It works the same way as **IDM (Internet Download Manager)** — it splits every
 
 ### Step 1 — Download the installer
 
-👉 **[Download IDG-Setup-v1.4.0.exe](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.4.0.exe)**
+👉 **[Download IDG-Setup-v1.4.1.exe](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.4.1.exe)**
 
 ### Step 2 — Run the installer
 
@@ -92,7 +92,7 @@ Double-click the downloaded file and follow the wizard:
 
 ### Step 1 — Download the extension
 
-👉 **[Download IDG-extension-v1.4.0.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.0.zip)**
+👉 **[Download IDG-extension-v1.4.1.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.1.zip)**
 
 ### Step 2 — Extract the ZIP
 
@@ -148,7 +148,7 @@ Transfer rates use **Mbps** (decimal megabits per second), with 8 bits per byte;
 
 ## YouTube downloads
 
-Install the **complete v1.4.0 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
+Install the **complete v1.4.1 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
 
 Open a YouTube video and click **Download with IDG** over the player, use its browser context menu, or paste a watch/Shorts/youtu.be link into IDG. Choose the video format and quality or an audio format in the desktop chooser. Radio and playlist parameters are removed so the selected video is downloaded once. IDG uses the bundled yt-dlp, FFmpeg, and Deno tools. Cancel through **Remove**; pause/resume is available for regular direct-file downloads.
 
@@ -189,7 +189,7 @@ cargo build --release
 ```powershell
 python installer/fetch-media-tools.py
 python installer/package.py
-# dist/IDG-portable-v1.4.0.zip and dist/IDG-extension-v1.4.0.zip
+# dist/IDG-portable-v1.4.1.zip and dist/IDG-extension-v1.4.1.zip
 ```
 
 Extract the portable ZIP, run `installer/register-native-host.ps1` from PowerShell, and load its `extension` folder in Chrome or Edge. Keep `IDG.exe` and `IDG-native.exe` together.
@@ -198,7 +198,7 @@ Extract the portable ZIP, run `installer/register-native-host.ps1` from PowerShe
 
 ```powershell
 .\installer\build-installer.ps1
-# → dist\IDG-Setup-v1.4.0.exe
+# → dist\IDG-Setup-v1.4.1.exe
 # (downloads Inno Setup automatically if not installed)
 ```
 
@@ -237,9 +237,9 @@ python tests/tray-smoke.py
 
 Automated tests exercise handoff success/failure, native framing, stable extension identity, saved interception settings, API confirmation, and exact bytes for authenticated parallel downloads. To verify Chrome installation end to end, install the current build, load the extension, close IDG, and download a direct ZIP link. Confirm that IDG opens with an editable filename, then start it and compare the result with the source. The extension popup shows connection status only. Check that failed handoffs resume the original browser download.
 
-## Updates, YouTube choices, and Windows startup (v1.4.0)
+## Updates, YouTube choices, and Windows startup (v1.4.1)
 
-Open **Settings → Application updates** to check for a new release, automatically download and verify it, or enable automatic installation when all downloads are finished. **Install update and restart IDG** replaces the complete app in its current folder and reopens it. Finish or remove queued/paused transfers first. No browser download or manual installer search is needed after installing v1.4.0 once. Windows can still request elevation for a protected installation folder.
+Open **Settings → Application updates** to check for a new release, automatically download and verify it, or enable automatic installation when all downloads are finished. **Install update and restart IDG** replaces the complete app in its current folder and reopens it. Finish or remove queued/paused transfers first. No browser download or manual installer search is needed after installing v1.4.1 once. Windows can still request elevation for a protected installation folder.
 
 The updater verifies the installer size and SHA-256 digest published by GitHub. An interrupted or altered download is rejected, with a retry option. Update checks run at launch and every six hours while the UI is active.
 
@@ -254,8 +254,14 @@ YouTube links open **New download** before transferring media. Choose MP4, MKV, 
 
 Windows startup is enabled by default by the installer and on the first portable run. IDG starts in the system tray; the setting remains editable. The app, installer, shortcuts, and taskbar use the embedded IDG icon. If an old pinned shortcut retains Windows' cached generic icon, unpin it and pin the updated IDG once.
 
-## Compact desktop design (v1.4.0)
+## Compact desktop design (v1.4.1)
 
 The desktop app opens at **960 × 600** logical pixels and can shrink to **800 × 500**. Its dark teal library includes a sidebar Add download action, status and file-type categories, live speed/count summaries, search, newest/oldest sorting, transfer progress, and selected-file details. Speeds remain in Mbps. Large lists scroll without pushing the action buttons outside the window.
 
 The extension popup now contains only connection status. Capture controls, manual download forms, recent downloads, YouTube buttons, and release links have been removed from the popup. Existing page overlays and browser context-menu download actions remain available.
+
+### Slim, dismissible media overlay (v1.4.1)
+
+The page's **Download with IDG** overlay is now 28px tall. Click **×** to hide it for that video until the page reloads, or press **Escape** while the overlay has keyboard focus. The close button also removes any error notice and remains available while a handoff is in progress. Different videos can show their own download button. Downloads already sent to IDG remain in its desktop queue.
+
+![Slim media overlay with close button](docs/media-overlay.png)

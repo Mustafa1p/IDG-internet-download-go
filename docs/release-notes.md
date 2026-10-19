@@ -1,11 +1,11 @@
-IDG v1.4.0 introduces the compact desktop redesign and a status-only extension popup.
+IDG v1.4.1 makes the browser's media download overlay slimmer and dismissible.
 
-- Smaller **960×600** default window, with **800×500** minimum size.
-- Dark teal library inspired by the supplied reference: sidebar Add download, live speed/count summaries, status and file-type categories, search/sorting, progress rows, and download details.
-- Speeds remain in **Mbps**. Existing YouTube formats/qualities, in-app updates, tray behavior, and Windows startup remain available.
-- Extension popup shows only **IDG is connected**, **IDG is ready**, or **IDG is not connected**. Removed capture switch, manual link form, recent downloads, popup YouTube button, and footer links.
-- Browser capture stays automatic; use YouTube's page overlay or the browser context menu to open the desktop chooser.
+- Slim **28px** Download with IDG bar with smaller text, padding, and rounded corners.
+- New **×** close button with an accessible label; keyboard users can dismiss with **Escape** while focused.
+- Dismissal hides the overlay and any error notice for that video until a page reload, without changing playback or sending a download.
+- New videos can show their own overlay. Late handoff responses cannot bring a dismissed overlay back.
+- The extension popup stays connection-status only. Desktop UI, YouTube choices, updater, and startup features are included.
 
-Use **Settings → Check for updates now** in IDG v1.3.1, or install **IDG-Setup-v1.4.0.exe** after quitting the old app through the tray menu. Portable users should extract the entire **IDG-portable-v1.4.0.zip**. Existing v1.3.x unpacked extensions can update/reload through IDG; **IDG-extension-v1.4.0.zip** is available for a fresh installation.
+Update through **IDG → Settings → Check for updates now**, or install **IDG-Setup-v1.4.1.exe** after quitting the old app from the tray. Existing v1.3.x/v1.4.x unpacked extensions can update through IDG. Refresh already-open video pages to load the new overlay. Portable and extension ZIPs are also available; SHA256SUMS.txt lists package checksums.
 
-Validated with Rust/extension regression tests and visual checks at both desktop sizes. SHA256SUMS.txt contains package checksums.
+Verified with extension regressions for close/Escape, mutation rescans, YouTube navigation, and closing while a handoff is in flight, plus desktop build tests.

@@ -1,3 +1,10 @@
+## 1.4.1 — 2026-10-19
+
+- Slim the page's Download with IDG overlay to 28px with smaller typography and padding.
+- Add an accessible close button and Escape dismissal; keep the overlay hidden for that media until the page reloads.
+- Show the overlay for different videos and prevent dismissed or navigated overlays from returning after an in-flight request finishes.
+- Dismiss error notices with the overlay and preserve YouTube SPA routing.
+
 ## 1.4.0 — 2026-10-19
 
 - Redesign the desktop library with a compact dark teal interface inspired by the supplied reference.

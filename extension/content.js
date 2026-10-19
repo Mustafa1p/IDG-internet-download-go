@@ -1,60 +1,136 @@
-// Direct media downloads and YouTube video-page handoff (including blob players).
+// Compact, dismissible media handoff. Dismissal lasts for this page session.
 (() => {
   if (window.__idgInitialized) return;
   window.__idgInitialized = true;
   const buttons = new WeakMap();
+  const dismissed = new Set();
+  const watched = new WeakSet();
   function youtubePage() {
     try {
       if (!["www.youtube.com", "youtube.com", "m.youtube.com", "music.youtube.com", "www.youtube-nocookie.com"].includes(location.hostname)) return false;
       return (location.pathname === "/watch" && /^[A-Za-z0-9_-]{11}$/.test(new URL(location.href).searchParams.get("v") || "")) || /^\/(shorts|live|embed)\/[A-Za-z0-9_-]{11}/.test(location.pathname);
     } catch { return false; }
   }
+  function mediaKey(media) {
+    if (youtubePage()) {
+      const url = new URL(location.href);
+      return "youtube:" + (url.searchParams.get("v") || url.pathname);
+    }
+    return media.currentSrc || media.src || media.querySelector("source[src]")?.src || location.href;
+  }
   function attach(media) {
-    if (buttons.has(media) || !media.parentElement) return;
+    if (!media.parentElement) return;
+    const key = mediaKey(media);
+    const previous = buttons.get(media);
+    if (dismissed.has(key)) {
+      previous?.overlay.remove();
+      buttons.delete(media);
+      return;
+    }
+    if (previous) {
+      if (previous.key !== key) {
+        previous.key = key;
+        previous.notice?.remove(); previous.notice = null;
+        previous.button.textContent = "Download with IDG";
+        previous.button.title = "Choose a format and save location in IDG";
+        previous.button.disabled = false;
+      }
+      return;
+    }
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-idg-overlay", "");
+    Object.assign(overlay.style, {
+      all: "initial", position: "absolute", top: "6px", right: "6px", zIndex: "2147483647",
+      display: "inline-flex", alignItems: "center", height: "28px", maxWidth: "calc(100% - 12px)",
+      boxSizing: "border-box", background: "#126e65", color: "#fff", border: "1px solid #60d5c280",
+      borderRadius: "5px", font: "500 11px/16px system-ui, sans-serif", boxShadow: "0 2px 8px #0003",
+    });
     const button = document.createElement("button");
     button.textContent = "Download with IDG";
     button.type = "button";
+    button.title = "Choose a format and save location in IDG";
     button.setAttribute("aria-label", "Download this media with IDG");
     Object.assign(button.style, {
-      position: "absolute", top: "8px", right: "8px", zIndex: "2147483647",
-      padding: "10px 14px", background: "#126e65", color: "#fff", border: "1px solid #60d5c2",
-      borderRadius: "8px", cursor: "pointer", font: "600 13px system-ui, sans-serif",
-      boxShadow: "0 4px 16px #0004",
+      all: "initial", boxSizing: "border-box", height: "26px", padding: "4px 8px", margin: "0",
+      color: "#fff", background: "transparent", border: "0", borderRadius: "4px 0 0 4px",
+      cursor: "pointer", font: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+    });
+    const close = document.createElement("button");
+    close.textContent = "×";
+    close.type = "button";
+    close.title = "Hide for this video";
+    close.setAttribute("aria-label", "Hide IDG download button for this video");
+    Object.assign(close.style, {
+      all: "initial", boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center",
+      flex: "0 0 26px", width: "26px", height: "26px", margin: "0", padding: "0",
+      color: "#fff", background: "transparent", border: "0", borderLeft: "1px solid #ffffff40",
+      borderRadius: "0 4px 4px 0", cursor: "pointer", font: "400 17px/1 system-ui, sans-serif",
+    });
+    for (const control of [button, close]) {
+      control.addEventListener("focus", () => { control.style.outline = "2px solid #fff"; control.style.outlineOffset = "-2px"; });
+      control.addEventListener("blur", () => { control.style.outline = "none"; });
+      control.addEventListener("pointerdown", event => event.stopPropagation());
+    }
+    const state = { overlay, button, notice: null, key };
+    const dismiss = () => { dismissed.add(mediaKey(media)); overlay.remove(); buttons.delete(media); };
+    close.addEventListener("click", event => {
+      if (!event.isTrusted) return;
+      event.preventDefault(); event.stopPropagation(); dismiss();
+    });
+    overlay.addEventListener("keydown", event => {
+      if (event.isTrusted && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismiss(); }
     });
     button.addEventListener("click", async event => {
-      if (!event.isTrusted) return;
+      if (!event.isTrusted || button.disabled) return;
       event.preventDefault(); event.stopPropagation();
       const youtube = youtubePage();
       const url = youtube ? location.href : media.currentSrc || media.src || media.querySelector("source[src]")?.src;
       if (!url || !/^https?:/.test(url)) {
-        button.textContent = "This stream has no direct download";
+        button.textContent = "No direct link";
         button.title = "Use an HTTP/HTTPS media link. YouTube watch pages are supported separately.";
         return;
       }
-      button.disabled = true;
-      button.textContent = "Sending to IDG…";
+      const requestKey = mediaKey(media);
+      state.key = requestKey;
+      state.notice?.remove(); state.notice = null;
+      button.disabled = true; button.textContent = "Sending…";
       try {
         const response = await chrome.runtime.sendMessage({ type: "download", url, filename: youtube ? document.title.replace(/\s*[-–]\s*YouTube$/, "").trim() + ".mp4" : null });
-        button.textContent = response?.ok ? "Opened in IDG" : "IDG needs attention · retry";
+        // Closing or navigating while the handoff runs must not recreate the overlay.
+        if (buttons.get(media) !== state || state.key !== requestKey) return;
+        button.textContent = response?.ok ? "Opened in IDG" : "IDG · retry";
         button.title = response?.error || "Choose a filename and start in IDG";
         if (!response?.ok) {
-          let notice = buttons.get(media)?.notice;
-          if (!notice) {
-            notice = document.createElement("div");
-            notice.setAttribute("role", "alert");
-            Object.assign(notice.style, { position: "absolute", top: "52px", right: "8px", zIndex: "2147483647", maxWidth: "320px", padding: "12px", borderRadius: "8px", background: "#19262d", color: "#fff", font: "13px/1.5 system-ui", boxShadow: "0 4px 16px #0005" });
-            media.parentElement?.appendChild(notice);
-            buttons.get(media).notice = notice;
+          if (!state.notice) {
+            state.notice = document.createElement("div");
+            state.notice.setAttribute("role", "alert");
+            Object.assign(state.notice.style, {
+              position: "absolute", top: "32px", right: "0", zIndex: "2147483647", width: "240px", maxWidth: "calc(100vw - 24px)",
+              padding: "9px 10px", boxSizing: "border-box", borderRadius: "5px", background: "#19262d", color: "#fff",
+              font: "12px/1.5 system-ui, sans-serif", boxShadow: "0 2px 8px #0004", whiteSpace: "normal",
+            });
+            overlay.appendChild(state.notice);
           }
-          notice.textContent = response?.error || "Open IDG and retry.";
-        } else { buttons.get(media)?.notice?.remove(); buttons.get(media).notice = null; }
-      } catch { button.textContent = "Reload this page to reconnect"; }
-      button.disabled = false;
+          state.notice.textContent = response?.error || "Open IDG and retry.";
+        } else { state.notice?.remove(); state.notice = null; }
+      } catch {
+        if (buttons.get(media) === state && state.key === requestKey) {
+          button.textContent = "IDG · reconnect";
+          button.title = "Reload this page to reconnect to IDG.";
+        }
+      } finally {
+        if (buttons.get(media) === state && state.key === requestKey) button.disabled = false;
+      }
     });
+    overlay.appendChild(button); overlay.appendChild(close);
     const parent = media.parentElement;
     if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
-    parent.appendChild(button);
-    buttons.set(media, { button, notice: null });
+    buttons.set(media, state);
+    parent.appendChild(overlay);
+    if (!watched.has(media)) {
+      watched.add(media);
+      media.addEventListener("loadedmetadata", () => attach(media));
+    }
   }
   function scan(root) {
     if (root.matches?.("video,audio")) attach(root);
@@ -65,7 +141,7 @@
     document.addEventListener("yt-navigate-finish", () => scan(document));
     new MutationObserver(mutations => {
       for (const mutation of mutations) for (const node of mutation.addedNodes) {
-        if (node.nodeType === 1 && node.tagName !== "BUTTON") scan(node);
+        if (node.nodeType === 1 && !node.hasAttribute("data-idg-overlay") && node.tagName !== "BUTTON") scan(node);
       }
     }).observe(document.documentElement, { childList: true, subtree: true });
   }
