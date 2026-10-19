@@ -1,50 +1,18 @@
 /**
- * rust-idm background service worker (Manifest V3)
+ * IDG – Internet Download GO — browser extension background service worker
  *
- * Architecture mirrors IDM's IDMGCExt / IDMMsgHost design:
+ * Intercepts downloads and sends them to the IDG desktop app via its local
+ * HTTP API on http://127.0.0.1:1001.
  *
- *  Browser network stack
- *       │  webRequest.onHeadersReceived
- *       ▼
- *  background.js  ─── nativeMessaging ──► rust-idm (native host)
- *       │                                      │
- *       │  cancel browser download             │  POST /downloads  →  parallel segments
- *       ▼                                      ▼
- *  (download suppressed)              127.0.0.1:1001 API
- *
- * Evidence from IDMGCExt.crx:
- *   - webRequest + declarativeNetRequest permissions
- *   - nativeMessaging to "com.tonec.idm"  (we use "com.rust_idm.host")
- *   - Extensive MIME-type → extension mapping (za{} in background.js)
- *   - Ka = ["127.0.0.1:1001"] local API addresses
- *   - Content-Disposition / Content-Length / Accept-Ranges header inspection
+ * MV3-compatible approach:
+ *  1. chrome.downloads.onCreated  — catches all browser download starts
+ *  2. Cancels the browser download
+ *  3. POSTs the URL to IDG's local API
  */
 
-const NATIVE_HOST_NAME = "com.rust_idm.host";
-const API_BASE = "http://127.0.0.1:1001";
-
-// MIME types that should always be intercepted (mirrors IDM's za{} table)
-const INTERCEPT_MIME = new Set([
-  "application/octet-stream",
-  "application/zip", "application/x-zip", "application/x-zip-compressed",
-  "application/x-rar", "application/x-rar-compressed",
-  "application/x-7z-compressed",
-  "application/x-tar", "application/gzip", "application/x-gzip",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/x-dosexec", "application/x-msdos-program",
-  "application/x-msi",
-  "application/x-bittorrent", "application/torrent",
-  "video/mp4", "video/x-mp4", "video/mpeg", "video/webm", "video/avi",
-  "video/x-msvideo", "video/quicktime", "video/x-flv", "video/flv",
-  "video/x-ms-wmv", "video/3gpp",
-  "audio/mpeg", "audio/mp3", "audio/mp4", "audio/ogg", "audio/wav",
-  "audio/x-ms-wma",
-  "image/gif",
-]);
+const API_BASE        = "http://127.0.0.1:1001";
+const MIN_SIZE_BYTES  = 1024 * 100;   // ignore files < 100 KB
+const CONNECT_RETRY   = 5_000;        // ms between connection retries
 
 // File extensions that should always be intercepted
 const INTERCEPT_EXT = new Set([
@@ -52,197 +20,183 @@ const INTERCEPT_EXT = new Set([
   "zip","rar","7z","tar","gz","bz2","xz","cab","iso",
   "pdf","doc","docx","xls","xlsx","ppt","pptx",
   "mp3","mp4","avi","mkv","mov","wmv","flv","webm","m4v","m4a",
-  "wav","ogg","flac","aac",
-  "jpg","jpeg","png","gif","webp","bmp","tiff",
+  "wav","ogg","flac","aac","mp2","wma",
   "torrent",
 ]);
 
-// Minimum size (bytes) to trigger interception (avoid tiny API calls)
-const MIN_SIZE = 1024 * 100; // 100 KB
+// MIME types to intercept
+const INTERCEPT_MIME = new Set([
+  "application/octet-stream",
+  "application/zip","application/x-zip","application/x-zip-compressed",
+  "application/x-rar","application/x-rar-compressed","application/x-7z-compressed",
+  "application/x-tar","application/gzip","application/x-gzip",
+  "application/pdf","application/msword",
+  "application/x-dosexec","application/x-msdos-program","application/x-msi",
+  "application/x-bittorrent","application/torrent",
+  "video/mp4","video/x-mp4","video/mpeg","video/webm","video/avi",
+  "video/x-msvideo","video/quicktime","video/x-flv","video/flv",
+  "video/x-ms-wmv","video/3gpp","video/mkv",
+  "audio/mpeg","audio/mp3","audio/mp4","audio/ogg","audio/wav","audio/x-ms-wma",
+]);
 
-let nativePort = null;
 let interceptEnabled = true;
+let serverOnline     = false;
 
-// ── Native messaging ────────────────────────────────────────────────────────
+// ── Connectivity ─────────────────────────────────────────────────────────────
 
-function connectNative() {
+async function pingServer() {
   try {
-    nativePort = chrome.runtime.connectNative(NATIVE_HOST_NAME);
-    nativePort.onDisconnect.addListener(() => {
-      console.warn("[rust-idm] native host disconnected, will reconnect on next download");
-      nativePort = null;
+    const r = await fetch(`${API_BASE}/health`, {
+      signal: AbortSignal.timeout(2000)
     });
-  } catch (e) {
-    console.error("[rust-idm] cannot connect to native host:", e.message);
+    return r.ok;
+  } catch {
+    return false;
   }
 }
 
-function sendToNativeHost(msg) {
-  if (!nativePort) connectNative();
-  if (nativePort) {
-    nativePort.postMessage(msg);
-  } else {
-    // Fallback: hit the API directly from the extension (no native host needed).
-    sendToApi(msg);
-  }
+async function updateServerStatus() {
+  serverOnline = await pingServer();
+  // Update extension badge
+  chrome.action.setBadgeText({ text: serverOnline ? "" : "OFF" });
+  chrome.action.setBadgeBackgroundColor({ color: "#c62828" });
 }
 
-async function sendToApi(msg) {
-  if (msg.type !== "download") return;
-  try {
-    await fetch(`${API_BASE}/downloads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: msg.url,
-        filename: msg.filename,
-        referrer: msg.referrer,
-        cookies: msg.cookies,
-        user_agent: msg.userAgent,
-      }),
-    });
-  } catch (e) {
-    console.error("[rust-idm] API call failed:", e);
-  }
-}
+// Check on startup and every 5 seconds
+updateServerStatus();
+setInterval(updateServerStatus, CONNECT_RETRY);
 
-// ── Intercept logic ─────────────────────────────────────────────────────────
+// ── Intercept logic ───────────────────────────────────────────────────────────
 
-function shouldIntercept(details) {
+function shouldIntercept(url, mime, filesize) {
   if (!interceptEnabled) return false;
 
-  const ct = (details.responseHeaders || [])
-    .find(h => h.name.toLowerCase() === "content-type");
-  const cl = (details.responseHeaders || [])
-    .find(h => h.name.toLowerCase() === "content-length");
-  const cd = (details.responseHeaders || [])
-    .find(h => h.name.toLowerCase() === "content-disposition");
+  // Always intercept Content-Disposition attachment via mime signal
+  if (mime && INTERCEPT_MIME.has(mime.split(";")[0].trim().toLowerCase())) {
+    if (!filesize || filesize >= MIN_SIZE_BYTES) return true;
+  }
 
-  const mimeBase = ct ? ct.value.split(";")[0].trim().toLowerCase() : "";
-  const size = cl ? parseInt(cl.value, 10) : 0;
-
-  // Always intercept Content-Disposition: attachment
-  if (cd && cd.value.toLowerCase().includes("attachment")) return true;
-
-  // Intercept known download MIME types above minimum size
-  if (INTERCEPT_MIME.has(mimeBase) && size >= MIN_SIZE) return true;
-
-  // Intercept by file extension
-  const urlPath = new URL(details.url).pathname;
-  const ext = urlPath.split(".").pop().toLowerCase().split("?")[0];
-  if (INTERCEPT_EXT.has(ext) && size >= MIN_SIZE) return true;
+  // Check by extension
+  try {
+    const path = new URL(url).pathname.split("?")[0];
+    const ext  = path.split(".").pop().toLowerCase();
+    if (INTERCEPT_EXT.has(ext)) return true;
+  } catch {}
 
   return false;
 }
 
-function getFilenameFromHeaders(headers, url) {
-  const cd = (headers || []).find(h => h.name.toLowerCase() === "content-disposition");
-  if (cd) {
-    const match = cd.value.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i);
-    if (match) return decodeURIComponent(match[1].trim());
+async function sendDownloadToIDG(url, filename, referrer, cookies) {
+  if (!serverOnline) {
+    serverOnline = await pingServer();
+    if (!serverOnline) {
+      console.warn("[IDG ext] server offline — cannot intercept:", url);
+      return false;
+    }
   }
-  // Fall back to URL path
+
   try {
-    const path = new URL(url).pathname;
-    const last = path.split("/").pop();
-    if (last && last.includes(".")) return decodeURIComponent(last);
-  } catch (_) {}
-  return null;
-}
-
-async function getCookiesForUrl(url) {
-  try {
-    const cookies = await chrome.cookies.getAll({ url });
-    return cookies.map(c => `${c.name}=${c.value}`).join("; ") || null;
-  } catch (_) {
-    return null;
-  }
-}
-
-// ── webRequest listener ─────────────────────────────────────────────────────
-
-chrome.webRequest.onHeadersReceived.addListener(
-  async (details) => {
-    if (details.tabId < 0) return; // ignore background requests
-    if (!shouldIntercept(details)) return;
-
-    // Gather context
-    const filename = getFilenameFromHeaders(details.responseHeaders, details.url);
-    const cookies  = await getCookiesForUrl(details.url);
-    const tab      = await chrome.tabs.get(details.tabId).catch(() => null);
-    const referrer = tab ? tab.url : details.initiator || null;
-
-    console.log(`[rust-idm] intercepting: ${details.url}`);
-
-    sendToNativeHost({
-      type:      "download",
-      url:       details.url,
-      filename:  filename,
-      referrer:  referrer,
-      cookies:   cookies,
-      userAgent: navigator.userAgent,
+    const resp = await fetch(`${API_BASE}/downloads`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ url, filename, referrer, cookies }),
+      signal:  AbortSignal.timeout(3000),
     });
+    return resp.ok || resp.status === 201;
+  } catch (e) {
+    console.error("[IDG ext] API call failed:", e);
+    serverOnline = false;
+    return false;
+  }
+}
 
-    // Cancel the browser's own download so IDM handles it exclusively.
-    return { cancel: true };
-  },
-  { urls: ["<all_urls>"], types: ["main_frame", "sub_frame", "xmlhttprequest", "media", "object"] },
-  ["responseHeaders", "blocking", "extraHeaders"]
-);
+// ── chrome.downloads.onCreated (MV3-compatible interception) ─────────────────
+//
+// In Manifest V3, blocking webRequest is not allowed for extensions.
+// The correct approach is to listen for the download starting, cancel it
+// immediately, and send it to IDG instead.
 
-// ── Context-menu "Download with rust-idm" ───────────────────────────────────
+chrome.downloads.onCreated.addListener(async (item) => {
+  if (!interceptEnabled) return;
+  if (!shouldIntercept(item.url, item.mime, item.fileSize)) return;
+
+  console.log("[IDG ext] intercepting download:", item.url);
+
+  // Cancel the browser's download
+  chrome.downloads.cancel(item.id, () => {
+    // Erase the entry from the download shelf
+    chrome.downloads.erase({ id: item.id });
+  });
+
+  // Get cookies for this URL
+  let cookies = null;
+  try {
+    const jar    = await chrome.cookies.getAll({ url: item.url });
+    if (jar.length) cookies = jar.map(c => `${c.name}=${c.value}`).join("; ");
+  } catch {}
+
+  // Get referrer from current tab
+  let referrer = null;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) referrer = tab.url;
+  } catch {}
+
+  const sent = await sendDownloadToIDG(item.url, item.filename || null, referrer, cookies);
+  if (!sent) {
+    // IDG unavailable — re-open the download in browser as fallback
+    chrome.downloads.download({ url: item.url });
+  }
+});
+
+// ── Context menu ─────────────────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: "rust-idm-download-link",
-    title: "Download with rust-idm",
-    contexts: ["link"],
+    id: "idg-download-link",  title: "Download with IDG", contexts: ["link"],
   });
   chrome.contextMenus.create({
-    id: "rust-idm-download-image",
-    title: "Download image with rust-idm",
-    contexts: ["image"],
+    id: "idg-download-image", title: "Download image with IDG", contexts: ["image"],
   });
   chrome.contextMenus.create({
-    id: "rust-idm-download-video",
-    title: "Download video with rust-idm",
-    contexts: ["video", "audio"],
+    id: "idg-download-video", title: "Download video with IDG", contexts: ["video","audio"],
   });
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || info.srcUrl;
   if (!url) return;
-
-  const cookies  = await getCookiesForUrl(url);
-  const referrer = tab ? tab.url : null;
-
-  sendToNativeHost({
-    type:      "download",
-    url:       url,
-    filename:  null,
-    referrer:  referrer,
-    cookies:   cookies,
-    userAgent: navigator.userAgent,
-  });
+  let cookies  = null;
+  try {
+    const jar = await chrome.cookies.getAll({ url });
+    if (jar.length) cookies = jar.map(c => `${c.name}=${c.value}`).join("; ");
+  } catch {}
+  await sendDownloadToIDG(url, null, tab?.url ?? null, cookies);
 });
 
-// ── Message from content scripts or popup ───────────────────────────────────
+// ── Messages from popup ───────────────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === "download") {
-    sendToNativeHost(msg);
-    sendResponse({ status: "queued" });
-  }
-  if (msg.type === "toggleIntercept") {
-    interceptEnabled = msg.enabled;
-    sendResponse({ interceptEnabled });
-  }
-  if (msg.type === "getStatus") {
-    sendResponse({ interceptEnabled });
-  }
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  (async () => {
+    switch (msg.type) {
+      case "getStatus":
+        sendResponse({ interceptEnabled, serverOnline });
+        break;
+      case "toggleIntercept":
+        interceptEnabled = msg.enabled;
+        sendResponse({ interceptEnabled });
+        break;
+      case "download":
+        const ok = await sendDownloadToIDG(msg.url, null, msg.referrer ?? null, null);
+        sendResponse({ ok });
+        break;
+      case "ping":
+        serverOnline = await pingServer();
+        sendResponse({ serverOnline });
+        break;
+    }
+  })();
   return true; // keep channel open for async
 });
 
-connectNative();
-console.log("[rust-idm] background service worker ready");
+console.log("[IDG ext] background service worker ready");

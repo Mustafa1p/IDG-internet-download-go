@@ -4,9 +4,14 @@ use egui::{Color32, FontId, Frame, Margin, RichText, Rounding, Stroke, Ui, Vec2}
 use egui_extras::{Column, TableBuilder};
 use tokio::runtime::Handle;
 
-use crate::download::{
-    engine::start_download,
-    types::{DownloadItem, Downloads, Status},
+use crate::{
+    APP_VERSION,
+    download::{
+        engine::start_download,
+        types::{DownloadItem, Downloads, Status},
+    },
+    server::{ServerState, run_server},
+    updater::{UpdateInfo, check_for_update},
 };
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -16,7 +21,8 @@ const TOOLBAR: Color32 = Color32::from_rgb(20, 20, 30);
 const SIDEBAR: Color32 = Color32::from_rgb(22, 22, 32);
 const ROW_ODD: Color32 = Color32::from_rgb(26, 26, 38);
 const ROW_EVEN: Color32 = Color32::from_rgb(30, 30, 44);
-const ROW_SEL: Color32 = Color32::from_rgba_premultiplied(0, 140, 186, 60);
+// Subtle dark-blue selection — NOT the bright ACCENT teal
+const ROW_SEL: Color32 = Color32::from_rgb(38, 68, 120);
 const ACCENT: Color32 = Color32::from_rgb(0, 195, 220);
 const ACCENT2: Color32 = Color32::from_rgb(25, 118, 210);
 const GREEN: Color32 = Color32::from_rgb(72, 199, 142);
@@ -103,6 +109,10 @@ pub struct IDGApp {
     show_settings: bool,
     default_save_dir: String,
     default_segments: usize,
+    /// Set by the background update checker when a new version is available.
+    update_info: Option<UpdateInfo>,
+    /// Receiver for update check results.
+    update_rx: Option<tokio::sync::oneshot::Receiver<Option<UpdateInfo>>>,
 }
 
 impl IDGApp {
@@ -113,10 +123,29 @@ impl IDGApp {
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| ".".into());
 
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        // ── Start the local API server (used by the browser extension) ───────
+        let srv_state = ServerState {
+            downloads: downloads.clone(),
+            client: client.clone(),
+            rt_handle: rt.clone(),
+            default_dir: default_save_dir.clone(),
+        };
+        rt.spawn(run_server(srv_state));
+
+        // ── Start update checker ─────────────────────────────────────────────
+        let (update_tx, update_rx) = tokio::sync::oneshot::channel();
+        let update_client = client.clone();
+        rt.spawn(async move {
+            let info = check_for_update(&update_client, APP_VERSION).await;
+            let _ = update_tx.send(info);
+        });
+
         IDGApp {
             rt,
             client,
-            downloads: Arc::new(std::sync::Mutex::new(Vec::new())),
+            downloads,
             category: Category::All,
             selected_id: None,
             show_add: false,
@@ -124,6 +153,8 @@ impl IDGApp {
             show_settings: false,
             default_save_dir,
             default_segments: 8,
+            update_info: None,
+            update_rx: Some(update_rx),
         }
     }
 
@@ -420,9 +451,8 @@ impl IDGApp {
                             };
 
                             body.row(28.0, |mut row| {
-                                row.set_selected(is_sel);
-
-                                // # ──────────────────────
+                                // Do NOT call row.set_selected() — it overrides our
+                                // manual background with egui's selection.bg_fill teal.
                                 let (_, r) = row.col(|ui| {
                                     ui.painter()
                                         .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
@@ -593,9 +623,29 @@ impl IDGApp {
     }
 
     fn add_dialog(&mut self, ctx: &egui::Context) {
-        let mut open = self.show_add;
+        if !self.show_add {
+            return;
+        }
+
+        // Auto-paste clipboard URL when the dialog first opens.
+        if self.dialog.url.is_empty() {
+            if let Ok(mut cb) = arboard::Clipboard::new() {
+                if let Ok(text) = cb.get_text() {
+                    let t = text.trim().to_string();
+                    if t.starts_with("http://")
+                        || t.starts_with("https://")
+                        || t.starts_with("ftp://")
+                    {
+                        self.dialog.filename = filename_from_url(&t);
+                        self.dialog.url = t;
+                    }
+                }
+            }
+        }
+
+        let mut should_close = false;
+
         egui::Window::new("Enter new address to download")
-            .open(&mut open)
             .resizable(false)
             .collapsible(false)
             .fixed_size(Vec2::new(440.0, 150.0))
@@ -618,8 +668,19 @@ impl IDGApp {
                     if r.changed() {
                         self.dialog.filename = filename_from_url(&self.dialog.url);
                     }
-                    // dropdown indicator
-                    ui.label(RichText::new("▼").size(10.0).color(GRAY));
+                    // Paste button
+                    if ui
+                        .small_button("📋")
+                        .on_hover_text("Paste from clipboard")
+                        .clicked()
+                    {
+                        if let Ok(mut cb) = arboard::Clipboard::new() {
+                            if let Ok(text) = cb.get_text() {
+                                self.dialog.url = text.trim().to_string();
+                                self.dialog.filename = filename_from_url(&self.dialog.url);
+                            }
+                        }
+                    }
                 });
 
                 // Save dir row
@@ -663,7 +724,7 @@ impl IDGApp {
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button(" Cancel ").clicked() {
-                            self.show_add = false;
+                            should_close = true;
                         }
                         let can = !self.dialog.url.trim().is_empty();
                         ui.add_enabled_ui(can, |ui| {
@@ -685,13 +746,17 @@ impl IDGApp {
                                     self.dialog.filename.trim().to_string()
                                 };
                                 self.enqueue(url, dir.join(name), self.dialog.segments);
-                                self.show_add = false;
+                                should_close = true;
                             }
                         });
                     });
                 });
             });
-        self.show_add = open;
+
+        // Close AFTER the window borrow is released.
+        if should_close {
+            self.show_add = false;
+        }
     }
 
     fn settings_dialog(&mut self, ctx: &egui::Context) {
@@ -895,6 +960,59 @@ impl eframe::App for IDGApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let items: Vec<DownloadItem> = self.downloads.lock().unwrap().clone();
 
+        // ── Poll update checker ───────────────────────────────────────────────
+        if let Some(rx) = self.update_rx.as_mut() {
+            if let Ok(result) = rx.try_recv() {
+                self.update_info = result;
+                self.update_rx = None;
+            }
+        }
+
+        // ── Update available banner ───────────────────────────────────────────
+        if let Some(ref info) = self.update_info.clone() {
+            egui::TopBottomPanel::top("update_banner")
+                .frame(
+                    Frame::none()
+                        .fill(Color32::from_rgb(30, 80, 40))
+                        .inner_margin(Margin::symmetric(10.0, 4.0)),
+                )
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(format!("🆕 IDG {} is available!", info.version))
+                                .size(12.0)
+                                .color(GREEN)
+                                .strong(),
+                        );
+                        let url = info
+                            .installer_url
+                            .clone()
+                            .unwrap_or_else(|| info.release_url.clone());
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new("  Download Update  ").color(Color32::WHITE),
+                                )
+                                .fill(Color32::from_rgb(40, 160, 60))
+                                .rounding(4.0),
+                            )
+                            .clicked()
+                        {
+                            // Start downloading the installer through IDG itself.
+                            let save = PathBuf::from(&self.default_save_dir)
+                                .join(format!("IDG-Setup-v{}.exe", info.version));
+                            self.enqueue(url, save, 8);
+                            self.update_info = None;
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("✕").clicked() {
+                                self.update_info = None;
+                            }
+                        });
+                    });
+                });
+        }
+
         // ── Toolbar ──────────────────────────────────────────────────────────
         egui::TopBottomPanel::top("toolbar")
             .min_height(58.0)
@@ -963,7 +1081,7 @@ fn setup_visuals(ctx: &egui::Context) {
     v.panel_fill = PANEL;
     v.window_fill = Color32::from_rgb(26, 26, 38);
     v.override_text_color = Some(TEXT);
-    v.selection.bg_fill = ROW_SEL;
+    v.selection.bg_fill = Color32::from_rgb(38, 68, 120); // matches ROW_SEL exactly
     v.hyperlink_color = ACCENT;
     v.window_stroke = Stroke::new(1.0, BORDER);
     v.window_rounding = Rounding::same(6.0);

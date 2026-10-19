@@ -34,6 +34,7 @@
     "declarativeNetRequest",
     "downloads",
     "downloads.shelf",
+    "downloads.ui",
     "tabs",
     "cookies",
     "contextMenus",
@@ -41,7 +42,7 @@
     "nativeMessaging",
     "scripting"
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": ["<all_urls>", "http://127.0.0.1:1001/"],
   "web_accessible_resources": [
     {
       "resources": ["intercepted.html"],

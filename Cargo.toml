@@ -1,6 +1,6 @@
 [package]
 name = "idg"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 
 [[bin]]
@@ -27,3 +27,9 @@ futures      = "0.3"
 bytes        = "1"
 rfd          = "0.14"
 dirs         = "5"
+arboard = "3.7.0"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+serde_json = "1.0.154"
+axum = "0.8.9"
+tower-http = { version = "0.7.1", features = ["cors"] }
+
