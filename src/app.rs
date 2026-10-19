@@ -77,6 +77,7 @@ struct AddDialog {
     url: String,
     save_dir: String,
     filename: String,
+    filename_edited: bool,
 }
 impl AddDialog {
     fn new(dir: &str) -> Self {
@@ -84,6 +85,7 @@ impl AddDialog {
             url: String::new(),
             save_dir: dir.to_owned(),
             filename: String::new(),
+            filename_edited: false,
         }
     }
 }
@@ -209,9 +211,10 @@ impl IDGApp {
         }
     }
 
-    fn enqueue(&self, url: String, save_path: PathBuf) {
+    fn enqueue(&self, url: String, save_path: PathBuf, preserve_filename: bool) {
         let segments = self.connection_settings.lock().unwrap().requested_count();
-        let item = DownloadItem::new(url, save_path, segments);
+        let mut item = DownloadItem::new(url, save_path, segments);
+        item.preserve_filename = preserve_filename;
         let id = item.id.clone();
         self.downloads.lock().unwrap().push(item);
         let dl = self.downloads.clone();
@@ -618,6 +621,7 @@ impl IDGApp {
                     );
                     if r.changed() {
                         self.dialog.filename = filename_from_url(&self.dialog.url);
+                        self.dialog.filename_edited = false;
                     }
                     // Paste button
                     if ui
@@ -629,6 +633,7 @@ impl IDGApp {
                     {
                         self.dialog.url = text.trim().to_string();
                         self.dialog.filename = filename_from_url(&self.dialog.url);
+                        self.dialog.filename_edited = false;
                     }
                 });
 
@@ -637,9 +642,15 @@ impl IDGApp {
                         [62.0, 22.0],
                         egui::Label::new(RichText::new("Filename").color(TEXT_DIM)),
                     );
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.dialog.filename).desired_width(330.0),
-                    );
+                    if ui
+                        .add(
+                            egui::TextEdit::singleline(&mut self.dialog.filename)
+                                .desired_width(330.0),
+                        )
+                        .changed()
+                    {
+                        self.dialog.filename_edited = true;
+                    }
                 });
                 // Save dir row
                 ui.horizontal(|ui| {
@@ -703,6 +714,7 @@ impl IDGApp {
                                         item.url = url;
                                         item.filename = safe_filename(&name);
                                         item.save_path = save_path;
+                                        item.preserve_filename = self.dialog.filename_edited;
                                         item.awaiting_confirmation = false;
                                     }
                                     drop(downloads);
@@ -724,7 +736,7 @@ impl IDGApp {
                                         }
                                     });
                                 } else {
-                                    self.enqueue(url, save_path);
+                                    self.enqueue(url, save_path, self.dialog.filename_edited);
                                 }
                                 should_close = true;
                             }
@@ -1030,6 +1042,7 @@ impl eframe::App for IDGApp {
             self.dialog = AddDialog {
                 url: item.url.clone(),
                 filename: item.filename.clone(),
+                filename_edited: item.preserve_filename,
                 save_dir: self.default_save_dir.clone(),
             };
             self.pending_browser_id = Some(item.id.clone());
@@ -1078,7 +1091,7 @@ impl eframe::App for IDGApp {
                             // Start downloading the installer through IDG itself.
                             let save = PathBuf::from(&self.default_save_dir)
                                 .join(format!("IDG-Setup-v{}.exe", info.version));
-                            self.enqueue(url, save);
+                            self.enqueue(url, save, true);
                             self.update_info = None;
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1266,15 +1279,7 @@ fn fmt_eta(secs: f64) -> String {
 }
 
 fn filename_from_url(url: &str) -> String {
-    if let Some(name) = crate::download::media::default_filename(url) {
-        return name;
-    }
-    url.split('?')
-        .next()
-        .and_then(|p| p.rsplit('/').next())
-        .filter(|s| !s.is_empty() && s.contains('.'))
-        .unwrap_or("download")
-        .to_string()
+    crate::download::probe::filename_from_url(url)
 }
 
 fn status_info(s: &Status) -> (&'static str, Color32) {

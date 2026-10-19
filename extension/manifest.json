@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IDG Integration Module",
   "description": "Intercepts browser downloads and sends them to IDG for parallel multi-segment downloading",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "icons": {
     "16": "images/icon16.png",
     "32": "images/icon32.png",

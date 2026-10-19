@@ -113,6 +113,10 @@ async fn add_download(
         );
     }
     let save_dir = req.save_dir.unwrap_or(state.default_dir.clone());
+    let preserve_filename = req.filename.as_ref().is_some_and(|name| {
+        let name = safe_filename(name);
+        name.contains('.') && name != filename_from_url(&req.url)
+    });
     let filename = req
         .filename
         .filter(|f| !f.is_empty())
@@ -125,6 +129,7 @@ async fn add_download(
         .min(32);
 
     let mut item = DownloadItem::new(req.url, save_path, segments);
+    item.preserve_filename = preserve_filename;
     let id = item.id.clone();
 
     for (name, value) in [
@@ -244,12 +249,7 @@ pub async fn run_server(state: ServerState) {
 // ---------------------------------------------------------------------------
 
 fn filename_from_url(url: &str) -> String {
-    url.split('?')
-        .next()
-        .and_then(|p| p.rsplit('/').next())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("download")
-        .to_string()
+    crate::download::probe::filename_from_url(url)
 }
 
 #[cfg(test)]
@@ -325,6 +325,99 @@ mod tests {
             .unwrap();
         assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
         server.abort();
+    }
+
+    #[tokio::test]
+    async fn redirected_archives_resolve_server_names_and_preserve_user_edits() {
+        let (source, source_task) = serve(
+            Router::new()
+                .route(
+                    "/archive/refs/heads/main.zip",
+                    get(|| async { axum::response::Redirect::temporary("/zip/refs/heads/main") }),
+                )
+                .route(
+                    "/zip/refs/heads/main",
+                    get(|| async {
+                        (
+                            [(
+                                "content-disposition",
+                                "attachment; filename=Anti-Youtube-Ads-Extension-main.zip",
+                            )],
+                            b"archive bytes".to_vec(),
+                        )
+                    }),
+                ),
+        )
+        .await;
+        let directory = tempfile::tempdir().unwrap();
+        let state = state(directory.path());
+        let downloads = state.downloads.clone();
+        let (api, api_task) = serve(build_router(state)).await;
+        let client = reqwest::Client::new();
+        for supplied in [None, Some("main"), Some("main.zip"), Some("my-archive.zip")] {
+            let response = client.post(format!("{api}/downloads"))
+                .json(&serde_json::json!({"url": format!("{source}/archive/refs/heads/main.zip"), "filename": supplied}))
+                .send().await.unwrap();
+            assert_eq!(response.status(), StatusCode::CREATED);
+            let id = response.json::<serde_json::Value>().await.unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let item = tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let item = downloads
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .find(|i| i.id == id)
+                        .unwrap()
+                        .clone();
+                    if matches!(item.status, Status::Completed | Status::Failed) {
+                        break item;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+            assert_eq!(item.status, Status::Completed, "{:?}", item.error);
+            let expected = if supplied == Some("my-archive.zip") {
+                "my-archive.zip"
+            } else {
+                "Anti-Youtube-Ads-Extension-main.zip"
+            };
+            assert_eq!(item.filename, expected);
+            assert_eq!(item.save_path, directory.path().join(expected));
+            assert_eq!(std::fs::read(item.save_path).unwrap(), b"archive bytes");
+        }
+        source_task.abort();
+        api_task.abort();
+    }
+
+    #[tokio::test]
+    #[ignore = "Live GitHub archive/network test"]
+    async fn supplied_github_archive_uses_complete_filename_and_zip_bytes() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut item = DownloadItem::new(
+            "https://github.com/Mustafa1p/Anti-Youtube-Ads-Extension-/archive/refs/heads/main.zip"
+                .into(),
+            directory.path().join("main.zip"),
+            0,
+        );
+        item.preserve_filename = false;
+        let id = item.id.clone();
+        let downloads = Arc::new(Mutex::new(vec![item]));
+        start_download(Arc::new(reqwest::Client::new()), downloads.clone(), id)
+            .await
+            .unwrap();
+        let items = downloads.lock().unwrap();
+        let item = &items[0];
+        assert_eq!(item.status, Status::Completed);
+        assert_eq!(item.filename, "Anti-Youtube-Ads-Extension-main.zip");
+        let bytes = std::fs::read(&item.save_path).unwrap();
+        assert!(bytes.starts_with(b"PK\x03\x04"));
+        assert_eq!(item.downloaded_bytes, bytes.len() as u64);
+        println!("Downloaded {} ({} bytes)", item.filename, bytes.len());
     }
 
     async fn authenticated_file(method: Method, headers: HeaderMap) -> impl IntoResponse {

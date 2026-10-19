@@ -68,6 +68,8 @@ pub struct DownloadItem {
     pub media_cookies: Option<String>,
     /// Resolved filename (from `Content-Disposition` or URL path).
     pub filename: String,
+    /// Keep a filename explicitly selected by the user instead of server metadata.
+    pub preserve_filename: bool,
     /// Absolute path of the output file.
     pub save_path: PathBuf,
     /// Total file size reported by the server (`Content-Length`), if known.
@@ -120,6 +122,7 @@ impl DownloadItem {
             awaiting_confirmation: false,
             media_cookies: None,
             filename,
+            preserve_filename: true,
             save_path,
             total_bytes: None,
             downloaded_bytes: 0,

@@ -134,7 +134,7 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .get("content-disposition")
         .and_then(|v| v.to_str().ok())
         .and_then(filename_from_content_disposition)
-        .or_else(|| filename_from_url(&final_url));
+        .or_else(|| Some(filename_from_url(&final_url)));
 
     Ok(ProbeResult {
         content_length,
@@ -148,63 +148,135 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-/// Extract a filename from a `Content-Disposition` header value.
-///
-/// Handles both `filename="foo.zip"` and `filename*=UTF-8''foo%20bar.zip`.
+/// Decode HTTP filename parameters, preferring RFC 5987 over the legacy fallback.
 fn filename_from_content_disposition(cd: &str) -> Option<String> {
-    for part in cd.split(';') {
-        let part = part.trim();
-        let lower = part.to_ascii_lowercase();
-
-        if lower.starts_with("filename*=") {
-            // RFC 5987 extended value: filename*=UTF-8''encoded%20name.zip
-            let val = part.split_once('=')?.1;
-            let decoded = percent_decode(val.trim().trim_matches('\''));
-            if !decoded.is_empty() {
-                return Some(decoded);
-            }
-        } else if lower.starts_with("filename=") {
-            let val = part.split_once('=')?.1;
-            let clean = val.trim().trim_matches('"').trim_matches('\'');
-            if !clean.is_empty() {
-                return Some(clean.to_owned());
-            }
+    let mut parts = Vec::new();
+    let mut part = String::new();
+    let mut quoted = false;
+    let mut escaped = false;
+    for c in cd.chars() {
+        if escaped {
+            part.push(c);
+            escaped = false;
+        } else if quoted && c == '\\' {
+            escaped = true;
+        } else if c == '"' {
+            quoted = !quoted;
+        } else if c == ';' && !quoted {
+            parts.push(std::mem::take(&mut part));
+        } else {
+            part.push(c);
         }
     }
-    None
-}
-
-/// Extract the last path segment from a URL as a filename.
-fn filename_from_url(url: &str) -> Option<String> {
-    let path = url.split('?').next()?;
-    let last = path.rsplit('/').next()?;
-    if last.contains('.') && !last.is_empty() {
-        Some(last.to_owned())
-    } else {
-        None
+    parts.push(part);
+    let mut fallback = None;
+    let mut extended = None;
+    for part in parts {
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        if key.trim().eq_ignore_ascii_case("filename*") {
+            let mut fields = value.splitn(3, '\'');
+            if let (Some(charset), Some(_language), Some(encoded)) =
+                (fields.next(), fields.next(), fields.next())
+                && charset.eq_ignore_ascii_case("UTF-8")
+            {
+                extended = percent_decode(encoded);
+            }
+        } else if key.trim().eq_ignore_ascii_case("filename") {
+            fallback = Some(value.to_owned());
+        }
     }
+    extended.filter(|s| !s.is_empty()).or(fallback)
 }
 
-/// Minimal percent-decoder for `Content-Disposition` filenames.
-fn percent_decode(s: &str) -> String {
-    // Strip the charset prefix "UTF-8''" if present.
-    let s = if let Some(pos) = s.find("''") {
-        &s[pos + 2..]
-    } else {
-        s
+/// Shared URL suggestion for the desktop dialog and browser API. Server headers
+/// can replace this suggestion after redirects; explicit user edits are retained.
+pub fn filename_from_url(url: &str) -> String {
+    if let Some(name) = super::media::default_filename(url) {
+        return name;
+    }
+    let Ok(url) = reqwest::Url::parse(url) else {
+        return "download".into();
     };
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '%' {
-            let hi = chars.next().unwrap_or('0');
-            let lo = chars.next().unwrap_or('0');
-            if let Ok(b) = u8::from_str_radix(&format!("{hi}{lo}"), 16) {
-                out.push(b as char);
-                continue;
-            }
+    for (key, value) in url.query_pairs() {
+        if matches!(
+            key.to_ascii_lowercase().as_str(),
+            "filename" | "file_name" | "download"
+        ) && value.contains('.')
+        {
+            return super::types::safe_filename(&value);
         }
-        out.push(c);
     }
-    out
+    url.path_segments()
+        .and_then(|mut segments| segments.next_back())
+        .filter(|name| !name.is_empty())
+        .and_then(percent_decode)
+        .map(|name| super::types::safe_filename(&name))
+        .unwrap_or_else(|| "download".into())
+}
+
+fn percent_decode(s: &str) -> Option<String> {
+    let bytes = s.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(hi), Some(lo)) = (
+                (bytes[i + 1] as char).to_digit(16),
+                (bytes[i + 2] as char).to_digit(16),
+            )
+        {
+            decoded.push((hi * 16 + lo) as u8);
+            i += 3;
+            continue;
+        }
+        decoded.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(decoded).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn header_names_and_url_encoding() {
+        assert_eq!(
+            filename_from_content_disposition(
+                "attachment; filename=Anti-Youtube-Ads-Extension-main.zip"
+            ),
+            Some("Anti-Youtube-Ads-Extension-main.zip".into())
+        );
+        assert_eq!(
+            filename_from_content_disposition(
+                "attachment; filename=backup.zip; filename*=UTF-8'en'%D9%85%D9%84%D9%81.zip"
+            ),
+            Some("ملف.zip".into())
+        );
+        assert_eq!(
+            filename_from_content_disposition("attachment; filename=\"a;b.zip\""),
+            Some("a;b.zip".into())
+        );
+        assert_eq!(
+            filename_from_content_disposition(
+                "attachment; filename*=UTF-8''%FF; filename=backup.zip"
+            ),
+            Some("backup.zip".into())
+        );
+        assert_eq!(
+            filename_from_url("https://example.com/my%20file.zip#section"),
+            "my file.zip"
+        );
+        assert_eq!(
+            filename_from_url("https://example.com/get?filename=report%20final.pdf"),
+            "report final.pdf"
+        );
+        assert_eq!(percent_decode("bad%QZ.zip").unwrap(), "bad%QZ.zip");
+    }
 }

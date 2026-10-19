@@ -98,7 +98,7 @@ pub async fn start_download(
     with_item(&downloads, &id, |i| {
         i.total_bytes = probe_result.content_length;
         if let Some(ref server_name) = probe_result.filename
-            && i.filename == "download"
+            && (!i.preserve_filename || i.filename == "download")
         {
             let dir = i.save_path.parent().unwrap_or(std::path::Path::new("."));
             i.save_path = dir.join(safe_filename(server_name));

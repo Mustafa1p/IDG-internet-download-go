@@ -1,3 +1,9 @@
+## 1.2.1 — 2026-10-19
+
+- Resolve redirected download filenames from server metadata instead of saving GitHub archives as main or main.zip.
+- Share filename detection between the desktop dialog and browser API; decode URL and UTF-8 header filenames correctly.
+- Preserve filenames explicitly edited by the user; test redirected downloads and exact output bytes.
+
 ## 1.2.0 — 2026-10-19
 
 - Add YouTube watch-page, Shorts, and short-link downloads using bundled, checksum-verified yt-dlp, FFmpeg, and Deno.
