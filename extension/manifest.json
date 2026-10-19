@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "IDG – Internet Download GO",
+  "description": "Intercepts browser downloads and sends them to IDG for parallel multi-segment downloading",
+  "version": "1.0.0",
+  "icons": {
+    "16":  "images/icon16.png",
+    "32":  "images/icon32.png",
+    "48":  "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "images/icon16.png",
+      "32": "images/icon32.png",
+      "48": "images/icon48.png"
+    },
+    "default_popup": "popup.html",
+    "default_title": "IDG – Internet Download GO"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "js": ["content.js"],
+      "matches": ["*://*/*"],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ],
+  "permissions": [
+    "webRequest",
+    "declarativeNetRequest",
+    "downloads",
+    "downloads.shelf",
+    "tabs",
+    "cookies",
+    "contextMenus",
+    "storage",
+    "nativeMessaging",
+    "scripting"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["intercepted.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "minimum_chrome_version": "109.0"
+}

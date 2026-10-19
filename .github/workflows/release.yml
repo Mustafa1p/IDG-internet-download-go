@@ -1,0 +1,96 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags:     ["v*.*.*"]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Build on Windows ────────────────────────────────────────────────────────
+  build:
+    name: Build (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IDG-windows-x64
+          path: target/release/IDG.exe
+          if-no-files-found: error
+
+  # ── Release (only on tag push) ───────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: windows-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: IDG-windows-x64
+          path: dist/
+
+      - name: Install Inno Setup
+        run: |
+          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:TEMP\inno.exe" -UseBasicParsing
+          Start-Process -FilePath "$env:TEMP\inno.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+
+      - name: Build installer
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc installer/setup.iss
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: IDG ${{ github.ref_name }}
+          body: |
+            ## IDG – Internet Download GO ${{ github.ref_name }}
+
+            ### Downloads
+            | File | Description |
+            |------|-------------|
+            | `IDG-Setup-*.exe` | Windows installer (recommended) |
+            | `IDG.exe` | Portable executable |
+
+            ### What's new
+            See [CHANGELOG](https://github.com/${{ github.repository }}/commits/main) for details.
+          files: |
+            dist/IDG.exe
+            dist/IDG-Setup-*.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

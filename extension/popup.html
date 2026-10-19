@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>rust-idm</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 320px;
+      font-family: "Segoe UI", sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+    }
+    header {
+      background: #1976d2;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header h1 { font-size: 16px; font-weight: 600; }
+    header span { font-size: 12px; opacity: .8; }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .toggle-label { font-size: 13px; }
+    /* Toggle switch */
+    .switch { position:relative; display:inline-block; width:42px; height:24px; }
+    .switch input { opacity:0; width:0; height:0; }
+    .slider {
+      position:absolute; cursor:pointer; inset:0;
+      background:#555; border-radius:24px; transition:.3s;
+    }
+    .slider:before {
+      content:""; position:absolute;
+      height:18px; width:18px; left:3px; bottom:3px;
+      background:#fff; border-radius:50%; transition:.3s;
+    }
+    input:checked + .slider { background:#1976d2; }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    #url-form { padding: 12px 16px; border-bottom: 1px solid #2a2a4a; }
+    #url-form label { font-size: 12px; opacity: .7; }
+    #url-form input {
+      width: 100%; margin-top: 4px; padding: 6px 8px;
+      background: #2a2a4a; border: 1px solid #3a3a6a;
+      border-radius: 4px; color: #e0e0e0; font-size: 13px;
+    }
+    #url-form button {
+      margin-top: 8px; width: 100%; padding: 7px;
+      background: #1976d2; border: none; border-radius: 4px;
+      color: #fff; font-size: 13px; cursor: pointer;
+    }
+    #url-form button:hover { background: #1565c0; }
+
+    #downloads-list { padding: 8px; max-height: 300px; overflow-y: auto; }
+    .dl-item {
+      background: #2a2a4a; border-radius: 6px; padding: 8px 10px;
+      margin-bottom: 6px; font-size: 12px;
+    }
+    .dl-item .name { font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dl-item progress { width: 100%; height: 6px; border-radius: 3px; }
+    .dl-item .meta { display: flex; justify-content: space-between; margin-top: 3px; opacity: .7; }
+    .state-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 10px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+    }
+    .state-queued    { background:#455a64; }
+    .state-probing   { background:#f57c00; color:#000; }
+    .state-downloading{ background:#1976d2; }
+    .state-completed { background:#388e3c; }
+    .state-failed    { background:#c62828; }
+    .state-paused    { background:#616161; }
+    footer { padding: 8px 16px; font-size: 11px; opacity: .5; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>rust-idm</h1>
+      <span>Multi-segment Download Manager</span>
+    </div>
+  </header>
+
+  <div class="toggle-row">
+    <span class="toggle-label">Intercept downloads</span>
+    <label class="switch">
+      <input type="checkbox" id="toggleIntercept" checked />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div id="url-form">
+    <label for="manual-url">Manual URL</label>
+    <input type="text" id="manual-url" placeholder="https://example.com/file.zip" />
+    <button id="add-btn">Add Download</button>
+  </div>
+
+  <div id="downloads-list">
+    <p style="opacity:.5; font-size:12px; padding:4px;">No active downloads.</p>
+  </div>
+
+  <footer>rust-idm v1.0 — API: 127.0.0.1:1001</footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target
+Cargo.lock
+
+# Distribution / installer output
+/dist/*.exe
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Temp
+*.tmp
+*.log
