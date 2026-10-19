@@ -43,8 +43,9 @@ let installed = false;
 let connectionError = "";
 let lastHealth = null;
 let activeHandoffs = 0;
-const settingsReady = chrome.storage.local.get({ interceptEnabled: true }).then(settings => {
-  interceptEnabled = settings.interceptEnabled;
+const settingsReady = chrome.storage.local.get({ interceptEnabled: true, statusOnlyPopup: false }).then(async settings => {
+  interceptEnabled = settings.statusOnlyPopup ? settings.interceptEnabled : true;
+  if (!settings.statusOnlyPopup) await chrome.storage.local.set({ interceptEnabled: true, statusOnlyPopup: true });
 });
 
 function validUrl(value) {

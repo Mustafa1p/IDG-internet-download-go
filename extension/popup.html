@@ -1,38 +1,11 @@
 <!doctype html>
-
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>IDG Integration Module</title>
-
 <style>
-
-:root{color-scheme:dark;--bg:#10191e;--surface:#19262d;--border:#33464f;--text:#ecf3f5;--muted:#acbdc5;--accent:#62debf}
-
-*{box-sizing:border-box}body{width:380px;margin:0;background:var(--bg);color:var(--text);font:13px/1.5 "Segoe UI",system-ui,sans-serif}
-
-header{padding:22px 22px 16px;display:flex;gap:12px;align-items:center}header img{width:40px;height:40px}h1{font-size:18px;margin:0;letter-spacing:0}header p{margin:0;color:var(--muted);font-size:12px}
-
-main{padding:0 20px 20px}.connection{border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface)}#connection-status{font-weight:600;color:var(--accent)}#connection-detail{font-size:12px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
-
-.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:16px 0}input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);cursor:pointer}
-
-form{border-top:1px solid var(--border);padding-top:16px}label{display:block;margin-bottom:6px}input[type=url]{width:100%;padding:11px 12px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;font:inherit}
-
-button{width:100%;min-height:42px;border:0;border-radius:8px;background:var(--accent);color:#10271f;font:inherit;font-weight:600;cursor:pointer;margin-top:10px;transition:background .18s}button:hover{background:#8cebd3}button:disabled{opacity:.6;cursor:wait}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}#feedback{min-height:20px;color:var(--muted);margin:8px 0}
-
-h2{font-size:12px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);margin-top:18px}.dl-item{padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-top:8px}.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}progress{width:100%;height:5px;accent-color:var(--accent);margin:9px 0}.meta{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:11px}#downloads-list{max-height:270px;overflow:auto}.empty{color:var(--muted)}footer{border-top:1px solid var(--border);padding:12px 20px;color:var(--muted);font-size:11px}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
-
-</style></head><body>
-
-<header><img src="images/icon48.png" alt=""><div><h1>IDG Integration Module</h1><p>Your downloads. In one place.</p></div></header>
-
-<main><div class="connection" role="status"><div id="connection-status">Connecting…</div><div id="connection-detail">Checking the desktop app</div></div>
-
-<button id="youtube-btn" type="button" hidden>Download this YouTube video</button>
-<div class="toggle-row"><label for="toggleIntercept">Capture browser downloads</label><input type="checkbox" id="toggleIntercept" checked></div>
-
-<form id="url-form"><label for="manual-url">Download link</label><input type="url" id="manual-url" placeholder="https://example.com/file.zip" required><button id="add-btn" type="submit">Download with IDG</button><p id="feedback" role="status" aria-live="polite"></p></form>
-
-<h2>Recent downloads</h2><div id="downloads-list"><p class="empty">Loading downloads…</p></div></main>
-
-<footer>Choose the filename and save location in IDG. <a style="color:var(--accent)" href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest" target="_blank" rel="noopener">Get the latest IDG</a></footer><script src="popup.js"></script></body></html>
+:root{color-scheme:dark;font-family:"Segoe UI",system-ui,sans-serif;background:#0e1922;color:#e7f0f7}*{box-sizing:border-box}body{width:284px;margin:0;padding:18px}.status{display:flex;align-items:center;gap:12px}img{width:34px;height:34px}.text{min-width:0}#connection-status{font-size:14px;font-weight:600;line-height:1.5}#connection-detail{margin-top:3px;color:#a6bacb;font-size:12px;line-height:1.5;overflow-wrap:anywhere}.indicator{width:7px;height:7px;background:#f6bd51;border-radius:50%;display:inline-block;margin-right:6px}.connected .indicator{background:#16d3b1}.offline .indicator{background:#f27880}
+</style>
+</head>
+<body><main class="status" role="status" aria-live="polite"><img src="images/icon48.png" alt=""><div class="text"><div id="connection-status"><span class="indicator" aria-hidden="true"></span><span id="status-label">Connecting…</span></div><div id="connection-detail">Checking IDG</div></div></main><script src="popup.js"></script></body>
+</html>

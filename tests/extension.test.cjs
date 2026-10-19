@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, native = true, youtube = true, reload = false, diskVersion = "1.3.1" } = {}) {
+function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, reload = false, diskVersion = "1.3.1" } = {}) {
   const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
@@ -20,7 +20,7 @@ function worker({ online = true, accepts = true, enabled = true, native = true, 
     },
     management: { getSelf: async () => ({ installType: 'development' }) },
     alarms: { onAlarm: event('alarm'), create() {} },
-    storage: { local: { get: async () => ({ interceptEnabled: enabled }), set: async value => calls.push(['settings', value]) } },
+    storage: { local: { get: async () => ({ interceptEnabled: enabled, statusOnlyPopup: migrated }), set: async value => calls.push(['settings', value]) } },
     action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
     cookies: { getAll: async () => [{ name: 'session', value: 'test-cookie' }] },
     downloads: {
@@ -164,4 +164,26 @@ test('extension reload waits until browser handoffs have finished', async () => 
   active.reports.length = 0;
   await vm.runInContext('activeHandoffs = 1; reportIntegration()', active.context);
   assert.ok(!active.reports.includes('reload'));
+});
+
+test('status-only popup requests connection status without requesting downloads or controls', async () => {
+  const elements = { 'status-label': {}, 'connection-detail': {} }, panel = {}, messages = [];
+  let refresh;
+  const context = vm.createContext({ document: { getElementById: id => elements[id], querySelector: () => panel },
+    chrome: { runtime: { sendMessage: async message => { messages.push(message.type); return { serverOnline: true, serverVersion: '1.4.0' }; } } },
+    setInterval: callback => { refresh = callback; } });
+  vm.runInContext(fs.readFileSync('extension/popup.js', 'utf8'), context);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(elements['status-label'].textContent, 'IDG is connected');
+  await refresh();
+  assert.deepEqual(messages, ['getStatus', 'getStatus']);
+  const html = fs.readFileSync('extension/popup.html', 'utf8');
+  assert.ok(!/<form|<button|<input|<footer|downloads-list|youtube-btn/.test(html));
+});
+
+test('popup migration enables capture when the old switch had been disabled', async () => {
+  const { events, calls } = worker({ enabled: false, migrated: false });
+  await events.created(download);
+  assert.ok(calls.some(call => call[0] === 'post'));
+  assert.ok(calls.some(call => call[0] === 'settings' && call[1].statusOnlyPopup === true));
 });

@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use egui::{Color32, FontId, Frame, Margin, RichText, Rounding, Stroke, Ui, Vec2};
-use egui_extras::{Column, TableBuilder};
+mod library;
 use tokio::runtime::Handle;
 
 use crate::{
@@ -18,16 +18,14 @@ use crate::{
 };
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const BG: Color32 = Color32::from_rgb(16, 25, 30);
-const PANEL: Color32 = Color32::from_rgb(25, 38, 45);
-const TOOLBAR: Color32 = Color32::from_rgb(20, 31, 37);
-const SIDEBAR: Color32 = Color32::from_rgb(20, 31, 37);
-const ROW_ODD: Color32 = Color32::from_rgb(25, 38, 45);
-const ROW_EVEN: Color32 = Color32::from_rgb(28, 42, 49);
+const BG: Color32 = Color32::from_rgb(11, 21, 29);
+const PANEL: Color32 = Color32::from_rgb(20, 33, 43);
+const SIDEBAR: Color32 = Color32::from_rgb(14, 26, 35);
+const ROW_EVEN: Color32 = Color32::from_rgb(22, 37, 48);
 // Calm row selection; filename text itself is not selectable.
-const ROW_SEL: Color32 = Color32::from_rgb(34, 65, 62);
-const ACCENT: Color32 = Color32::from_rgb(98, 222, 191);
-const ACCENT2: Color32 = Color32::from_rgb(18, 110, 101);
+const ROW_SEL: Color32 = Color32::from_rgb(20, 62, 62);
+const ACCENT: Color32 = Color32::from_rgb(20, 212, 180);
+const ACCENT2: Color32 = Color32::from_rgb(10, 139, 126);
 const GREEN: Color32 = Color32::from_rgb(72, 199, 142);
 const RED: Color32 = Color32::from_rgb(240, 80, 80);
 const ORANGE: Color32 = Color32::from_rgb(255, 165, 0);
@@ -35,7 +33,7 @@ const GRAY: Color32 = Color32::from_rgb(110, 115, 135);
 const DIMGRAY: Color32 = Color32::from_rgb(140, 157, 167);
 const TEXT: Color32 = Color32::from_rgb(236, 243, 245);
 const TEXT_DIM: Color32 = Color32::from_rgb(172, 189, 197);
-const BORDER: Color32 = Color32::from_rgb(51, 70, 79);
+const BORDER: Color32 = Color32::from_rgb(39, 61, 76);
 
 // ── Categories ────────────────────────────────────────────────────────────────
 #[derive(PartialEq, Clone, Copy)]
@@ -45,15 +43,23 @@ enum Category {
     Completed,
     Paused,
     Failed,
+    Videos,
+    Documents,
+    Archives,
+    Other,
 }
 impl Category {
     fn label(self) -> &'static str {
         match self {
-            Self::All => "All Downloads",
+            Self::All => "All downloads",
             Self::Downloading => "Downloading",
-            Self::Completed => "Finished",
+            Self::Completed => "Completed",
             Self::Paused => "Paused",
             Self::Failed => "Failed",
+            Self::Videos => "Videos & audio",
+            Self::Documents => "Documents",
+            Self::Archives => "Archives",
+            Self::Other => "Other",
         }
     }
     fn matches(self, i: &DownloadItem) -> bool {
@@ -66,6 +72,9 @@ impl Category {
             Self::Completed => matches!(i.status, Status::Completed),
             Self::Paused => matches!(i.status, Status::Paused),
             Self::Failed => matches!(i.status, Status::Failed | Status::Cancelled),
+            Self::Videos | Self::Documents | Self::Archives | Self::Other => {
+                library::file_category(&i.filename) == self
+            }
         }
     }
     fn count(self, v: &[DownloadItem]) -> usize {
@@ -127,6 +136,7 @@ pub struct IDGApp {
     show_add: bool,
     pending_browser_id: Option<String>,
     search: String,
+    newest_first: bool,
     dialog: AddDialog,
     show_settings: bool,
     default_save_dir: String,
@@ -156,6 +166,15 @@ impl IDGApp {
         background: bool,
     ) -> Self {
         setup_visuals(&cc.egui_ctx);
+        // Apply the smaller layout once on upgrade, then respect later resizing.
+        if !cc
+            .storage
+            .and_then(|storage| eframe::get_value::<bool>(storage, "compact_layout_v1"))
+            .unwrap_or(false)
+        {
+            cc.egui_ctx
+                .send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(960.0, 600.0)));
+        }
         desktop::attach_window(cc);
         let (tray, mut desktop_error) = match SystemTray::new(&cc.egui_ctx) {
             Ok(tray) => (Some(tray), None),
@@ -265,6 +284,7 @@ impl IDGApp {
             show_add: false,
             pending_browser_id: None,
             search: String::new(),
+            newest_first: true,
             dialog: AddDialog::new(&default_save_dir),
             show_settings: false,
             default_save_dir,
@@ -315,357 +335,6 @@ impl IDGApp {
                 });
             }
         });
-    }
-
-    fn toolbar(&mut self, ui: &mut Ui) {
-        ui.horizontal_centered(|ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
-            if ui
-                .add(
-                    egui::Button::new(RichText::new("+  Add download").color(Color32::WHITE))
-                        .fill(ACCENT2)
-                        .min_size(Vec2::new(136.0, 36.0)),
-                )
-                .clicked()
-            {
-                self.dialog = AddDialog::new(&self.default_save_dir);
-                self.pending_browser_id = None;
-                self.show_add = true;
-            }
-            let selected = self
-                .downloads
-                .lock()
-                .unwrap()
-                .iter()
-                .find(|i| Some(&i.id) == self.selected_id.as_ref())
-                .cloned();
-            if ui
-                .add_enabled(
-                    selected
-                        .as_ref()
-                        .is_some_and(|i| matches!(i.status, Status::Paused)),
-                    egui::Button::new("Resume"),
-                )
-                .clicked()
-            {
-                self.resume_selected();
-            }
-            if ui
-                .add_enabled(
-                    selected
-                        .as_ref()
-                        .is_some_and(|i| i.status.is_active() && i.supports_pause()),
-                    egui::Button::new("Pause"),
-                )
-                .clicked()
-            {
-                self.pause_selected();
-            }
-            if ui.button("Pause all").clicked() {
-                self.pause_all();
-            }
-            if ui
-                .add_enabled(selected.is_some(), egui::Button::new("Remove"))
-                .clicked()
-            {
-                self.delete_selected();
-            }
-            if ui.button("Settings").clicked() {
-                self.default_segments = self.connection_settings.lock().unwrap().requested_count();
-                self.show_settings = true;
-            }
-            if self.tray.is_some() && ui.button("Hide to tray").clicked() {
-                ui.ctx()
-                    .send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            }
-        });
-    }
-
-    fn sidebar(&mut self, ui: &mut Ui, items: &[DownloadItem]) {
-        ui.add_space(20.0);
-        ui.horizontal(|ui| {
-            ui.add_space(14.0);
-            ui.label(RichText::new("IDG").size(25.0).strong());
-            ui.label(RichText::new("GO").size(25.0).color(ACCENT).strong());
-        });
-        ui.add_space(6.0);
-        ui.label(
-            RichText::new("  DOWNLOAD LIBRARY")
-                .size(10.5)
-                .color(TEXT_DIM),
-        );
-        ui.add_space(22.0);
-        for category in [
-            Category::All,
-            Category::Downloading,
-            Category::Completed,
-            Category::Paused,
-            Category::Failed,
-        ] {
-            let selected = self.category == category;
-            let label = format!("{}    {}", category.label(), category.count(items));
-            let response = ui.add_sized(
-                [ui.available_width(), 38.0],
-                egui::Button::new(RichText::new(label).color(if selected {
-                    ACCENT
-                } else {
-                    TEXT_DIM
-                }))
-                .fill(if selected {
-                    ROW_SEL
-                } else {
-                    Color32::TRANSPARENT
-                })
-                .rounding(6.0),
-            );
-            if response.clicked() {
-                self.category = category;
-            }
-        }
-        ui.add_space(22.0);
-        ui.separator();
-        ui.add_space(10.0);
-        ui.label(RichText::new("Save location").color(TEXT_DIM).size(11.0));
-        ui.add(egui::Label::new(RichText::new(&self.default_save_dir).size(11.0)).wrap());
-        if ui.button("Open folder").clicked() {
-            open_path(std::path::Path::new(&self.default_save_dir));
-        }
-    }
-
-    fn download_table(&mut self, ui: &mut Ui, items: &[DownloadItem]) {
-        let filtered: Vec<usize> = items
-            .iter()
-            .enumerate()
-            .filter(|(_, i)| {
-                self.category.matches(i)
-                    && i.filename
-                        .to_lowercase()
-                        .contains(&self.search.to_lowercase())
-            })
-            .map(|(idx, _)| idx)
-            .collect();
-
-        if filtered.is_empty() {
-            ui.centered_and_justified(|ui| {
-                ui.label(RichText::new(if self.search.is_empty() { "Your downloads will appear here.\nAdd a link or download from your browser." } else { "No matching downloads" }).size(15.0).color(TEXT_DIM));
-            });
-            return;
-        }
-
-        let mut clicked: Option<String> = None;
-        let mut action: Option<(String, &'static str)> = None;
-        let sel = self.selected_id.clone();
-
-        // Header row
-        Frame::none()
-            .fill(PANEL)
-            .inner_margin(Margin {
-                left: 6.0,
-                right: 6.0,
-                top: 3.0,
-                bottom: 3.0,
-            })
-            .show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .striped(false)
-                    .sense(egui::Sense::click())
-                    .column(Column::exact(20.0)) // #
-                    .column(Column::remainder()) // File Name
-                    .column(Column::exact(38.0)) // Connections
-                    .column(Column::exact(72.0)) // Size
-                    .column(Column::exact(86.0)) // Status
-                    .column(Column::exact(58.0)) // Time left
-                    .column(Column::exact(92.0)) // Transfer rate
-                    .header(32.0, |mut h| {
-                        for hdr in [
-                            "#",
-                            "File Name",
-                            "Parts",
-                            "Size",
-                            "Status",
-                            "Time left",
-                            "Mbps",
-                        ] {
-                            h.col(|ui| {
-                                ui.add_space(2.0);
-                                ui.label(RichText::new(hdr).size(10.5).color(TEXT_DIM).strong());
-                            });
-                        }
-                    })
-                    .body(|mut body| {
-                        for (pos, &idx) in filtered.iter().enumerate() {
-                            let item = &items[idx];
-                            let is_sel = sel.as_deref() == Some(&item.id);
-                            let row_bg = if is_sel {
-                                ROW_SEL
-                            } else if pos % 2 == 0 {
-                                ROW_EVEN
-                            } else {
-                                ROW_ODD
-                            };
-
-                            body.row(42.0, |mut row| {
-                                // Do NOT call row.set_selected() — it overrides our
-                                // manual background with egui's selection.bg_fill teal.
-                                let (_, r) = row.col(|ui| {
-                                    ui.painter()
-                                        .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
-                                    ui.add_space(2.0);
-                                    ui.label(
-                                        RichText::new(format!("{}", pos + 1))
-                                            .size(10.5)
-                                            .color(DIMGRAY),
-                                    );
-                                });
-                                if r.clicked() {
-                                    clicked = Some(item.id.clone());
-                                }
-
-                                // File Name ───────────────
-                                let iid = item.id.clone();
-                                let is_done = matches!(item.status, Status::Completed);
-                                let (_, r) = row.col(|ui| {
-                                    ui.painter()
-                                        .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
-                                    ui.add_space(2.0);
-                                    ui.add(
-                                        egui::Label::new(
-                                            RichText::new(&item.filename).size(13.0).color(TEXT),
-                                        )
-                                        .selectable(false)
-                                        .truncate(),
-                                    )
-                                    .on_hover_text(&item.url);
-                                });
-                                if r.clicked() {
-                                    clicked = Some(item.id.clone());
-                                }
-                                r.context_menu(|ui| {
-                                    ui.set_min_width(150.0);
-                                    if ui.button("Resume").clicked() {
-                                        action = Some((iid.clone(), "Resume"));
-                                        ui.close_menu();
-                                    }
-                                    if ui.add_enabled(item.supports_pause() && item.status.is_active(), egui::Button::new("Pause")).on_hover_text("YouTube downloads support cancellation through Remove.").clicked() {
-                                        action = Some((iid.clone(), "Pause"));
-                                        ui.close_menu();
-                                    }
-                                    ui.separator();
-                                    if ui.button("Open folder").clicked() {
-                                        action = Some((iid.clone(), "OpenFolder"));
-                                        ui.close_menu();
-                                    }
-                                    if is_done && ui.button("Open file").clicked() {
-                                        action = Some((iid.clone(), "OpenFile"));
-                                        ui.close_menu();
-                                    }
-                                    ui.separator();
-                                    if ui.button("Remove from list").clicked() {
-                                        action = Some((iid.clone(), "Delete"));
-                                        ui.close_menu();
-                                    }
-                                });
-
-                                // Q ───────────────────────
-                                let (_, r) = row.col(|ui| {
-                                    ui.painter()
-                                        .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
-                                    ui.label(
-                                        RichText::new(if !item.supports_pause() { if item.media_options.format.audio() { "Audio".into() } else { "Video".into() } } else if item.num_segments == 0 {
-                                            "Auto".into()
-                                        } else {
-                                            item.num_segments.to_string()
-                                        })
-                                        .size(10.5)
-                                        .color(DIMGRAY),
-                                    );
-                                });
-                                if r.clicked() {
-                                    clicked = Some(item.id.clone());
-                                }
-
-                                // Size ────────────────────
-                                let (_, r) = row.col(|ui| {
-                                    ui.painter()
-                                        .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
-                                    ui.label(
-                                        RichText::new(
-                                            item.total_bytes
-                                                .map(fmt_size)
-                                                .unwrap_or_else(|| "—".into()),
-                                        )
-                                        .size(11.0)
-                                        .color(TEXT_DIM),
-                                    );
-                                });
-                                if r.clicked() {
-                                    clicked = Some(item.id.clone());
-                                }
-
-                                // Status + mini-bar ───────
-                                let (_, r) = row.col(|ui| {
-                                    ui.painter()
-                                        .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
-                                    let (lbl, col) = status_info(&item.status);
-                                    ui.vertical(|ui| {
-                                        ui.add_space(3.0);
-                                        ui.label(RichText::new(lbl).size(11.0).color(col).strong())
-                                            .on_hover_text(item.error.as_deref().unwrap_or(lbl));
-                                        let p = item.progress();
-                                        if p > 0.0 && !matches!(item.status, Status::Completed) {
-                                            ui.add(
-                                                egui::ProgressBar::new(p)
-                                                    .desired_width(ui.available_width())
-                                                    .desired_height(3.0)
-                                                    .fill(col),
-                                            );
-                                        }
-                                    });
-                                });
-                                if r.clicked() {
-                                    clicked = Some(item.id.clone());
-                                }
-
-                                // Time left ───────────────
-                                let (_, r) = row.col(|ui| {
-                                    ui.painter()
-                                        .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
-                                    let eta =
-                                        item.eta_secs().map(fmt_eta).unwrap_or_else(|| "—".into());
-                                    ui.label(RichText::new(eta).size(11.0).color(TEXT_DIM));
-                                });
-                                if r.clicked() {
-                                    clicked = Some(item.id.clone());
-                                }
-
-                                // Transfer rate ───────────
-                                let (_, r) = row.col(|ui| {
-                                    ui.painter()
-                                        .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
-                                    if matches!(item.status, Status::Downloading) {
-                                        ui.label(
-                                            RichText::new(fmt_speed(item.speed_bps))
-                                                .size(11.0)
-                                                .color(GREEN),
-                                        );
-                                    } else {
-                                        ui.label(RichText::new("—").size(11.0).color(DIMGRAY));
-                                    }
-                                });
-                                if r.clicked() {
-                                    clicked = Some(item.id.clone());
-                                }
-                            });
-                        }
-                    });
-            });
-
-        if let Some(id) = clicked {
-            self.selected_id = Some(id);
-        }
-        if let Some((id, act)) = action {
-            self.handle_action(&id, act, items);
-        }
     }
 
     fn add_dialog(&mut self, ctx: &egui::Context) {
@@ -1241,49 +910,6 @@ impl IDGApp {
         self.show_settings = open && !saved;
     }
 
-    fn status_bar(&self, ui: &mut Ui, items: &[DownloadItem]) {
-        ui.horizontal(|ui| {
-            ui.style_mut().spacing.item_spacing.x = 8.0;
-            let active = items.iter().filter(|i| i.status.is_active()).count();
-            let completed = items
-                .iter()
-                .filter(|i| matches!(i.status, Status::Completed))
-                .count();
-            let failed = items
-                .iter()
-                .filter(|i| matches!(i.status, Status::Failed))
-                .count();
-            let speed: f64 = items.iter().map(|i| i.speed_bps).sum();
-
-            if active > 0 {
-                ui.colored_label(GREEN, format!("⬇ {}", fmt_speed(speed)));
-                ui.label(RichText::new("|").color(BORDER));
-                ui.label(
-                    RichText::new(format!("{active} active"))
-                        .size(11.0)
-                        .color(TEXT_DIM),
-                );
-                ui.label(RichText::new("|").color(BORDER));
-            }
-            ui.label(
-                RichText::new(format!("✔ {completed}"))
-                    .size(11.0)
-                    .color(TEXT_DIM),
-            );
-            if failed > 0 {
-                ui.label(RichText::new("|").color(BORDER));
-                ui.colored_label(RED, format!("✖ {failed}"));
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    RichText::new(format!("IDG v{} — Internet Download GO", APP_VERSION))
-                        .size(10.5)
-                        .color(DIMGRAY),
-                );
-            });
-        });
-    }
-
     // ── Actions ───────────────────────────────────────────────────────────────
     fn handle_action(&mut self, id: &str, action: &str, items: &[DownloadItem]) {
         use std::sync::atomic::Ordering::Relaxed;
@@ -1391,6 +1017,7 @@ impl IDGApp {
 
 impl eframe::App for IDGApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, "compact_layout_v1", &true);
         eframe::set_value(storage, "close_to_tray", &self.close_to_tray);
         eframe::set_value(
             storage,
@@ -1466,20 +1093,6 @@ impl eframe::App for IDGApp {
             });
         }
 
-        // ── Toolbar ──────────────────────────────────────────────────────────
-        egui::TopBottomPanel::top("toolbar")
-            .min_height(62.0)
-            .max_height(62.0)
-            .frame(Frame::none().fill(TOOLBAR).inner_margin(Margin {
-                left: 16.0,
-                right: 16.0,
-                top: 12.0,
-                bottom: 0.0,
-            }))
-            .show(ctx, |ui| {
-                self.toolbar(ui);
-            });
-
         // ── Status bar ───────────────────────────────────────────────────────
         egui::TopBottomPanel::bottom("statusbar")
             .min_height(22.0)
@@ -1495,8 +1108,8 @@ impl eframe::App for IDGApp {
 
         // ── Sidebar ──────────────────────────────────────────────────────────
         egui::SidePanel::left("sidebar")
-            .min_width(190.0)
-            .max_width(210.0)
+            .exact_width(174.0)
+            .resizable(false)
             .frame(
                 Frame::none()
                     .fill(SIDEBAR)
@@ -1512,34 +1125,9 @@ impl eframe::App for IDGApp {
 
         // ── Main area ────────────────────────────────────────────────────────
         egui::CentralPanel::default()
-            .frame(Frame::none().fill(BG).inner_margin(Margin::same(18.0)))
+            .frame(Frame::none().fill(BG).inner_margin(Margin::same(14.0)))
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        ui.heading(self.category.label());
-                        let speed: f64 = items
-                            .iter()
-                            .filter(|i| i.status.is_active())
-                            .map(|i| i.speed_bps)
-                            .sum();
-                        ui.label(
-                            RichText::new(format!(
-                                "{} files   ·   {} total speed",
-                                items.len(),
-                                fmt_speed(speed)
-                            ))
-                            .color(TEXT_DIM),
-                        );
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.search)
-                                .hint_text("Search downloads…")
-                                .desired_width(180.0),
-                        );
-                    });
-                });
-                ui.add_space(18.0);
+                self.library_header(ui, &items);
                 self.download_table(ui, &items);
             });
 
@@ -1568,16 +1156,16 @@ fn setup_visuals(ctx: &egui::Context) {
     v.extreme_bg_color = BG;
     v.widgets.inactive.weak_bg_fill = ROW_EVEN;
     v.widgets.hovered.weak_bg_fill = ROW_SEL;
-    v.window_fill = Color32::from_rgb(25, 38, 45);
+    v.window_fill = PANEL;
     v.override_text_color = Some(TEXT);
     v.selection.bg_fill = ROW_SEL;
     v.selection.stroke = Stroke::new(1.0_f32, TEXT);
     v.hyperlink_color = ACCENT;
     v.window_stroke = Stroke::new(1.0_f32, BORDER);
     v.window_rounding = Rounding::same(6.0);
-    v.widgets.noninteractive.bg_fill = Color32::from_rgb(28, 28, 42);
-    v.widgets.inactive.bg_fill = Color32::from_rgb(34, 36, 52);
-    v.widgets.hovered.bg_fill = Color32::from_rgb(44, 48, 68);
+    v.widgets.noninteractive.bg_fill = ROW_EVEN;
+    v.widgets.inactive.bg_fill = ROW_EVEN;
+    v.widgets.hovered.bg_fill = ROW_SEL;
     v.widgets.active.bg_fill = ACCENT2;
     v.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, BORDER);
     ctx.set_visuals(v);
@@ -1597,7 +1185,7 @@ fn setup_visuals(ctx: &egui::Context) {
     );
     s.spacing.item_spacing = Vec2::new(6.0, 4.0);
     s.spacing.window_margin = Margin::same(8.0);
-    s.spacing.button_padding = Vec2::new(12.0, 8.0);
+    s.spacing.button_padding = Vec2::new(10.0, 6.0);
     s.animation_time = 0.15;
     ctx.set_style(s);
 }
@@ -1641,7 +1229,7 @@ fn status_info(s: &Status) -> (&'static str, Color32) {
     match s {
         Status::Queued => ("Queued", GRAY),
         Status::Probing => ("Connecting…", ORANGE),
-        Status::Downloading => ("Downloading", Color32::from_rgb(60, 160, 240)),
+        Status::Downloading => ("Downloading", ACCENT),
         Status::Paused => ("Paused", ORANGE),
         Status::Completed => ("Completed", GREEN),
         Status::Failed => ("Failed", RED),

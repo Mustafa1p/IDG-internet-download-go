@@ -1,3 +1,11 @@
+## 1.4.0 — 2026-10-19
+
+- Redesign the desktop library with a compact dark teal interface inspired by the supplied reference.
+- Open at 960×600, support 800×500, and add live summaries, file-type categories, search/sorting, inline progress/actions, and selected-download details.
+- Keep Mbps speed reporting and existing YouTube/update/startup functionality.
+- Reduce the extension popup to connection status only; retain automatic browser handoffs, page overlays, and context-menu actions.
+- Migrate the removed capture switch once so a stale disabled setting does not silently prevent capture.
+
 ## 1.3.1 — 2026-10-19
 
 - Stop automatic update retries after an installer failure until the user explicitly retries, avoiding repeated download/restart cycles.
