@@ -1,0 +1,36 @@
+{
+  "tools": [
+    {
+      "name": "yt-dlp",
+      "tag": "2026.10.10.233141",
+      "url": "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.10.10.233141/yt-dlp.exe",
+      "sha256": "e7cafc44db8aa433da8dd78303b9157f2c1dd509c4cbfcd8418081b7e1d26a7a",
+      "format": "exe",
+      "licenses": [
+        "https://raw.githubusercontent.com/yt-dlp/yt-dlp/897341241f2bfb2439fe0367f4c7c9ccd29a3828/LICENSE",
+        "https://raw.githubusercontent.com/yt-dlp/yt-dlp/897341241f2bfb2439fe0367f4c7c9ccd29a3828/THIRD_PARTY_LICENSES.txt"
+      ],
+      "source": "https://github.com/yt-dlp/yt-dlp/tree/897341241f2bfb2439fe0367f4c7c9ccd29a3828"
+    },
+    {
+      "name": "ffmpeg",
+      "tag": "autobuild-2026-10-18-17-17",
+      "url": "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2026-10-18-17-17/ffmpeg-N-127654-g7045cc9b80-win64-gpl-shared.zip",
+      "sha256": "bc0a49e622f9cec9cae04d2e7add8fdad8293889dcd39bf4db60daeaf64c7a36",
+      "format": "zip-bin",
+      "licenses": [
+        "https://raw.githubusercontent.com/FFmpeg/FFmpeg/7045cc9b80/COPYING.GPLv3"
+      ]
+    },
+    {
+      "name": "deno",
+      "tag": "v2.9.7",
+      "url": "https://github.com/denoland/deno/releases/download/v2.9.7/deno-x86_64-pc-windows-msvc.zip",
+      "sha256": "a0c3101b4158d1dfb7d6a78a7bf0f3de80c96bb423c152beec8beb22786f2238",
+      "format": "zip",
+      "licenses": [
+        "https://raw.githubusercontent.com/denoland/deno/v2.9.7/LICENSE.md"
+      ]
+    }
+  ]
+}

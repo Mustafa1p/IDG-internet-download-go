@@ -41,6 +41,7 @@ let interceptEnabled = true;
 let serverOnline = false;
 let installed = false;
 let connectionError = "";
+let lastHealth = null;
 const settingsReady = chrome.storage.local.get({ interceptEnabled: true }).then(settings => {
   interceptEnabled = settings.interceptEnabled;
 });
@@ -64,7 +65,9 @@ async function pingServer() {
   try {
     const response = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(1500) });
     const health = await response.json();
-    return response.ok && health.status === "ok" && typeof health.version === "string";
+    const valid = response.ok && health.status === "ok" && typeof health.version === "string";
+    lastHealth = valid ? health : null;
+    return valid;
   } catch { return false; }
 }
 
@@ -80,7 +83,7 @@ async function updateServerStatus() {
   }
   await chrome.action.setBadgeText({ text: serverOnline || installed ? "" : "OFF" });
   await chrome.action.setBadgeBackgroundColor({ color: "#dc5662" });
-  return { interceptEnabled, serverOnline, installed, error: connectionError };
+  return { interceptEnabled, serverOnline, installed, serverVersion: lastHealth?.version, youtubeReady: lastHealth?.capabilities?.youtube === true, error: connectionError };
 }
 
 function shouldIntercept(url, mime, filesize) {
@@ -90,31 +93,72 @@ function shouldIntercept(url, mime, filesize) {
   return INTERCEPT_EXT.has(new URL(url).pathname.split(".").pop().toLowerCase());
 }
 
+function youtubeVideoUrl(value) {
+  try {
+    const url = new URL(value);
+    let id;
+    if (url.hostname === "youtu.be") id = url.pathname.slice(1);
+    else if (["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "www.youtube-nocookie.com"].includes(url.hostname)) {
+      if (url.pathname === "/watch") id = url.searchParams.get("v");
+      else if (/^\/(shorts|embed|live)\//.test(url.pathname)) id = url.pathname.split("/")[2];
+    }
+    return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? `https://www.youtube.com/watch?v=${id}` : null;
+  } catch { return null; }
+}
+
+function nativeError(message) {
+  if (/not found|missing|forbidden|access.*denied/i.test(message)) {
+    return "IDG browser integration is not registered. Install the full IDG package, open IDG once, then reload this extension.";
+  }
+  return message;
+}
+
 async function sendDownloadToIDG(url, filename, referrer, userAgent) {
   if (!validUrl(url)) return { ok: false, error: "Only HTTP and HTTPS links can be sent to IDG." };
-  let cookies = null;
+  const youtube = youtubeVideoUrl(url);
+  if (youtube) url = youtube;
+  let cookies = null, media_cookies = null;
   try {
     const jar = await chrome.cookies.getAll({ url });
-    if (jar.length) cookies = jar.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
+    if (jar.length) {
+      cookies = jar.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
+      if (youtube) {
+        const field = value => String(value ?? "").replace(/[\t\r\n]/g, "");
+        media_cookies = "# Netscape HTTP Cookie File\n" + jar.map(cookie => [
+          (cookie.httpOnly ? "#HttpOnly_" : "") + field(cookie.domain),
+          cookie.domain?.startsWith(".") ? "TRUE" : "FALSE", field(cookie.path || "/"),
+          cookie.secure ? "TRUE" : "FALSE", Math.floor(cookie.expirationDate || 0), field(cookie.name), field(cookie.value),
+        ].join("\t")).join("\n") + "\n";
+      }
+    }
   } catch {}
-  const download = { url, filename, referrer, cookies, user_agent: userAgent, show_dialog: true };
+  const download = { url, filename, referrer, cookies, media_cookies, user_agent: userAgent, show_dialog: true };
   // Never retry a POST using another transport: a lost response could duplicate it.
   const online = await pingServer();
   try {
+    if (youtube) {
+      const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
+      if (!capability?.capabilities?.youtube) {
+        return { ok: false, error: "YouTube requires the complete IDG v1.2.0 package or newer. Quit the old IDG in the tray, install the update, then reopen IDG." };
+      }
+    }
     if (online) {
       const response = await fetch(`${API_BASE}/downloads`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(download), signal: AbortSignal.timeout(5000),
       });
-      if (!response.ok) throw new Error(`IDG returned HTTP ${response.status}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `IDG returned HTTP ${response.status}`);
+      }
     } else {
       await nativeRequest({ type: "download", download });
     }
     serverOnline = true;
     return { ok: true };
   } catch (error) {
-    connectionError = error.message;
-    return { ok: false, error: error.message };
+    connectionError = nativeError(error.message);
+    return { ok: false, error: connectionError };
   }
 }
 
@@ -146,7 +190,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  const url = info.linkUrl || info.srcUrl;
+  const url = youtubeVideoUrl(info.linkUrl) || youtubeVideoUrl(tab?.url) || info.linkUrl || info.srcUrl;
   if (!url) return;
   const result = await sendDownloadToIDG(url, null, info.pageUrl || tab?.url || null, navigator.userAgent);
   if (!result.ok) {
@@ -169,7 +213,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return { interceptEnabled };
       case "download":
         if (sender.tab && !interceptEnabled) return { ok: false, error: "IDG interception is disabled." };
-        return sendDownloadToIDG(message.url, null, sender.tab ? sender.url : message.referrer, navigator.userAgent);
+        return sendDownloadToIDG(message.url, typeof message.filename === "string" ? message.filename : null, sender.tab ? sender.url : message.referrer, navigator.userAgent);
       case "list": {
         // Polling must not start the desktop app.
         if (!await pingServer()) return { ok: false, error: "Open IDG to view your downloads." };

@@ -134,6 +134,10 @@ impl IDGApp {
                 )),
             ),
         };
+        #[cfg(windows)]
+        if let Err(error) = desktop::repair_browser_integration() {
+            desktop_error = Some(format!("Browser integration: {error}"));
+        }
         let startup_enabled = desktop::startup_enabled().unwrap_or_else(|error| {
             desktop_error = Some(format!("Could not read Windows startup setting: {error}"));
             false
@@ -257,7 +261,9 @@ impl IDGApp {
             }
             if ui
                 .add_enabled(
-                    selected.as_ref().is_some_and(|i| i.status.is_active()),
+                    selected
+                        .as_ref()
+                        .is_some_and(|i| i.status.is_active() && i.supports_pause()),
                     egui::Button::new("Pause"),
                 )
                 .clicked()
@@ -449,7 +455,7 @@ impl IDGApp {
                                         action = Some((iid.clone(), "Resume"));
                                         ui.close_menu();
                                     }
-                                    if ui.button("Pause").clicked() {
+                                    if ui.add_enabled(item.supports_pause() && item.status.is_active(), egui::Button::new("Pause")).on_hover_text("YouTube downloads support cancellation through Remove.").clicked() {
                                         action = Some((iid.clone(), "Pause"));
                                         ui.close_menu();
                                     }
@@ -474,7 +480,7 @@ impl IDGApp {
                                     ui.painter()
                                         .rect_filled(ui.max_rect(), Rounding::ZERO, row_bg);
                                     ui.label(
-                                        RichText::new(if item.num_segments == 0 {
+                                        RichText::new(if !item.supports_pause() { "Video".into() } else if item.num_segments == 0 {
                                             "Auto".into()
                                         } else {
                                             item.num_segments.to_string()
@@ -802,6 +808,10 @@ impl IDGApp {
                         self.desktop_error = None;
                     }
                 }
+                #[cfg(windows)]
+                if ui.button("Repair Chrome / Edge integration").clicked() {
+                    self.desktop_error = desktop::repair_browser_integration().err().map(|error| format!("Browser integration: {error}"));
+                }
                 if let Some(error) = &self.desktop_error {
                     ui.colored_label(RED, error);
                 }
@@ -893,7 +903,10 @@ impl IDGApp {
             }
             "Pause" => {
                 let mut lock = self.downloads.lock().unwrap();
-                if let Some(i) = lock.iter_mut().find(|i| i.id == id && i.status.is_active()) {
+                if let Some(i) = lock
+                    .iter_mut()
+                    .find(|i| i.id == id && i.status.is_active() && i.supports_pause())
+                {
                     i.pause_flag.store(true, Relaxed);
                     i.status = Status::Paused;
                     i.speed_bps = 0.0;
@@ -930,7 +943,7 @@ impl IDGApp {
     fn pause_all(&self) {
         let mut lock = self.downloads.lock().unwrap();
         for i in lock.iter_mut() {
-            if matches!(i.status, Status::Downloading) {
+            if matches!(i.status, Status::Downloading) && i.supports_pause() {
                 i.pause_flag
                     .store(true, std::sync::atomic::Ordering::Relaxed);
                 i.status = Status::Paused;
@@ -957,7 +970,7 @@ impl IDGApp {
             let mut lock = self.downloads.lock().unwrap();
             if let Some(i) = lock
                 .iter_mut()
-                .find(|i| &i.id == id && i.status.is_active())
+                .find(|i| &i.id == id && i.status.is_active() && i.supports_pause())
             {
                 i.pause_flag
                     .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1253,6 +1266,9 @@ fn fmt_eta(secs: f64) -> String {
 }
 
 fn filename_from_url(url: &str) -> String {
+    if let Some(name) = crate::download::media::default_filename(url) {
+        return name;
+    }
     url.split('?')
         .next()
         .and_then(|p| p.rsplit('/').next())

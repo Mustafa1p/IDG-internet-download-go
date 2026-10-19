@@ -36,6 +36,7 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
       - name: Check formatting
         run: cargo fmt --check
       - name: Check warnings
@@ -46,6 +47,13 @@ jobs:
         run: node --test tests/extension.test.cjs
       - name: Build release binaries
         run: cargo build --locked --release --bins
+      - name: Cache verified media tools
+        uses: actions/cache@v4
+        with:
+          path: target/media-cache
+          key: media-tools-${{ hashFiles('installer/media-tools.json') }}
+      - name: Fetch pinned YouTube tools
+        run: python installer/fetch-media-tools.py
       - name: Package portable app and extension
         run: python installer/package.py
       - name: Upload tested build
@@ -55,8 +63,7 @@ jobs:
           path: |
             target/release/IDG.exe
             target/release/IDG-native.exe
-            dist/IDG-extension-v*.zip
-            dist/IDG-portable-v*.zip
+            target/release/tools/
           if-no-files-found: error
 
   release:
@@ -74,12 +81,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: IDG-windows-x64
+          path: target/release
       - name: Validate release version and prepare assets
         shell: pwsh
         run: |
           python installer/package.py "${{ github.ref_name }}"
           if ($LASTEXITCODE -ne 0) { throw "Release version validation failed" }
-          Copy-Item -LiteralPath target/release/IDG.exe -Destination "dist/IDG-${{ github.ref_name }}.exe"
       - name: Find Inno Setup
         shell: pwsh
         run: |
@@ -103,11 +110,10 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          name: "IDG ${{ github.ref_name }} — Automatic connections and browser integration"
+          name: "IDG ${{ github.ref_name }} — YouTube downloads and repaired browser handoff"
           body_path: docs/release-notes.md
           files: |
             dist/IDG-Setup-${{ github.ref_name }}.exe
-            dist/IDG-${{ github.ref_name }}.exe
             dist/IDG-extension-${{ github.ref_name }}.zip
             dist/IDG-portable-${{ github.ref_name }}.zip
             dist/SHA256SUMS.txt

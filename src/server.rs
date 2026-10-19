@@ -54,6 +54,7 @@ pub struct AddDownloadRequest {
     pub segments: Option<usize>,
     pub referrer: Option<String>,
     pub cookies: Option<String>,
+    pub media_cookies: Option<String>,
     pub user_agent: Option<String>,
 }
 
@@ -66,6 +67,7 @@ pub struct AddDownloadResponse {
 struct HealthResponse {
     status: &'static str,
     version: &'static str,
+    capabilities: serde_json::Value,
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,7 @@ async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
+        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available()}),
     })
 }
 
@@ -87,6 +90,26 @@ async fn add_download(
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": "Use an HTTP or HTTPS download URL"})),
+        );
+    }
+    if crate::download::media::video_url(&req.url).is_some()
+        && !crate::download::media::tools_available()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                serde_json::json!({"error": "YouTube tools are missing. Install the complete IDG v1.2.0 package."}),
+            ),
+        );
+    }
+    if req
+        .media_cookies
+        .as_ref()
+        .is_some_and(|cookies| cookies.len() > 128 * 1024)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Cookie data is too large"})),
         );
     }
     let save_dir = req.save_dir.unwrap_or(state.default_dir.clone());
@@ -121,6 +144,7 @@ async fn add_download(
         }
     }
     item.awaiting_confirmation = req.show_dialog;
+    item.media_cookies = req.media_cookies;
 
     state.downloads.lock().unwrap().push(item);
 
@@ -162,6 +186,7 @@ async fn list_downloads(State(state): State<ServerState>) -> impl IntoResponse {
                 "speed_bps":        i.speed_bps,
                 "status":           format!("{:?}", i.status),
                 "added_at": i.added_at.to_rfc3339(),
+                "error": i.error,
             })
         })
         .collect();

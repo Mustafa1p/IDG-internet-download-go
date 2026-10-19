@@ -125,6 +125,31 @@ pub fn startup_command(executable: &Path) -> String {
     format!("\"{}\" --background", executable.display())
 }
 
+/// Opening a complete portable/installed app repairs native host registration for this user.
+#[cfg(windows)]
+pub fn repair_browser_integration() -> anyhow::Result<()> {
+    let executable = std::env::current_exe()?.with_file_name("IDG-native.exe");
+    anyhow::ensure!(
+        executable.is_file(),
+        "Browser bridge is missing. Install the full IDG package."
+    );
+    let directory = dirs::config_dir()
+        .ok_or_else(|| anyhow::anyhow!("Windows AppData directory is unavailable"))?
+        .join("IDG");
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("com.rust_idm.host.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(include_str!("../extension/com.rust_idm.host.json"))?;
+    manifest["path"] = serde_json::Value::String(executable.to_string_lossy().into_owned());
+    std::fs::write(&path, serde_json::to_vec_pretty(&manifest)?)?;
+    for browser in [r"Software\Google\Chrome", r"Software\Microsoft\Edge"] {
+        let (key, _) = winreg::HKCU
+            .create_subkey(format!(r"{browser}\NativeMessagingHosts\com.rust_idm.host"))?;
+        key.set_value("", &path.to_string_lossy().as_ref())?;
+    }
+    Ok(())
+}
+
 #[cfg(windows)]
 pub fn set_startup(enabled: bool) -> std::io::Result<()> {
     let (key, _) = winreg::HKCU.create_subkey(RUN_KEY)?;

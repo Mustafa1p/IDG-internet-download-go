@@ -8,6 +8,7 @@
 
 pub mod connections;
 pub mod engine;
+pub mod media;
 pub mod probe;
 pub mod segment;
 pub mod types;

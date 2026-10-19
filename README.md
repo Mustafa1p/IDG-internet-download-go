@@ -12,7 +12,7 @@ Splits every file into multiple parallel connections — just like IDM, but free
 <br/>
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Mustafa1p/IDG-internet-download-go/release.yml?branch=main&style=for-the-badge&logo=github&label=Build)](https://github.com/Mustafa1p/IDG-internet-download-go/actions)
-[![Release](https://img.shields.io/github/v/release/Mustafa1p/IDG-internet-download-go?style=for-the-badge&color=0bc&label=Latest+Release)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
+[![Release](https://img.shields.io/badge/Latest_Release-v1.2.0-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078d4?style=for-the-badge&logo=windows)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 
@@ -20,11 +20,11 @@ Splits every file into multiple parallel connections — just like IDM, but free
 
 ## ⬇️ Download
 
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.1.0.exe">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.2.0.exe">
   <img src="https://img.shields.io/badge/Download%20Installer-Setup%20.exe-1976d2?style=for-the-badge&logo=windows&logoColor=white" height="42"/>
 </a>
 &nbsp;&nbsp;
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.1.0.zip">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.2.0.zip">
   <img src="https://img.shields.io/badge/Download%20Extension-Chrome%20%2F%20Edge-F4B400?style=for-the-badge&logo=googlechrome&logoColor=white" height="42"/>
 </a>
 
@@ -64,7 +64,7 @@ It works the same way as **IDM (Internet Download Manager)** — it splits every
 
 ### Step 1 — Download the installer
 
-👉 **[Download IDG-Setup-v1.1.0.exe](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.1.0.exe)**
+👉 **[Download IDG-Setup-v1.2.0.exe](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.2.0.exe)**
 
 ### Step 2 — Run the installer
 
@@ -92,7 +92,7 @@ Double-click the downloaded file and follow the wizard:
 
 ### Step 1 — Download the extension
 
-👉 **[Download IDG-extension-v1.1.0.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.1.0.zip)**
+👉 **[Download IDG-extension-v1.2.0.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.2.0.zip)**
 
 ### Step 2 — Extract the ZIP
 
@@ -112,7 +112,7 @@ Use the updated installer, then remove the old extension and load the new `exten
 
 Open the extension popup: **IDG is connected** means the desktop app is running; **IDG is ready** means the native host is installed and can launch it. Click a direct file download. IDG opens a confirmation window where you can edit the filename, choose a save folder, and click **Start download**. Multiple requests are shown one at a time. Cancel discards that request.
 
-If IDG cannot accept a request, the original browser download resumes. Blob URLs, protected streaming media, and downloads Chrome cannot pause remain in the browser. The media button supports direct HTTP/HTTPS sources.
+If IDG cannot accept a request, the original browser download resumes. YouTube watch pages and Shorts are sent to the bundled video downloader, including players that use blob URLs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
 
 For source builds or portable integration, keep `IDG.exe` and `IDG-native.exe` together and run:
 
@@ -141,10 +141,18 @@ Transfer rates use **Mbps** (decimal megabits per second), with 8 bits per byte;
 - **Live speed & ETA** — see real-time download speed and estimated time
 - **Category filter** — view All / Downloading / Finished / Paused / Failed
 - **Dark compact UI** — clean, minimal interface
-- **Portable or installed** — works as a setup installer or a standalone EXE
+- **Portable or installed** — complete portable ZIP or installer, including the native bridge and media tools
 - **Free & open source** — MIT license
 
 ---
+
+## YouTube downloads
+
+Install the **complete v1.2.0 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
+
+Open a YouTube video and click **Download with IDG** over the player, or **Download this YouTube video** in the extension popup. You can also paste a watch/Shorts/youtu.be link into IDG. Radio and playlist parameters are removed so the selected video is downloaded once. IDG saves an MP4 with video and audio using the bundled yt-dlp, FFmpeg, and Deno tools. Larger formats are downloaded and merged automatically. Cancel through **Remove**; pause/resume is available for regular direct-file downloads.
+
+The media tools are pinned and checksum-verified at build time. Their licenses, versions, and source locations are included in `tools/licenses`. Keep the `tools` folder beside `IDG.exe` for portable use. A standalone EXE alone cannot download YouTube videos. Some videos may require an authenticated session or be unavailable; the extension passes the selected site's cookies in a temporary file that is removed when the media job ends. Errors now explain missing registration or an outdated app instead of only showing “IDG unavailable”.
 
 ## Automatic parallel connections
 
@@ -179,8 +187,9 @@ cargo build --release
 ### Package portable app and extension
 
 ```powershell
+python installer/fetch-media-tools.py
 python installer/package.py
-# dist/IDG-portable-v1.1.0.zip and dist/IDG-extension-v1.1.0.zip
+# dist/IDG-portable-v1.2.0.zip and dist/IDG-extension-v1.2.0.zip
 ```
 
 Extract the portable ZIP, run `installer/register-native-host.ps1` from PowerShell, and load its `extension` folder in Chrome or Edge. Keep `IDG.exe` and `IDG-native.exe` together.
@@ -189,7 +198,7 @@ Extract the portable ZIP, run `installer/register-native-host.ps1` from PowerShe
 
 ```powershell
 .\installer\build-installer.ps1
-# → dist\IDG-Setup-v1.1.0.exe
+# → dist\IDG-Setup-v1.2.0.exe
 # (downloads Inno Setup automatically if not installed)
 ```
 

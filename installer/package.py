@@ -15,6 +15,10 @@ if json.loads((root / "extension/manifest.json").read_text(encoding="utf-8"))["v
 for binary in ("IDG.exe", "IDG-native.exe"):
     if not (root / "target/release" / binary).is_file():
         raise SystemExit("Run cargo build --release --bins first.")
+tools = root / "target/release/tools"
+for name in ("yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe", "licenses/upstream-sources.json"):
+    if not (tools / name).is_file():
+        raise SystemExit("Run python installer/fetch-media-tools.py before packaging; media tools must be included.")
 (root / "dist").mkdir(exist_ok=True)
 extension_files = sorted(path for path in (root / "extension").rglob("*") if path.is_file())
 extension_zip = root / f"dist/IDG-extension-{tag}.zip"
@@ -27,6 +31,9 @@ with ZipFile(portable_zip, "w", ZIP_DEFLATED) as archive:
         archive.write(root / "target/release" / binary, binary)
     for path in extension_files:
         archive.write(path, path.relative_to(root))
+    for path in sorted(tools.rglob("*")):
+        if path.is_file():
+            archive.write(path, Path("tools") / path.relative_to(tools))
     for name in ("installer/register-native-host.ps1", "README.md"):
         archive.write(root / name, name)
 print(f"Created {portable_zip.name} and {extension_zip.name}")

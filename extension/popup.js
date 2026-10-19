@@ -5,7 +5,7 @@ async function refreshStatus() {
     const status = await chrome.runtime.sendMessage({ type: "getStatus" });
     toggle.checked = status.interceptEnabled;
     document.getElementById("connection-status").textContent = status.serverOnline ? "IDG is connected" : status.installed ? "IDG is ready" : "IDG is not connected";
-    document.getElementById("connection-detail").textContent = status.serverOnline ? "Downloads open in the desktop app." : status.installed ? "The app will open when you send a download." : "Open IDG, or reinstall it to register browser integration. " + (status.error || "");
+    document.getElementById("connection-detail").textContent = status.serverOnline ? (status.youtubeReady ? `IDG ${status.serverVersion}: file and YouTube downloads are ready.` : `IDG ${status.serverVersion || ""}: update the complete app to v1.2.0 for YouTube.`) : status.installed ? "The app will open when you send a download." : "Open IDG, or reinstall it to register browser integration. " + (status.error || "");
   } catch { feedback.textContent = "Reload the extension to reconnect."; }
 }
 toggle.addEventListener("change", async () => {
@@ -61,3 +61,25 @@ async function refreshList() {
 }
 refreshStatus(); refreshList();
 setInterval(() => { refreshStatus(); refreshList(); }, 3000);
+
+(async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url) return;
+    const url = new URL(tab.url);
+    if (!["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(url.hostname)) return;
+    const id = url.hostname === "youtu.be" ? url.pathname.slice(1) : url.pathname === "/watch" ? url.searchParams.get("v") : /^\/(shorts|live)\//.test(url.pathname) ? url.pathname.split("/")[2] : null;
+    if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) return;
+    const button = document.getElementById("youtube-btn");
+    button.hidden = false;
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      feedback.textContent = "Opening this video in IDG…";
+      try {
+        const result = await chrome.runtime.sendMessage({ type: "download", url: tab.url, filename: (tab.title || "YouTube video").replace(/\s*[-–]\s*YouTube$/, "") + ".mp4" });
+        feedback.textContent = result.ok ? "Start the YouTube download in IDG." : result.error;
+      } catch { feedback.textContent = "Open IDG and reload this extension to reconnect."; }
+      finally { button.disabled = false; }
+    });
+  } catch {}
+})();

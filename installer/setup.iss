@@ -1,9 +1,9 @@
 ; IDG – Internet Download GO  –  Inno Setup 6 script
 ; Build: ISCC installer\setup.iss
-; Produces: IDG-Setup-1.1.0.exe
+; Produces: IDG-Setup-1.2.0.exe
 
 #define AppName      "IDG – Internet Download GO"
-#define AppVersion   "1.1.0"
+#define AppVersion   "1.2.0"
 #define AppPublisher "IDG Project"
 #define AppURL       "https://github.com/Mustafa1p/IDG-internet-download-go"
 #define AppExeName   "IDG.exe"
@@ -21,9 +21,11 @@ DefaultGroupName=IDG
 AllowNoIcons=yes
 OutputDir=..\dist
 OutputBaseFilename=IDG-Setup-{#AppVersion}
-Compression=lzma2/ultra64
+Compression=lzma2/normal
 SolidCompression=yes
 WizardStyle=modern
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DisableProgramGroupPage=yes
@@ -45,6 +47,7 @@ Name: "startupicon"; Description: "Start IDG when Windows starts"; GroupDescript
 Source: "..\target\release\IDG-native.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\release\IDG.exe";   DestDir: "{app}"; Flags: ignoreversion
 Source: "..\extension\*";              DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\target\release\tools\*"; DestDir: "{app}\tools"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md";                DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

@@ -15,6 +15,8 @@ Push-Location $root
 cargo build --release --bins
 if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 Pop-Location
+python "$root/installer/fetch-media-tools.py"
+if ($LASTEXITCODE -ne 0) { throw "media tools download failed" }
 
 # ── 2. Ensure Inno Setup 6 ───────────────────────────────────────────────────
 $iscc = @(

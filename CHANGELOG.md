@@ -1,3 +1,12 @@
+## 1.2.0 — 2026-10-19
+
+- Add YouTube watch-page, Shorts, and short-link downloads using bundled, checksum-verified yt-dlp, FFmpeg, and Deno.
+- Download one selected video and merge video/audio into MP4; remove radio/playlist parameters.
+- Route YouTube blob players through the page URL and add a download action in the extension popup.
+- Automatically repair native-host registration when the full app starts; add a repair action in Settings.
+- Show actionable connection errors and reject YouTube handoffs to older apps without media support.
+- Correct the release badge and include media dependencies/licenses in installer and portable packages.
+
 ## 1.1.0 — 2026-10-19
 
 - Select parallel connections automatically, scaling to 32 for larger files after verifying server byte-range support.

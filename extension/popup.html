@@ -28,10 +28,11 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:1.4px;color:var(--mute
 
 <main><div class="connection" role="status"><div id="connection-status">Connecting…</div><div id="connection-detail">Checking the desktop app</div></div>
 
+<button id="youtube-btn" type="button" hidden>Download this YouTube video</button>
 <div class="toggle-row"><label for="toggleIntercept">Capture browser downloads</label><input type="checkbox" id="toggleIntercept" checked></div>
 
 <form id="url-form"><label for="manual-url">Download link</label><input type="url" id="manual-url" placeholder="https://example.com/file.zip" required><button id="add-btn" type="submit">Download with IDG</button><p id="feedback" role="status" aria-live="polite"></p></form>
 
 <h2>Recent downloads</h2><div id="downloads-list"><p class="empty">Loading downloads…</p></div></main>
 
-<footer>Choose the filename and save location in the IDG window.</footer><script src="popup.js"></script></body></html>
+<footer>Choose the filename and save location in IDG. <a style="color:var(--accent)" href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest" target="_blank" rel="noopener">Get the latest IDG</a></footer><script src="popup.js"></script></body></html>

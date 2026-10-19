@@ -2284,7 +2284,7 @@ dependencies = [
 
 [[package]]
 name = "idg"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -2302,6 +2302,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tower-http 0.7.1",
  "tray-icon",

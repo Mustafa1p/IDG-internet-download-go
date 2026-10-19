@@ -9,7 +9,7 @@ version = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))["pack
 tag = sys.argv[1] if len(sys.argv) > 1 else f"v{version}"
 if tag != f"v{version}":
     raise SystemExit("Release tag does not match the application version")
-names = [f"IDG-Setup-{tag}.exe", f"IDG-{tag}.exe", f"IDG-portable-{tag}.zip", f"IDG-extension-{tag}.zip"]
+names = [f"IDG-Setup-{tag}.exe", f"IDG-portable-{tag}.zip", f"IDG-extension-{tag}.zip"]
 lines = []
 for name in names:
     path = root / "dist" / name

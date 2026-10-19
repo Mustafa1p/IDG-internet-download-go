@@ -73,6 +73,10 @@ pub async fn start_download(
         )
     };
 
+    if super::media::video_url(&url).is_some() {
+        return super::media::download(downloads, id).await;
+    }
+
     // ── Step 1: Probe ─────────────────────────────────────────────────────────
     let client = if headers.is_empty() {
         client

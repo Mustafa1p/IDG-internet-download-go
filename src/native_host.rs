@@ -70,7 +70,13 @@ async fn dispatch(client: &reqwest::Client, message: Value) -> anyhow::Result<Va
         anyhow::ensure!(ready, "IDG did not start. Open IDG and retry.");
     }
     if kind == "ping" {
-        return Ok(json!({"ok": true, "installed": true, "serverOnline": online}));
+        let tools = std::env::current_exe()?.with_file_name("tools");
+        let youtube = ["yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe"]
+            .iter()
+            .all(|name| tools.join(name).is_file());
+        return Ok(
+            json!({"ok": true, "installed": true, "serverOnline": online, "version": env!("CARGO_PKG_VERSION"), "capabilities": {"youtube": youtube}}),
+        );
     }
     let response = if kind == "list" {
         client.get(format!("{base}/downloads")).send().await?

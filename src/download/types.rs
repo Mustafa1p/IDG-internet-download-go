@@ -65,6 +65,7 @@ pub struct DownloadItem {
     pub url: String,
     pub headers: reqwest::header::HeaderMap,
     pub awaiting_confirmation: bool,
+    pub media_cookies: Option<String>,
     /// Resolved filename (from `Content-Disposition` or URL path).
     pub filename: String,
     /// Absolute path of the output file.
@@ -97,7 +98,16 @@ pub struct DownloadItem {
 
 impl DownloadItem {
     /// Create a new download item in the [`Status::Queued`] state.
-    pub fn new(url: String, save_path: PathBuf, num_segments: usize) -> Self {
+    pub fn new(url: String, mut save_path: PathBuf, num_segments: usize) -> Self {
+        if let Some(name) = super::media::default_filename(&url) {
+            let current = save_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            if matches!(current, "download" | "watch" | "") || !current.contains('.') {
+                save_path.set_file_name(name);
+            }
+        }
         let filename = save_path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -108,6 +118,7 @@ impl DownloadItem {
             url,
             headers: reqwest::header::HeaderMap::new(),
             awaiting_confirmation: false,
+            media_cookies: None,
             filename,
             save_path,
             total_bytes: None,
@@ -122,6 +133,10 @@ impl DownloadItem {
             pause_flag: Arc::new(AtomicBool::new(false)),
             speed_window: Vec::new(),
         }
+    }
+
+    pub fn supports_pause(&self) -> bool {
+        super::media::video_url(&self.url).is_none()
     }
 
     /// Download progress as a value in `[0.0, 1.0]`.
