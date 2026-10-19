@@ -1026,7 +1026,9 @@ impl IDGApp {
                         .map(|info| format!("IDG {} is available", info.version))
                         .unwrap_or_else(|| "IDG is up to date".into());
                     self.update_info = info;
-                    if self.auto_download_updates {
+                    // A failed installer leaves an error for the reopened app.
+                    // Require an explicit retry instead of an automatic restart loop.
+                    if self.auto_download_updates && self.update_error.is_none() {
                         self.download_update(ctx);
                     }
                 }

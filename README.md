@@ -12,7 +12,7 @@ Splits every file into multiple parallel connections — just like IDM, but free
 <br/>
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Mustafa1p/IDG-internet-download-go/release.yml?branch=main&style=for-the-badge&logo=github&label=Build)](https://github.com/Mustafa1p/IDG-internet-download-go/actions)
-[![Release](https://img.shields.io/badge/Latest_Release-v1.3.0-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
+[![Release](https://img.shields.io/badge/Latest_Release-v1.3.1-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078d4?style=for-the-badge&logo=windows)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 
@@ -20,11 +20,11 @@ Splits every file into multiple parallel connections — just like IDM, but free
 
 ## ⬇️ Download
 
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.3.0.exe">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.3.1.exe">
   <img src="https://img.shields.io/badge/Download%20Installer-Setup%20.exe-1976d2?style=for-the-badge&logo=windows&logoColor=white" height="42"/>
 </a>
 &nbsp;&nbsp;
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.3.0.zip">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.3.1.zip">
   <img src="https://img.shields.io/badge/Download%20Extension-Chrome%20%2F%20Edge-F4B400?style=for-the-badge&logo=googlechrome&logoColor=white" height="42"/>
 </a>
 
@@ -64,7 +64,7 @@ It works the same way as **IDM (Internet Download Manager)** — it splits every
 
 ### Step 1 — Download the installer
 
-👉 **[Download IDG-Setup-v1.3.0.exe](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.3.0.exe)**
+👉 **[Download IDG-Setup-v1.3.1.exe](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.3.1.exe)**
 
 ### Step 2 — Run the installer
 
@@ -92,7 +92,7 @@ Double-click the downloaded file and follow the wizard:
 
 ### Step 1 — Download the extension
 
-👉 **[Download IDG-extension-v1.3.0.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.3.0.zip)**
+👉 **[Download IDG-extension-v1.3.1.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.3.1.zip)**
 
 ### Step 2 — Extract the ZIP
 
@@ -148,7 +148,7 @@ Transfer rates use **Mbps** (decimal megabits per second), with 8 bits per byte;
 
 ## YouTube downloads
 
-Install the **complete v1.3.0 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
+Install the **complete v1.3.1 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
 
 Open a YouTube video and click **Download with IDG** over the player, or **Download this YouTube video** in the extension popup. You can also paste a watch/Shorts/youtu.be link into IDG. Radio and playlist parameters are removed so the selected video is downloaded once. IDG saves an MP4 with video and audio using the bundled yt-dlp, FFmpeg, and Deno tools. Larger formats are downloaded and merged automatically. Cancel through **Remove**; pause/resume is available for regular direct-file downloads.
 
@@ -189,7 +189,7 @@ cargo build --release
 ```powershell
 python installer/fetch-media-tools.py
 python installer/package.py
-# dist/IDG-portable-v1.3.0.zip and dist/IDG-extension-v1.3.0.zip
+# dist/IDG-portable-v1.3.1.zip and dist/IDG-extension-v1.3.1.zip
 ```
 
 Extract the portable ZIP, run `installer/register-native-host.ps1` from PowerShell, and load its `extension` folder in Chrome or Edge. Keep `IDG.exe` and `IDG-native.exe` together.
@@ -198,7 +198,7 @@ Extract the portable ZIP, run `installer/register-native-host.ps1` from PowerShe
 
 ```powershell
 .\installer\build-installer.ps1
-# → dist\IDG-Setup-v1.3.0.exe
+# → dist\IDG-Setup-v1.3.1.exe
 # (downloads Inno Setup automatically if not installed)
 ```
 
@@ -237,9 +237,9 @@ python tests/tray-smoke.py
 
 Automated tests exercise handoff success/failure, native framing, stable extension identity, saved interception settings, API confirmation, and exact bytes for authenticated parallel downloads. To verify Chrome installation end to end, install the current build, load the extension, close IDG, and download a direct ZIP link. Confirm that IDG opens with an editable filename, then start it and compare the result with the source. Disable capture in the popup and check that Chrome handles the next download itself.
 
-## Updates, YouTube choices, and Windows startup (v1.3.0)
+## Updates, YouTube choices, and Windows startup (v1.3.1)
 
-Open **Settings → Application updates** to check for a new release, automatically download and verify it, or enable automatic installation when all downloads are finished. **Install update and restart IDG** replaces the complete app in its current folder and reopens it. Finish or remove queued/paused transfers first. No browser download or manual installer search is needed after installing v1.3.0 once. Windows can still request elevation for a protected installation folder.
+Open **Settings → Application updates** to check for a new release, automatically download and verify it, or enable automatic installation when all downloads are finished. **Install update and restart IDG** replaces the complete app in its current folder and reopens it. Finish or remove queued/paused transfers first. No browser download or manual installer search is needed after installing v1.3.1 once. Windows can still request elevation for a protected installation folder.
 
 The updater verifies the installer size and SHA-256 digest published by GitHub. An interrupted or altered download is rejected, with a retry option. Update checks run at launch and every six hours while the UI is active.
 

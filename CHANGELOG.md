@@ -1,3 +1,8 @@
+## 1.3.1 — 2026-10-19
+
+- Stop automatic update retries after an installer failure until the user explicitly retries, avoiding repeated download/restart cycles.
+- Include all in-app updates, extension synchronization, YouTube format choices, Windows icon, and startup changes from 1.3.0.
+
 ## 1.3.0 — 2026-10-19
 
 - Add verified in-app update downloads, installation/restart, optional automatic installation when idle, and periodic checks.
