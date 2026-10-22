@@ -112,7 +112,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          name: "IDG ${{ github.ref_name }} — YouTube downloads and repaired browser handoff"
+          name: "IDG ${{ github.ref_name }} — Hostinger email export support"
           body_path: docs/release-notes.md
           files: |
             dist/IDG-Setup-${{ github.ref_name }}.exe

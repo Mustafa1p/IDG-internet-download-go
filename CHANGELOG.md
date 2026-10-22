@@ -1,3 +1,13 @@
+## 1.4.2 — 2026-10-22
+
+- Support authenticated Hostinger Mail exports from Inbox and Sent, preserving repeated message-selection parameters.
+- Download single-message EML files and server-generated ZIP archives through one streaming GET, without HEAD or range probes.
+- Forward the export request's browser session and allowed authentication headers; recognize small EML downloads.
+- Replace the fixed total download timeout with a read timeout so active exports can finish.
+- Explain missing or expired mail sessions and reject sign-in pages or JSON API errors before saving an export.
+- Flush buffered file writes before marking downloads complete.
+- Add regression tests using an authenticated export server and a ZIP fixture containing EML messages.
+
 ## 1.4.1 — 2026-10-19
 
 - Slim the page's Download with IDG overlay to 28px with smaller typography and padding.

@@ -37,6 +37,8 @@ use tokio::{
 
 /// Arguments passed to a single segment worker.
 pub struct SegmentArgs {
+    /// A GET already opened by the probe; consume it instead of requesting again.
+    pub response: Option<reqwest::Response>,
     pub client: Arc<Client>,
     /// Segment index (used in error messages).
     pub id: usize,
@@ -65,18 +67,27 @@ pub struct SegmentArgs {
 /// # Errors
 /// Returns an error after `max_retries` failed attempts, or immediately if
 /// the segment is cancelled.
-pub async fn run_segment(args: SegmentArgs, max_retries: u32) -> Result<()> {
+pub async fn run_segment(mut args: SegmentArgs, max_retries: u32) -> Result<()> {
     let mut attempts = 0u32;
     // `resume_at` advances after each successful chunk write, enabling
     // within-segment resume across retries.
     let mut resume_at = args.start;
 
     loop {
-        let result = download_range(&args, resume_at, &mut resume_at).await;
+        let response = args.response.take();
+        let streaming_export = super::probe::is_mail_export(&args.url) || response.is_some();
+        let result = download_range(&args, resume_at, &mut resume_at, response).await;
 
         match result {
             Ok(()) => return Ok(()),
             Err(e) => {
+                // Generated exports cannot be resumed by byte offset or replayed
+                // reliably. Report the original error instead of appending a new export.
+                if streaming_export {
+                    return Err(
+                        e.context("Email export interrupted; export again from the browser")
+                    );
+                }
                 if args.cancel.load(Ordering::Relaxed) {
                     bail!("segment {} cancelled", args.id);
                 }
@@ -113,7 +124,12 @@ pub async fn run_segment(args: SegmentArgs, max_retries: u32) -> Result<()> {
 ///
 /// `cursor` is updated as bytes are written so the caller can resume
 /// from the correct offset on the next attempt.
-async fn download_range(args: &SegmentArgs, start: u64, cursor: &mut u64) -> Result<()> {
+async fn download_range(
+    args: &SegmentArgs,
+    start: u64,
+    cursor: &mut u64,
+    response: Option<reqwest::Response>,
+) -> Result<()> {
     let SegmentArgs {
         client,
         url,
@@ -137,7 +153,10 @@ async fn download_range(args: &SegmentArgs, start: u64, cursor: &mut u64) -> Res
     } else {
         request
     };
-    let resp = request.send().await.context("GET request failed")?;
+    let resp = match response {
+        Some(response) => response,
+        None => request.send().await.context("GET request failed")?,
+    };
 
     if !resp.status().is_success() {
         bail!("server returned HTTP {}", resp.status());

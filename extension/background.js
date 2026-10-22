@@ -19,11 +19,12 @@ const INTERCEPT_EXT = new Set([
   "pdf","doc","docx","xls","xlsx","ppt","pptx",
   "mp3","mp4","avi","mkv","mov","wmv","flv","webm","m4v","m4a",
   "wav","ogg","flac","aac","mp2","wma",
-  "torrent",
+  "torrent","eml",
 ]);
 
 // MIME types to intercept
 const INTERCEPT_MIME = new Set([
+  "message/rfc822",
   "application/octet-stream",
   "application/zip","application/x-zip","application/x-zip-compressed",
   "application/x-rar","application/x-rar-compressed","application/x-7z-compressed",
@@ -51,6 +52,31 @@ const settingsReady = chrome.storage.local.get({ interceptEnabled: true, statusO
 function validUrl(value) {
   try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
 }
+
+function isMailExport(value) {
+  try {
+    const url = new URL(value);
+    return validUrl(value) && url.hostname === "mail.hostinger.com" &&
+      /^\/bridge\/api\/v3\/mailboxes\/[^/]+\/messages\/sources\/export$/.test(url.pathname);
+  } catch { return false; }
+}
+
+// Some webmail sessions use authorization/CSRF headers as well as cookies.
+// Keep only the exact export request's credentials, in memory for two minutes.
+const exportRequests = new Map();
+chrome.webRequest.onBeforeSendHeaders.addListener(details => {
+  if (!isMailExport(details.url) || details.method !== "GET" || details.tabId < 0) return;
+  const headers = {};
+  for (const header of details.requestHeaders || []) {
+    const name = header.name.toLowerCase();
+    if (["authorization", "cookie", "referer", "origin", "user-agent", "x-csrf-token", "x-xsrf-token", "x-requested-with"].includes(name) && typeof header.value === "string") headers[name] = header.value;
+  }
+  exportRequests.delete(details.url);
+  exportRequests.set(details.url, { headers, time: Date.now() });
+  for (const [url, request] of exportRequests) {
+    if (Date.now() - request.time > 120000 || exportRequests.size > 64) exportRequests.delete(url);
+  }
+}, { urls: ["https://mail.hostinger.com/bridge/api/v3/mailboxes/*/messages/sources/export*", "http://mail.hostinger.com/bridge/api/v3/mailboxes/*/messages/sources/export*"] }, ["requestHeaders", "extraHeaders"]);
 
 function nativeRequest(message) {
   return new Promise((resolve, reject) => {
@@ -116,6 +142,7 @@ async function updateServerStatus() {
 
 function shouldIntercept(url, mime, filesize) {
   if (!interceptEnabled || !validUrl(url)) return false;
+  if (isMailExport(url) || mime?.split(";")[0].trim().toLowerCase() === "message/rfc822") return true;
   if (mime && INTERCEPT_MIME.has(mime.split(";")[0].trim().toLowerCase()) &&
       (!filesize || filesize < 0 || filesize >= MIN_SIZE_BYTES)) return true;
   return INTERCEPT_EXT.has(new URL(url).pathname.split(".").pop().toLowerCase());
@@ -166,6 +193,11 @@ async function sendDownloadRequest(url, filename, referrer, userAgent) {
     }
   } catch {}
   const download = { url, filename, referrer, cookies, media_cookies, user_agent: userAgent, show_dialog: true };
+  const captured = exportRequests.get(url);
+  if (isMailExport(url) && captured && Date.now() - captured.time <= 120000) {
+    download.headers = captured.headers;
+    exportRequests.delete(url);
+  }
   // Never retry a POST using another transport: a lost response could duplicate it.
   const online = await pingServer();
   try {

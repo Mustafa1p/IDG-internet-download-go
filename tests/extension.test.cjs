@@ -23,6 +23,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     storage: { local: { get: async () => ({ interceptEnabled: enabled, statusOnlyPopup: migrated }), set: async value => calls.push(['settings', value]) } },
     action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
     cookies: { getAll: async () => [{ name: 'session', value: 'test-cookie' }] },
+    webRequest: { onBeforeSendHeaders: event('requestHeaders') },
     downloads: {
       onCreated: event('created'),
       pause: async id => calls.push(['pause', id]),
@@ -50,6 +51,41 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
   return { events, calls, message, context, reports };
 }
 const download = { id: 17, url: 'https://example.com/file.zip', filename: 'C:\\Downloads\\file.zip', referrer: 'https://example.com/source', mime: 'application/zip', fileSize: 200000 };
+
+test('small Hostinger exports preserve repeated Inbox and Sent parameters and captured authentication', async () => {
+  for (const query of ['m=2464-INBOX', 'm=534-INBOX.Sent&m=533-INBOX.Sent']) {
+    const { events, calls } = worker();
+    const url = `https://mail.hostinger.com/bridge/api/v3/mailboxes/test/messages/sources/export?${query}`;
+    events.requestHeaders({ url, method: 'GET', tabId: 4, requestHeaders: [
+      { name: 'Authorization', value: 'Bearer test-token' },
+      { name: 'Cookie', value: 'partitioned-session=abc' },
+      { name: 'X-CSRF-Token', value: 'csrf-test' },
+      { name: 'Range', value: 'bytes=0-' },
+    ] });
+    await events.created({ ...download, url, filename: '', mime: 'application/octet-stream', fileSize: 512 });
+    assert.deepEqual(calls.map(call => call[0]), ['pause', 'post', 'cancel', 'erase']);
+    const request = calls.find(call => call[0] === 'post')[1];
+    assert.equal(request.url, url);
+    assert.deepEqual(request.headers, { authorization: 'Bearer test-token', cookie: 'partitioned-session=abc', 'x-csrf-token': 'csrf-test' });
+  }
+});
+
+test('EML downloads are captured even below the usual file size threshold', async () => {
+  const { events, calls } = worker();
+  await events.created({ ...download, url: 'https://example.com/message', mime: 'message/rfc822; charset=utf-8', fileSize: 500 });
+  assert.ok(calls.some(call => call[0] === 'post'));
+});
+
+test('expired or unrelated captured mail credentials are never forwarded', async () => {
+  for (const stale of [false, true]) {
+    const { events, calls, message, context } = worker();
+    const url = 'https://mail.hostinger.com/bridge/api/v3/mailboxes/test/messages/sources/export?m=1-INBOX';
+    events.requestHeaders({ url, method: 'GET', tabId: 1, requestHeaders: [{ name: 'Authorization', value: 'Bearer private' }] });
+    if (stale) vm.runInContext('for (const request of exportRequests.values()) request.time = 0', context);
+    await message({ type: 'download', url: stale ? url : 'https://example.com/file.zip' });
+    assert.equal(calls.find(call => call[0] === 'post')[1].headers, undefined);
+  }
+});
 
 test('handoff pauses, forwards credentials, then cancels after acceptance', async () => {
   const { events, calls } = worker();

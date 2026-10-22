@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use futures::future::join_all;
-use tokio::{fs::OpenOptions, sync::Mutex};
+use tokio::{fs::OpenOptions, io::AsyncWriteExt, sync::Mutex};
 
 use crate::download::{
     connections::choose_count,
@@ -85,13 +85,15 @@ pub async fn start_download(
             reqwest::Client::builder()
                 .default_headers(headers)
                 .connect_timeout(std::time::Duration::from_secs(15))
-                .timeout(std::time::Duration::from_secs(60))
+                .read_timeout(std::time::Duration::from_secs(300))
                 .build()?,
         )
     };
     with_item(&downloads, &id, |i| i.status = Status::Probing);
 
-    let probe_result = probe(&client, &url).await.context("URL probe failed")?;
+    let mut probe_result = probe(&client, &url)
+        .await
+        .map_err(|error| anyhow::anyhow!("URL probe failed: {error:#}"))?;
 
     // Persist probe results; update the save path if the server suggested a
     // different filename via Content-Disposition.
@@ -161,6 +163,7 @@ pub async fn start_download(
         id, seg_count, probe_result.content_length
     );
 
+    let mut initial_response = probe_result.response.take();
     let tasks: Vec<_> = segments
         .into_iter()
         .enumerate()
@@ -174,6 +177,7 @@ pub async fn start_download(
             let id = id.clone();
 
             let args = SegmentArgs {
+                response: initial_response.take(),
                 client: client.clone(),
                 id: seg_id,
                 url,
@@ -212,6 +216,13 @@ pub async fn start_download(
     if cancel.load(std::sync::atomic::Ordering::Relaxed) {
         with_item(&downloads, &id, |i| i.status = Status::Cancelled);
     } else {
+        // Tokio file writes can still be buffered after the workers finish.
+        // Flush before advertising completion or consumers may read zeroes.
+        file.lock()
+            .await
+            .flush()
+            .await
+            .context("failed to flush output file")?;
         eprintln!(
             "[IDG] download complete id={} path={}",
             id,

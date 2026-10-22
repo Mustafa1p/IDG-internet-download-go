@@ -57,6 +57,7 @@ pub struct AddDownloadRequest {
     pub media_cookies: Option<String>,
     pub media_options: Option<crate::download::media::MediaOptions>,
     pub user_agent: Option<String>,
+    pub headers: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -147,6 +148,35 @@ async fn add_download(
             };
             item.headers
                 .insert(reqwest::header::HeaderName::from_static(name), value);
+        }
+    }
+    // Only replay captured credentials to the original, recognized mail endpoint.
+    if crate::download::probe::is_mail_export(&item.url) {
+        for (name, value) in req.headers.unwrap_or_default() {
+            let name = name.to_ascii_lowercase();
+            if !matches!(
+                name.as_str(),
+                "authorization"
+                    | "cookie"
+                    | "referer"
+                    | "origin"
+                    | "user-agent"
+                    | "x-csrf-token"
+                    | "x-xsrf-token"
+                    | "x-requested-with"
+            ) {
+                continue;
+            }
+            let Ok(value) = reqwest::header::HeaderValue::from_str(&value) else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": "Invalid request header"})),
+                );
+            };
+            item.headers.insert(
+                reqwest::header::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                value,
+            );
         }
     }
     item.awaiting_confirmation = req.show_dialog;
@@ -328,6 +358,159 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
+    #[tokio::test]
+    async fn hostinger_exports_use_one_authenticated_get_and_keep_eml_and_zip_bytes() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        const EML: &[u8] =
+            b"From: sender@example.com\r\nSubject: Export test\r\n\r\nTest message.\r\n";
+        const ZIP: &[u8] = include_bytes!("../tests/fixtures/email-export.zip");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = calls.clone();
+        let (source, task) = serve(Router::new().route(
+            "/bridge/api/v3/mailboxes/test/messages/sources/export",
+            get(
+                move |method: Method, uri: axum::http::Uri, headers: HeaderMap| {
+                    let counter = counter.clone();
+                    async move {
+                        counter.fetch_add(1, Ordering::SeqCst);
+                        assert_eq!(method, Method::GET, "Exports must not be probed with HEAD");
+                        assert!(!headers.contains_key("range"));
+                        assert_eq!(headers["cookie"], "session=abc");
+                        assert_eq!(headers["authorization"], "Bearer export-test");
+                        assert_eq!(headers["x-csrf-token"], "csrf-test");
+                        let query = uri.query().unwrap();
+                        let (bytes, name, mime) = if query.contains("&m=") {
+                            assert!(query.starts_with("m=534-INBOX.Sent&m=533-INBOX.Sent"));
+                            (ZIP, "sent-emails.zip", "application/zip")
+                        } else {
+                            assert!(query.starts_with("m=2464-INBOX"));
+                            (EML, "message.eml", "message/rfc822")
+                        };
+                        let mut result = HeaderMap::new();
+                        result.insert("content-type", mime.parse().unwrap());
+                        // Even if an export advertises ranges, it must remain a stream.
+                        result.insert("accept-ranges", "bytes".parse().unwrap());
+                        if query.contains("named") {
+                            result.insert(
+                                "content-disposition",
+                                format!("attachment; filename={name}").parse().unwrap(),
+                            );
+                            (result, bytes.to_vec()).into_response()
+                        } else {
+                            let chunks: Vec<_> = bytes
+                                .chunks(13)
+                                .map(|chunk| {
+                                    Ok::<_, std::io::Error>(bytes::Bytes::copy_from_slice(chunk))
+                                })
+                                .collect();
+                            (
+                                result,
+                                axum::body::Body::from_stream(futures::stream::iter(chunks)),
+                            )
+                                .into_response()
+                        }
+                    }
+                },
+            ),
+        ))
+        .await;
+        let socket: std::net::SocketAddr = source.strip_prefix("http://").unwrap().parse().unwrap();
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("cookie", "session=abc".parse().unwrap());
+        headers.insert("authorization", "Bearer export-test".parse().unwrap());
+        headers.insert("x-csrf-token", "csrf-test".parse().unwrap());
+        let client = Arc::new(
+            reqwest::Client::builder()
+                .no_proxy()
+                .resolve("mail.hostinger.com", socket)
+                .default_headers(headers)
+                .build()
+                .unwrap(),
+        );
+        let directory = tempfile::tempdir().unwrap();
+        let downloads = Arc::new(Mutex::new(Vec::new()));
+        for (query, expected_name, expected_bytes) in [
+            ("m=2464-INBOX", "message.eml", EML),
+            ("m=534-INBOX.Sent&m=533-INBOX.Sent", "messages.zip", ZIP),
+            (
+                "m=534-INBOX.Sent&m=533-INBOX.Sent&named=1",
+                "sent-emails.zip",
+                ZIP,
+            ),
+        ] {
+            let before = calls.load(Ordering::SeqCst);
+            let mut item = DownloadItem::new(
+                format!(
+                    "http://mail.hostinger.com:{}/bridge/api/v3/mailboxes/test/messages/sources/export?{query}",
+                    socket.port()
+                ),
+                directory.path().join("export"),
+                32,
+            );
+            item.preserve_filename = false;
+            let id = item.id.clone();
+            downloads.lock().unwrap().push(item);
+            start_download(client.clone(), downloads.clone(), id)
+                .await
+                .unwrap();
+            let item = downloads.lock().unwrap().last().unwrap().clone();
+            assert_eq!(item.status, Status::Completed);
+            assert_eq!(item.filename, expected_name);
+            assert_eq!(item.num_segments, 1);
+            assert_eq!(item.downloaded_bytes, expected_bytes.len() as u64);
+            assert_eq!(std::fs::read(&item.save_path).unwrap(), expected_bytes);
+            assert_eq!(calls.load(Ordering::SeqCst), before + 1);
+        }
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn hostinger_login_and_api_errors_are_reported_before_creating_files() {
+        let (source, task) = serve(Router::new().route(
+            "/bridge/api/v3/mailboxes/test/messages/sources/export",
+            get(|uri: axum::http::Uri| async move {
+                match uri.query().unwrap() {
+                    "unauthorized" => StatusCode::UNAUTHORIZED.into_response(),
+                    "forbidden" => StatusCode::FORBIDDEN.into_response(),
+                    "html" => axum::response::Html("Sign in").into_response(),
+                    _ => Json(serde_json::json!({"error":"Session expired"})).into_response(),
+                }
+            }),
+        ))
+        .await;
+        let socket: std::net::SocketAddr = source.strip_prefix("http://").unwrap().parse().unwrap();
+        let client = Arc::new(
+            reqwest::Client::builder()
+                .no_proxy()
+                .resolve("mail.hostinger.com", socket)
+                .build()
+                .unwrap(),
+        );
+        let directory = tempfile::tempdir().unwrap();
+        for query in ["unauthorized", "forbidden", "html", "json"] {
+            let path = directory.path().join("messages.zip");
+            let item = DownloadItem::new(
+                format!(
+                    "http://mail.hostinger.com:{}/bridge/api/v3/mailboxes/test/messages/sources/export?{query}",
+                    socket.port()
+                ),
+                path.clone(),
+                0,
+            );
+            let id = item.id.clone();
+            let downloads = Arc::new(Mutex::new(vec![item]));
+            let error = start_download(client.clone(), downloads, id)
+                .await
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("IDG browser extension"),
+                "{error}"
+            );
+            assert!(!path.exists());
+        }
+        task.abort();
+    }
+
     async fn serve(router: Router) -> (String, tokio::task::JoinHandle<()>) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = format!("http://{}", listener.local_addr().unwrap());
@@ -393,6 +576,38 @@ mod tests {
             .unwrap();
         assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
         server.abort();
+    }
+
+    #[tokio::test]
+    async fn captured_export_headers_are_allowed_only_for_hostinger_exports() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = state(directory.path());
+        let downloads = state.downloads.clone();
+        let (address, task) = serve(build_router(state)).await;
+        for (host, captured) in [("mail.hostinger.com", true), ("example.com", false)] {
+            let response = reqwest::Client::new().post(format!("{address}/downloads"))
+                .json(&serde_json::json!({
+                    "url": format!("https://{host}/bridge/api/v3/mailboxes/test/messages/sources/export?m=1-INBOX"),
+                    "show_dialog": true,
+                    "cookies": "fallback=abc",
+                    "headers": {"Authorization": "Bearer test", "Cookie": "captured=abc", "X-CSRF-Token": "csrf", "Host": "evil.example", "Range": "bytes=0-0"}
+                })).send().await.unwrap();
+            assert_eq!(response.status(), StatusCode::CREATED);
+            let item = downloads.lock().unwrap().last().unwrap().clone();
+            assert_eq!(item.headers.contains_key("authorization"), captured);
+            assert_eq!(item.headers.contains_key("x-csrf-token"), captured);
+            assert_eq!(
+                item.headers["cookie"],
+                if captured {
+                    "captured=abc"
+                } else {
+                    "fallback=abc"
+                }
+            );
+            assert!(!item.headers.contains_key("host"));
+            assert!(!item.headers.contains_key("range"));
+        }
+        task.abort();
     }
 
     #[tokio::test]

@@ -21,6 +21,8 @@ use reqwest::{Client, StatusCode};
 /// Result of probing a URL before starting a download.
 #[derive(Debug)]
 pub struct ProbeResult {
+    /// Reuse a streaming GET when the endpoint cannot be probed safely.
+    pub response: Option<reqwest::Response>,
     /// File size in bytes, if the server reported `Content-Length`.
     pub content_length: Option<u64>,
     /// `true` when the server sent `Accept-Ranges: bytes`.
@@ -51,6 +53,9 @@ impl ProbeResult {
 /// Returns an error if the network request fails or the server returns a
 /// non-2xx status on both `HEAD` and the fallback `GET`.
 pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
+    if is_mail_export(url) {
+        return streaming_probe(client, url).await;
+    }
     let resp = client
         .head(url)
         .header("Accept-Encoding", "identity")
@@ -137,10 +142,76 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .or_else(|| Some(filename_from_url(&final_url)));
 
     Ok(ProbeResult {
+        response: None,
         content_length,
         accepts_ranges,
         filename,
         final_url,
+    })
+}
+
+/// Mail exports are generated streams, not static files. Do not issue HEAD,
+/// speculative ranges, or a second GET that regenerates the archive.
+pub fn is_mail_export(url: &str) -> bool {
+    reqwest::Url::parse(url).is_ok_and(|url| {
+        url.host_str() == Some("mail.hostinger.com") && is_mail_export_path(url.path())
+    })
+}
+
+fn is_mail_export_path(path: &str) -> bool {
+    path.strip_prefix("/bridge/api/v3/mailboxes/")
+        .and_then(|path| path.split_once('/'))
+        .is_some_and(|(mailbox, rest)| !mailbox.is_empty() && rest == "messages/sources/export")
+}
+
+async fn streaming_probe(client: &Client, url: &str) -> Result<ProbeResult> {
+    let response = client
+        .get(url)
+        .header("Accept-Encoding", "identity")
+        .send()
+        .await
+        .context("Email export request failed")?;
+    if matches!(
+        response.status(),
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
+    ) {
+        anyhow::bail!(
+            "Email session expired or missing. Sign in to Hostinger Mail and export again using the IDG browser extension."
+        );
+    }
+    let response = response
+        .error_for_status()
+        .context("Server rejected email export")?;
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim();
+    if matches!(
+        content_type,
+        "text/html" | "application/json" | "application/problem+json"
+    ) {
+        anyhow::bail!(
+            "Hostinger returned a sign-in page or API error instead of an email export. Sign in and export again using the IDG browser extension."
+        );
+    }
+    let final_url = response.url().to_string();
+    let filename = response
+        .headers()
+        .get("content-disposition")
+        .and_then(|value| value.to_str().ok())
+        .and_then(filename_from_content_disposition)
+        .unwrap_or_else(|| filename_from_url(url));
+    Ok(ProbeResult {
+        content_length: response.content_length(),
+        accepts_ranges: false,
+        filename: Some(filename),
+        final_url,
+        response: Some(response),
     })
 }
 
@@ -197,6 +268,19 @@ fn filename_from_content_disposition(cd: &str) -> Option<String> {
 /// Shared URL suggestion for the desktop dialog and browser API. Server headers
 /// can replace this suggestion after redirects; explicit user edits are retained.
 pub fn filename_from_url(url: &str) -> String {
+    if is_mail_export(url) {
+        let count = reqwest::Url::parse(url)
+            .unwrap()
+            .query_pairs()
+            .filter(|(key, _)| key == "m")
+            .count();
+        return if count == 1 {
+            "message.eml"
+        } else {
+            "messages.zip"
+        }
+        .into();
+    }
     if let Some(name) = super::media::default_filename(url) {
         return name;
     }

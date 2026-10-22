@@ -74,7 +74,7 @@ fn main() -> eframe::Result {
             ))
             .pool_max_idle_per_host(16)
             .tcp_keepalive(Duration::from_secs(30))
-            .timeout(Duration::from_secs(60))
+            .read_timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(15))
             .build()
             .expect("failed to build HTTP client")
