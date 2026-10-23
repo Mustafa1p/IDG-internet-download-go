@@ -84,3 +84,6 @@ $global:LASTEXITCODE = $global:IDGTestExit
         (Split-Path $resolved -Leaf) -notlike 'idg-signing-tests-*') { throw 'Unexpected test cleanup path.' }
     Remove-Item -LiteralPath $resolved -Recurse -Force
 }
+# The negative cases intentionally set a mock native failure exit code. GitHub's
+# pwsh wrapper propagates LASTEXITCODE even when all assertions passed.
+$global:LASTEXITCODE = 0
