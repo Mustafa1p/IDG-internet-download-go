@@ -20,6 +20,25 @@ use std::time::Duration;
 /// Current application version — kept in sync with Cargo.toml.
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Isolated UI review, available only in development builds.
+pub fn settings_preview() -> bool {
+    cfg!(debug_assertions) && std::env::args().any(|argument| argument == "--settings-preview")
+}
+
+fn settings_preview_size() -> [f32; 2] {
+    std::env::args()
+        .find_map(|argument| {
+            let (width, height) = argument
+                .strip_prefix("--settings-preview-size=")?
+                .split_once('x')?;
+            Some([
+                width.parse::<f32>().ok()?.clamp(800.0, 2000.0),
+                height.parse::<f32>().ok()?.clamp(500.0, 1400.0),
+            ])
+        })
+        .unwrap_or([1440.0, 1000.0])
+}
+
 fn main() -> eframe::Result {
     #[cfg(windows)]
     {
@@ -36,32 +55,36 @@ fn main() -> eframe::Result {
         .expect("failed to build Tokio runtime");
 
     let background = std::env::args().any(|argument| argument == "--background");
-    let _instance_lock = match desktop::acquire_instance()
-        .map_err(|error| eframe::Error::AppCreation(Box::new(error)))?
-    {
-        Some(lock) => lock,
-        None => {
-            if !background {
-                runtime.block_on(async {
-                    let client = reqwest::Client::builder()
-                        .no_proxy()
-                        .timeout(Duration::from_millis(500))
-                        .build()
-                        .unwrap();
-                    for _ in 0..25 {
-                        if client
-                            .post("http://127.0.0.1:17843/show")
-                            .send()
-                            .await
-                            .is_ok_and(|response| response.status().is_success())
-                        {
-                            break;
+    let _instance_lock = if settings_preview() {
+        None
+    } else {
+        match desktop::acquire_instance()
+            .map_err(|error| eframe::Error::AppCreation(Box::new(error)))?
+        {
+            Some(lock) => Some(lock),
+            None => {
+                if !background {
+                    runtime.block_on(async {
+                        let client = reqwest::Client::builder()
+                            .no_proxy()
+                            .timeout(Duration::from_millis(500))
+                            .build()
+                            .unwrap();
+                        for _ in 0..25 {
+                            if client
+                                .post("http://127.0.0.1:17843/show")
+                                .send()
+                                .await
+                                .is_ok_and(|response| response.status().is_success())
+                            {
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_millis(100)).await;
                         }
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
-                });
+                    });
+                }
+                return Ok(());
             }
-            return Ok(());
         }
     };
 
@@ -92,16 +115,33 @@ fn main() -> eframe::Result {
     let icon = load_icon();
 
     let options = eframe::NativeOptions {
+        persist_window: !settings_preview(),
+        persistence_path: settings_preview().then(|| {
+            std::env::temp_dir().join(format!("idg-settings-preview-{}.ron", std::process::id()))
+        }),
         viewport: egui::ViewportBuilder::default()
-            .with_title("IDG – Internet Download GO")
-            .with_inner_size([960.0, 600.0])
+            .with_title(if settings_preview() {
+                "IDG Settings Preview"
+            } else {
+                "IDG – Internet Download GO"
+            })
+            .with_inner_size(if settings_preview() {
+                settings_preview_size()
+            } else {
+                [960.0, 600.0]
+            })
             .with_min_inner_size([800.0, 500.0])
+            .with_clamp_size_to_monitor_size(!settings_preview())
             .with_icon(Arc::new(icon)),
         ..Default::default()
     };
 
     eframe::run_native(
-        "IDG",
+        if settings_preview() {
+            "IDG Settings Preview"
+        } else {
+            "IDG"
+        },
         options,
         Box::new(move |cc| {
             Ok(Box::new(app::IDGApp::new(

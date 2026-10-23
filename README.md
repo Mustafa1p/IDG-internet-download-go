@@ -269,6 +269,22 @@ Windows startup is enabled by default by the installer and on the first portable
 
 ## Compact desktop design (v1.4.1)
 
+Settings now opens as a full page inside the existing **960 × 600** window
+(minimum **800 × 500**). Save directory, parallel connections, app behavior,
+updates, and browser integration have separate cards with readable labels and
+teal controls. Scroll to reach the remaining sections; **Save changes** and
+**Reset to defaults** stay visible. Changes are applied when saved, and the
+download folder is remembered across restarts. Reset stages the defaults for
+review before saving. Opening Settings does not enlarge the window.
+
+![Compact Settings page](docs/settings.png)
+
+For isolated visual review from a development build, run
+`cargo run --bin IDG -- --settings-preview --settings-preview-size=960x600`.
+It writes `target/settings-preview.png` using the app renderer. This development
+mode uses a separate window, skips the API/startup/extension/update initialization,
+and does not save preferences. Release builds ignore the preview flag.
+
 The desktop app opens at **960 × 600** logical pixels and can shrink to **800 × 500**. Its dark teal library includes a sidebar Add download action, status and file-type categories, live speed/count summaries, search, newest/oldest sorting, transfer progress, and selected-file details. Speeds remain in Mbps. Large lists scroll without pushing the action buttons outside the window.
 
 The extension popup now contains only connection status. Capture controls, manual download forms, recent downloads, YouTube buttons, and release links have been removed from the popup. Existing page overlays and browser context-menu download actions remain available.

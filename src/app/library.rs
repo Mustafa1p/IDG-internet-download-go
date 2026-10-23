@@ -3,7 +3,7 @@ use super::*;
 use egui_extras::{Column, TableBuilder};
 
 #[derive(Clone, Copy)]
-enum Icon {
+pub(super) enum Icon {
     Download,
     Check,
     Pause,
@@ -17,9 +17,14 @@ enum Icon {
     Play,
     Remove,
     Link,
+    Monitor,
+    Refresh,
+    Puzzle,
+    Wrench,
+    Reset,
 }
 
-fn draw_icon(painter: &egui::Painter, rect: egui::Rect, icon: Icon, color: Color32) {
+pub(super) fn draw_icon(painter: &egui::Painter, rect: egui::Rect, icon: Icon, color: Color32) {
     let p = |x: f32, y: f32| {
         egui::pos2(
             rect.left() + rect.width() * x,
@@ -31,6 +36,71 @@ fn draw_icon(painter: &egui::Painter, rect: egui::Rect, icon: Icon, color: Color
         painter.line_segment([p(a.0, a.1), p(b.0, b.1)], stroke);
     };
     match icon {
+        Icon::Monitor => {
+            painter.rect_stroke(
+                egui::Rect::from_min_max(p(0.1, 0.12), p(0.9, 0.7)),
+                1.5,
+                stroke,
+            );
+            line((0.5, 0.7), (0.5, 0.9));
+            line((0.2, 0.9), (0.8, 0.9));
+        }
+        Icon::Refresh | Icon::Reset => {
+            let points = (0..24)
+                .map(|i| {
+                    let angle = -2.7 + i as f32 / 23.0 * 5.1;
+                    p(0.5 + 0.36 * angle.cos(), 0.5 + 0.36 * angle.sin())
+                })
+                .collect();
+            painter.add(egui::Shape::line(points, stroke));
+            line((0.13, 0.08), (0.13, 0.38));
+            line((0.13, 0.38), (0.42, 0.38));
+            if matches!(icon, Icon::Refresh) {
+                line((0.87, 0.62), (0.87, 0.92));
+                line((0.58, 0.62), (0.87, 0.62));
+            }
+        }
+        Icon::Puzzle => {
+            painter.add(egui::Shape::closed_line(
+                vec![
+                    p(0.15, 0.3),
+                    p(0.4, 0.3),
+                    p(0.36, 0.15),
+                    p(0.5, 0.08),
+                    p(0.64, 0.15),
+                    p(0.6, 0.3),
+                    p(0.85, 0.3),
+                    p(0.85, 0.55),
+                    p(0.98, 0.51),
+                    p(0.98, 0.72),
+                    p(0.85, 0.68),
+                    p(0.85, 0.9),
+                    p(0.6, 0.9),
+                    p(0.6, 0.75),
+                    p(0.4, 0.75),
+                    p(0.4, 0.9),
+                    p(0.15, 0.9),
+                ],
+                stroke,
+            ));
+        }
+        Icon::Wrench => {
+            painter.add(egui::Shape::closed_line(
+                vec![
+                    p(0.58, 0.12),
+                    p(0.55, 0.35),
+                    p(0.7, 0.48),
+                    p(0.9, 0.4),
+                    p(0.83, 0.58),
+                    p(0.64, 0.61),
+                    p(0.3, 0.93),
+                    p(0.12, 0.78),
+                    p(0.48, 0.45),
+                    p(0.43, 0.25),
+                ],
+                stroke,
+            ));
+        }
         Icon::Download => {
             line((0.5, 0.12), (0.5, 0.67));
             line((0.27, 0.45), (0.5, 0.68));
@@ -187,20 +257,33 @@ impl IDGApp {
         self.show_add = true;
     }
     pub(super) fn sidebar(&mut self, ui: &mut Ui, items: &[DownloadItem]) {
+        let spacious = self.show_settings && ui.ctx().screen_rect().width() >= 1100.0;
         ui.add_space(10.0);
         ui.horizontal(|ui| {
-            let (rect, _) = ui.allocate_exact_size(Vec2::splat(32.0), egui::Sense::hover());
+            let (rect, _) = ui.allocate_exact_size(
+                Vec2::splat(if spacious { 44.0 } else { 32.0 }),
+                egui::Sense::hover(),
+            );
             ui.painter().rect_filled(rect, 6.0, ACCENT2);
             draw_icon(ui.painter(), rect.shrink(6.0), Icon::Download, ACCENT);
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 3.0;
-                    ui.label(RichText::new("IDG").size(22.0).strong());
-                    ui.label(RichText::new("GO").size(22.0).color(ACCENT).strong());
+                    ui.label(
+                        RichText::new("IDG")
+                            .size(if spacious { 28.0 } else { 22.0 })
+                            .strong(),
+                    );
+                    ui.label(
+                        RichText::new("GO")
+                            .size(if spacious { 28.0 } else { 22.0 })
+                            .color(ACCENT)
+                            .strong(),
+                    );
                 });
                 ui.label(
                     RichText::new("Internet Download GO")
-                        .size(10.0)
+                        .size(if spacious { 12.0 } else { 10.0 })
                         .color(TEXT_DIM),
                 );
             });
@@ -208,16 +291,23 @@ impl IDGApp {
         ui.add_space(14.0);
         if ui
             .add_sized(
-                [ui.available_width(), 34.0],
-                egui::Button::new(RichText::new("+  Add download").strong().color(TEXT))
-                    .fill(ACCENT2)
-                    .rounding(6.0),
+                [ui.available_width(), if spacious { 44.0 } else { 34.0 }],
+                egui::Button::new(
+                    RichText::new("+  Add download")
+                        .size(if spacious { 16.0 } else { 12.0 })
+                        .strong()
+                        .color(TEXT),
+                )
+                .fill(ACCENT2)
+                .rounding(6.0),
             )
             .clicked()
         {
             self.open_add();
         }
-        let height = if ui.ctx().screen_rect().height() < 550.0 {
+        let height = if spacious {
+            40.0
+        } else if ui.ctx().screen_rect().height() < 550.0 {
             24.0
         } else {
             30.0
@@ -247,7 +337,7 @@ impl IDGApp {
             ui.label(RichText::new(title).size(10.0).color(TEXT_DIM));
             ui.add_space(4.0);
             for &category in categories {
-                let selected = self.category == category;
+                let selected = !self.show_settings && self.category == category;
                 let response = ui.add_sized(
                     [ui.available_width(), height],
                     egui::Button::new("")
@@ -279,7 +369,7 @@ impl IDGApp {
                     egui::pos2(rect.left() + 34.0, rect.center().y),
                     egui::Align2::LEFT_CENTER,
                     category.label(),
-                    FontId::proportional(11.5),
+                    FontId::proportional(if spacious { 14.0 } else { 11.5 }),
                     if selected { TEXT } else { TEXT_DIM },
                 );
                 ui.painter().text(
@@ -294,14 +384,20 @@ impl IDGApp {
                 });
                 if response.clicked() {
                     self.category = category;
+                    self.show_settings = false;
+                    self.settings_draft = None;
                 }
             }
         }
         ui.add_space((ui.available_height() - 100.0).max(4.0));
         ui.separator();
         let settings = ui.add_sized(
-            [ui.available_width(), 28.0],
-            egui::Button::new("Settings").fill(Color32::TRANSPARENT),
+            [ui.available_width(), if spacious { 40.0 } else { 28.0 }],
+            egui::Button::new("Settings").fill(if self.show_settings {
+                ROW_SEL
+            } else {
+                Color32::TRANSPARENT
+            }),
         );
         draw_icon(
             ui.painter(),
@@ -312,9 +408,18 @@ impl IDGApp {
             Icon::Settings,
             TEXT_DIM,
         );
+        if self.show_settings {
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(
+                    settings.rect.left_top(),
+                    Vec2::new(3.0, settings.rect.height()),
+                ),
+                2.0,
+                ACCENT,
+            );
+        }
         if settings.clicked() {
-            self.show_settings = true;
-            self.default_segments = self.connection_settings.lock().unwrap().requested_count();
+            self.open_settings();
         }
         ui.label(RichText::new("Download folder").size(10.0).color(TEXT_DIM));
         ui.horizontal(|ui| {
@@ -354,7 +459,7 @@ impl IDGApp {
                         ui.close_menu();
                     }
                     if ui.button("Settings").clicked() {
-                        self.show_settings = true;
+                        self.open_settings();
                         ui.close_menu();
                     }
                 });

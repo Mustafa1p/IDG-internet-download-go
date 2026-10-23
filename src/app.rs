@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use egui::{Color32, FontId, Frame, Margin, RichText, Rounding, Stroke, Ui, Vec2};
 mod library;
+mod settings;
 use tokio::runtime::Handle;
 
 use crate::{
@@ -139,8 +140,10 @@ pub struct IDGApp {
     newest_first: bool,
     dialog: AddDialog,
     show_settings: bool,
+    settings_draft: Option<settings::SettingsDraft>,
+    settings_message: Option<String>,
+    settings_error: Option<String>,
     default_save_dir: String,
-    default_segments: usize,
     connection_settings: SharedConnectionSettings,
     connection_settings_error: Option<String>,
     /// Set by the background update checker when a new version is available.
@@ -166,11 +169,18 @@ impl IDGApp {
         background: bool,
     ) -> Self {
         setup_visuals(&cc.egui_ctx);
+        if crate::settings_preview() {
+            cc.egui_ctx
+                .send_viewport_cmd(egui::ViewportCommand::InnerSize(
+                    crate::settings_preview_size().into(),
+                ));
+        }
         // Apply the smaller layout once on upgrade, then respect later resizing.
-        if !cc
-            .storage
-            .and_then(|storage| eframe::get_value::<bool>(storage, "compact_layout_v1"))
-            .unwrap_or(false)
+        if !crate::settings_preview()
+            && !cc
+                .storage
+                .and_then(|storage| eframe::get_value::<bool>(storage, "compact_layout_v1"))
+                .unwrap_or(false)
         {
             cc.egui_ctx
                 .send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(960.0, 600.0)));
@@ -186,11 +196,15 @@ impl IDGApp {
             ),
         };
         #[cfg(windows)]
-        if let Err(error) = desktop::repair_browser_integration() {
+        if !crate::settings_preview()
+            && let Err(error) = desktop::repair_browser_integration()
+        {
             desktop_error = Some(format!("Browser integration: {error}"));
         }
         #[cfg(windows)]
-        if let Err(error) = desktop::ensure_startup_default() {
+        if !crate::settings_preview()
+            && let Err(error) = desktop::ensure_startup_default()
+        {
             desktop_error = Some(format!("Windows startup: {error}"));
         }
         let startup_enabled = desktop::startup_enabled().unwrap_or_else(|error| {
@@ -203,9 +217,16 @@ impl IDGApp {
             .unwrap_or(true);
         let start_hidden = background && tray.is_some();
 
-        let default_save_dir = dirs::download_dir()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|| ".".into());
+        let default_save_dir = cc
+            .storage
+            .and_then(|storage| eframe::get_value::<String>(storage, "default_save_dir"))
+            .filter(|path| !path.trim().is_empty())
+            .unwrap_or_else(settings::default_download_folder);
+        let default_save_dir = if crate::settings_preview() {
+            r"C:\Users\User\Downloads".into()
+        } else {
+            default_save_dir
+        };
 
         let (connections, connection_settings_error) = match ConnectionSettings::load() {
             Ok(settings) => (settings, None),
@@ -214,7 +235,6 @@ impl IDGApp {
                 Some(format!("Could not load connection settings: {error}")),
             ),
         };
-        let default_segments = connections.requested_count();
         let connection_settings = Arc::new(std::sync::Mutex::new(connections));
 
         let downloads: Downloads = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -228,7 +248,9 @@ impl IDGApp {
             egui_ctx: cc.egui_ctx.clone(),
             connection_settings: connection_settings.clone(),
         };
-        rt.spawn(run_server(srv_state));
+        if !crate::settings_preview() {
+            rt.spawn(run_server(srv_state));
+        }
 
         let auto_download_updates = cc
             .storage
@@ -248,7 +270,7 @@ impl IDGApp {
                 auto_extension_updates,
             )
         });
-        if auto_extension_updates {
+        if auto_extension_updates && !crate::settings_preview() {
             let context = cc.egui_ctx.clone();
             rt.spawn_blocking(move || {
                 if let Err(error) = crate::integration::synchronize() {
@@ -262,12 +284,14 @@ impl IDGApp {
         // ── Start update checker ─────────────────────────────────────────────
         let (update_tx, update_rx) = tokio::sync::oneshot::channel();
         let update_client = client.clone();
-        rt.spawn(async move {
-            let info = check_for_update(&update_client, APP_VERSION)
-                .await
-                .map_err(|e| e.to_string());
-            let _ = update_tx.send(info);
-        });
+        if !crate::settings_preview() {
+            rt.spawn(async move {
+                let info = check_for_update(&update_client, APP_VERSION)
+                    .await
+                    .map_err(|e| e.to_string());
+                let _ = update_tx.send(info);
+            });
+        }
 
         IDGApp {
             tray,
@@ -286,17 +310,26 @@ impl IDGApp {
             search: String::new(),
             newest_first: true,
             dialog: AddDialog::new(&default_save_dir),
-            show_settings: false,
+            show_settings: crate::settings_preview(),
+            settings_draft: None,
+            settings_message: None,
+            settings_error: None,
             default_save_dir,
-            default_segments,
             connection_settings,
             connection_settings_error,
             update_info: None,
-            update_rx: Some(update_rx),
+            update_rx: if crate::settings_preview() {
+                None
+            } else {
+                Some(update_rx)
+            },
             update_download_rx: None,
             update_progress: None,
             prepared_update: None,
             update_error: dirs::config_dir().and_then(|config| {
+                if crate::settings_preview() {
+                    return None;
+                }
                 let path = config.join("IDG/update-error.txt");
                 let error = std::fs::read_to_string(&path).ok();
                 if error.is_some() {
@@ -304,7 +337,12 @@ impl IDGApp {
                 }
                 error
             }),
-            update_status: "Checking for updates…".into(),
+            update_status: if crate::settings_preview() {
+                "Update checks are paused in preview."
+            } else {
+                "Checking for updates…"
+            }
+            .into(),
             last_update_check: std::time::Instant::now(),
             auto_download_updates,
             auto_install_updates,
@@ -770,146 +808,6 @@ impl IDGApp {
         }
     }
 
-    fn settings_dialog(&mut self, ctx: &egui::Context) {
-        let mut open = self.show_settings;
-        let mut saved = false;
-        egui::Window::new("Settings")
-            .open(&mut open)
-            .resizable(false)
-            .collapsible(false)
-            .default_width(460.0)
-            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical().max_height((ctx.screen_rect().height() - 120.0).max(220.0)).show(ui, |ui| {
-                ui.style_mut().spacing.item_spacing = Vec2::new(8.0, 8.0);
-
-                ui.horizontal(|ui| {
-                    ui.add_sized(
-                        [100.0, 22.0],
-                        egui::Label::new(
-                            RichText::new("Save directory").size(12.0).color(TEXT_DIM),
-                        ),
-                    );
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.default_save_dir).desired_width(200.0),
-                    );
-                    if ui.small_button("…").clicked()
-                        && let Some(p) = rfd::FileDialog::new()
-                            .set_directory(&self.default_save_dir)
-                            .pick_folder()
-                    {
-                        self.default_save_dir = p.to_string_lossy().into_owned();
-                    }
-                });
-
-                ui.separator();
-                ui.label(RichText::new("Parallel connections").strong());
-                let mut automatic = self.default_segments == 0;
-                ui.horizontal(|ui| {
-                    if ui.radio_value(&mut automatic, true, "Automatic (recommended)").changed() {
-                        self.default_segments = 0;
-                    }
-                    if ui.radio_value(&mut automatic, false, "Manual").changed() {
-                        self.default_segments = 32;
-                    }
-                });
-                if automatic {
-                    ui.label(RichText::new("Selects up to 32 connections based on file size and server support.").size(11.0).color(TEXT_DIM));
-                } else {
-                    ui.horizontal(|ui| {
-                        ui.label("Connections per download");
-                        ui.add(egui::DragValue::new(&mut self.default_segments).range(1..=32));
-                    });
-                }
-                ui.label(RichText::new("Applies to new downloads after Save. Servers without range support use one connection.").size(11.0).color(TEXT_DIM));
-                if let Some(error) = &self.connection_settings_error {
-                    ui.colored_label(RED, error);
-                }
-
-                ui.separator();
-                ui.add_enabled(self.tray.is_some(), egui::Checkbox::new(&mut self.close_to_tray, "Keep IDG running in the system tray when I close the window"));
-                #[cfg(windows)]
-                if ui.checkbox(&mut self.startup_enabled, "Start IDG with Windows (in the system tray)").changed() {
-                    if let Err(error) = desktop::set_startup(self.startup_enabled) {
-                        self.startup_enabled = !self.startup_enabled;
-                        self.desktop_error = Some(format!("Could not update Windows startup: {error}"));
-                    } else {
-                        self.desktop_error = None;
-                    }
-                }
-                #[cfg(windows)]
-                if ui.button("Repair Chrome / Edge integration").clicked() {
-                    self.desktop_error = desktop::repair_browser_integration().err().map(|error| format!("Browser integration: {error}"));
-                }
-                if let Some(error) = &self.desktop_error {
-                    ui.colored_label(RED, error);
-                }
-                ui.label(RichText::new("Closing the window keeps downloads and browser integration active. Use Quit IDG in the tray menu to exit.").color(TEXT_DIM).size(11.0));
-
-                ui.separator();
-                ui.label(RichText::new("Application updates").strong());
-                ui.checkbox(&mut self.auto_download_updates, "Download and verify new updates automatically");
-                ui.checkbox(&mut self.auto_install_updates, "Install updates automatically when downloads are finished");
-                self.update_controls(ui, ctx);
-                if ui.add_enabled(self.update_rx.is_none() && self.update_download_rx.is_none(), egui::Button::new("Check for updates now")).clicked() { self.check_updates(ctx); }
-                ui.separator();
-                ui.label(RichText::new("IDG Integration Module").strong());
-                ui.label(RichText::new("Reload v1.2.x once after upgrading. Future updates can reload automatically.").size(11.0).color(TEXT_DIM));
-                if let Some(error) = ctx.data(|data| data.get_temp::<String>(egui::Id::new("idg-extension-error"))) { ui.colored_label(RED, error); }
-                if ui.checkbox(&mut self.auto_extension_updates, "Update the detected Chrome / Edge extension with IDG").changed() {
-                    ctx.data_mut(|data| data.insert_temp(egui::Id::new("extension-auto-update"), self.auto_extension_updates));
-                }
-                let connection = ctx.data(|data| data.get_temp::<crate::integration::Connection>(egui::Id::new("extension-connection")));
-                if let Some(connection) = connection.filter(|c| c.seen.elapsed() < Duration::from_secs(150)) {
-                    ui.label(format!("Connected: v{} ({})", connection.version, connection.install_type));
-                    if let Some(error) = connection.error { ui.colored_label(RED, error); }
-                } else {
-                    ui.label("Open the extension popup to connect and report its version.");
-                }
-                if ui.button("Detect and update extension now").clicked() {
-                    self.desktop_error = match crate::integration::synchronize() {
-                        Ok(count) if count > 0 => Some(format!("Updated {count} extension folder(s). Open its popup to reload.")),
-                        Ok(_) => Some("No older unpacked extension found. It may be current; otherwise select its folder below.".into()),
-                        Err(error) => Some(error.to_string()),
-                    };
-                }
-                if ui.button("Choose existing extension folder…").clicked()
-                    && let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                    self.desktop_error = Some(match crate::integration::sync_folder(&folder).and_then(|updated| { crate::integration::remember_folder(&folder)?; Ok(updated) }) {
-                        Ok(_) => "Extension files are current. Reload it in chrome://extensions or edge://extensions, then refresh open pages.".into(),
-                        Err(error) => error.to_string(),
-                    });
-                }
-
-                ui.add_space(4.0);
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui
-                            .add(
-                                egui::Button::new(RichText::new("  Save  ").color(Color32::WHITE))
-                                    .fill(ACCENT2)
-                                    .rounding(3.0),
-                            )
-                            .clicked()
-                        {
-                            let settings = ConnectionSettings { parallel_segments: (self.default_segments != 0).then_some(self.default_segments) };
-                            match settings.save() {
-                                Ok(()) => {
-                                    *self.connection_settings.lock().unwrap() = settings;
-                                    self.connection_settings_error = None;
-                                    saved = true;
-                                }
-                                Err(error) => self.connection_settings_error = Some(format!("Could not save connection settings: {error}")),
-                            }
-                        }
-                    });
-                });
-                });
-            });
-        self.show_settings = open && !saved;
-    }
-
     // ── Actions ───────────────────────────────────────────────────────────────
     fn handle_action(&mut self, id: &str, action: &str, items: &[DownloadItem]) {
         use std::sync::atomic::Ordering::Relaxed;
@@ -1017,8 +915,12 @@ impl IDGApp {
 
 impl eframe::App for IDGApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        if crate::settings_preview() {
+            return;
+        }
         eframe::set_value(storage, "compact_layout_v1", &true);
         eframe::set_value(storage, "close_to_tray", &self.close_to_tray);
+        eframe::set_value(storage, "default_save_dir", &self.default_save_dir);
         eframe::set_value(
             storage,
             "auto_download_updates",
@@ -1032,7 +934,11 @@ impl eframe::App for IDGApp {
         );
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        #[cfg(debug_assertions)]
+        if crate::settings_preview() {
+            self.capture_settings_preview(ctx);
+        }
         if self.start_hidden {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             self.start_hidden = false;
@@ -1072,9 +978,10 @@ impl eframe::App for IDGApp {
         }
 
         self.poll_updates(ctx);
-        if self.update_info.is_some()
-            || self.update_error.is_some()
-            || self.prepared_update.is_some()
+        if !self.show_settings
+            && (self.update_info.is_some()
+                || self.update_error.is_some()
+                || self.prepared_update.is_some())
         {
             egui::TopBottomPanel::top("update_banner")
                 .frame(
@@ -1108,7 +1015,13 @@ impl eframe::App for IDGApp {
 
         // ── Sidebar ──────────────────────────────────────────────────────────
         egui::SidePanel::left("sidebar")
-            .exact_width(174.0)
+            .exact_width(
+                if self.show_settings && ctx.screen_rect().width() >= 1100.0 {
+                    250.0
+                } else {
+                    174.0
+                },
+            )
             .resizable(false)
             .frame(
                 Frame::none()
@@ -1127,16 +1040,17 @@ impl eframe::App for IDGApp {
         egui::CentralPanel::default()
             .frame(Frame::none().fill(BG).inner_margin(Margin::same(14.0)))
             .show(ctx, |ui| {
-                self.library_header(ui, &items);
-                self.download_table(ui, &items);
+                if self.show_settings {
+                    self.settings_page(ui, ctx, frame);
+                } else {
+                    self.library_header(ui, &items);
+                    self.download_table(ui, &items);
+                }
             });
 
         // ── Dialogs ──────────────────────────────────────────────────────────
         if self.show_add {
             self.add_dialog(ctx);
-        }
-        if self.show_settings {
-            self.settings_dialog(ctx);
         }
 
         // Repaint while active
@@ -1151,6 +1065,35 @@ impl eframe::App for IDGApp {
 
 // ── Visuals ───────────────────────────────────────────────────────────────────
 fn setup_visuals(ctx: &egui::Context) {
+    // Use Windows' own UI typeface when available; keep egui's portable fallback.
+    let mut fonts = egui::FontDefinitions::default();
+    let font_root = std::env::var_os("WINDIR")
+        .map(PathBuf::from)
+        .map(|path| path.join("Fonts"));
+    if let Some(root) = font_root {
+        for (name, file) in [("idg-ui", "segoeui.ttf"), ("idg-semibold", "seguisb.ttf")] {
+            if let Ok(bytes) = std::fs::read(root.join(file)) {
+                fonts
+                    .font_data
+                    .insert(name.into(), egui::FontData::from_owned(bytes));
+            }
+        }
+    }
+    if fonts.font_data.contains_key("idg-ui") {
+        fonts
+            .families
+            .get_mut(&egui::FontFamily::Proportional)
+            .unwrap()
+            .insert(0, "idg-ui".into());
+    }
+    let mut headings = fonts.families[&egui::FontFamily::Proportional].clone();
+    if fonts.font_data.contains_key("idg-semibold") {
+        headings.insert(0, "idg-semibold".into());
+    }
+    fonts
+        .families
+        .insert(egui::FontFamily::Name("idg-heading".into()), headings);
+    ctx.set_fonts(fonts);
     let mut v = egui::Visuals::dark();
     v.panel_fill = PANEL;
     v.extreme_bg_color = BG;
