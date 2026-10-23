@@ -36,6 +36,11 @@ VersionInfoVersion={#AppVersion}
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName}
 VersionInfoProductName={#AppName}
+#ifdef IDG_SIGN_RELEASE
+; The compiler invokes this tool for Setup, its temporary copies, and uninstall.
+SignTool=idg
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

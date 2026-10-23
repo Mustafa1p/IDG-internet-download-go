@@ -6,6 +6,7 @@
 .EXAMPLE
   .\installer\build-installer.ps1
 #>
+param([switch]$SignRelease)
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 
@@ -17,11 +18,17 @@ if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 Pop-Location
 python "$root/installer/fetch-media-tools.py"
 if ($LASTEXITCODE -ne 0) { throw "media tools download failed" }
+if ($SignRelease) {
+    & "$PSScriptRoot/sign-windows.ps1" -Path "$root/target/release/IDG.exe", "$root/target/release/IDG-native.exe", "$root/target/release/tools", "$PSScriptRoot/register-native-host.ps1"
+} else {
+    Write-Warning 'Development installer: unsigned. Public releases require -SignRelease and a trusted signing identity; see docs/windows-signing.md.'
+}
 
 # ── 2. Ensure Inno Setup 6 ───────────────────────────────────────────────────
 $iscc = @(
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
     "C:\Program Files\Inno Setup 6\ISCC.exe"
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 if (-not $iscc) {
@@ -31,6 +38,9 @@ if (-not $iscc) {
     $innoUrl = "https://jrsoftware.org/download.php/is.exe"
     Write-Host "     Downloading from $innoUrl"
     Invoke-WebRequest -Uri $innoUrl -OutFile $innoInstaller -UseBasicParsing
+    if ((Get-AuthenticodeSignature -LiteralPath $innoInstaller).Status -ne 'Valid') {
+        throw 'The downloaded Inno Setup installer does not have a valid trusted signature.'
+    }
 
     Write-Host "     Installing Inno Setup silently..."
     Start-Process -FilePath $innoInstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -WindowStyle Hidden -Wait
@@ -39,6 +49,7 @@ if (-not $iscc) {
     $iscc = @(
         "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
         "C:\Program Files\Inno Setup 6\ISCC.exe"
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
     ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
     if (-not $iscc) { throw "Inno Setup installation failed – please install manually from https://jrsoftware.org/isinfo.php" }
@@ -50,11 +61,17 @@ if (-not $iscc) {
 Write-Host "`n[3/3] Compiling installer..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force "$root\dist" | Out-Null
 
-& $iscc "$root\installer\setup.iss"
+$compilerArgs = @("$root\installer\setup.iss")
+if ($SignRelease) {
+    $signCommand = 'pwsh.exe -NoProfile -NonInteractive -File $q' + "$PSScriptRoot/sign-windows.ps1" + '$q -Path $f'
+    $compilerArgs = @('/DIDG_SIGN_RELEASE', "/Sidg=$signCommand") + $compilerArgs
+}
+& $iscc @compilerArgs
 if ($LASTEXITCODE -ne 0) { throw "ISCC compilation failed" }
 
 $output = Get-ChildItem "$root\dist\IDG-Setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($output) {
+    if ($SignRelease) { & "$PSScriptRoot/sign-windows.ps1" -VerifyOnly -Path $output.FullName }
     $sizeMB = [math]::Round($output.Length / 1MB, 2)
     Write-Host "`n✅ Installer built: $($output.FullName) ($sizeMB MB)" -ForegroundColor Green
 } else {
