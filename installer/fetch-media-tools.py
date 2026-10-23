@@ -50,7 +50,9 @@ for tool in lock["tools"]:
         fetch(url, notices / f"{tool['name']}-{index}-{url.rsplit('/', 1)[-1]}.txt")
     print(f"Verified {tool['name']} {tool['tag']}", flush=True)
 
-fetch("https://www.gnu.org/licenses/gpl-3.0.txt", notices / "GPL-3.0.txt")
+# The complete GPLv3 text was already fetched from FFmpeg's pinned source revision.
+# Reuse it rather than making release packaging depend on another host's uptime.
+shutil.copyfile(notices / "ffmpeg-0-COPYING.GPLv3.txt", notices / "GPL-3.0.txt")
 shutil.copyfile(root / "installer/media-tools.json", notices / "upstream-sources.json")
 (notices / "README.txt").write_text(
     "IDG invokes these independent tools as subprocesses. Their licenses and upstream source locations "
