@@ -164,6 +164,50 @@ fn is_mail_export_path(path: &str) -> bool {
         .is_some_and(|(mailbox, rest)| !mailbox.is_empty() && rest == "messages/sources/export")
 }
 
+/// Send a token-bearing form exactly once; reuse the response as the file stream.
+/// HEAD/range probes and parallel POST replays can consume one-use tokens.
+pub async fn post_probe(client: &Client, url: &str, body: String) -> Result<ProbeResult> {
+    let response = client
+        .post(url)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Accept-Encoding", "identity")
+        .body(body)
+        .send()
+        .await
+        .context("Download form request failed")?
+        .error_for_status()
+        .context("Server rejected download form; return to the website for a fresh link")?;
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    anyhow::ensure!(
+        !matches!(
+            content_type.as_str(),
+            "text/html" | "application/json" | "application/problem+json"
+        ),
+        "The website returned an error or waiting page; return to the browser for a fresh download token"
+    );
+    let filename = response
+        .headers()
+        .get("content-disposition")
+        .and_then(|value| value.to_str().ok())
+        .and_then(filename_from_content_disposition);
+    Ok(ProbeResult {
+        content_length: response.content_length(),
+        accepts_ranges: false,
+        filename,
+        final_url: response.url().to_string(),
+        response: Some(response),
+    })
+}
+
 async fn streaming_probe(client: &Client, url: &str) -> Result<ProbeResult> {
     let response = client
         .get(url)

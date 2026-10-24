@@ -58,6 +58,7 @@ pub struct AddDownloadRequest {
     pub media_options: Option<crate::download::media::MediaOptions>,
     pub user_agent: Option<String>,
     pub headers: Option<std::collections::HashMap<String, String>>,
+    pub post_data: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -82,7 +83,7 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
         build: env!("IDG_BUILD_ID"),
-        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available()}),
+        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "post_downloads": true}),
     })
 }
 
@@ -117,6 +118,16 @@ async fn add_download(
         );
     }
     let save_dir = req.save_dir.unwrap_or(state.default_dir.clone());
+    if req
+        .post_data
+        .as_ref()
+        .is_some_and(|body| body.len() > 65536)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Download form is too large"})),
+        );
+    }
     let preserve_filename = req.filename.as_ref().is_some_and(|name| {
         let name = safe_filename(name);
         name.contains('.') && name != filename_from_url(&req.url)
@@ -183,6 +194,7 @@ async fn add_download(
     }
     item.awaiting_confirmation = req.show_dialog;
     item.media_cookies = req.media_cookies;
+    item.post_data = req.post_data;
     item.media_options = req.media_options.unwrap_or_default();
 
     {
@@ -948,5 +960,101 @@ mod tests {
         }
         task.abort();
         tokio::fs::remove_dir(directory).await.unwrap();
+    }
+    #[tokio::test]
+    async fn token_form_download_posts_once_without_probes_and_preserves_file_bytes() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let count = Arc::new(AtomicUsize::new(0));
+        let requests = count.clone();
+        let expected: Vec<u8> = (0..250_003).map(|n| (n % 251) as u8).collect();
+        let bytes = expected.clone();
+        let (source, source_task) = serve(Router::new().route(
+            "/download.php",
+            axum::routing::any(move |method: Method, headers: HeaderMap, body: String| {
+                let bytes = bytes.clone();
+                let requests = requests.clone();
+                async move {
+                    assert_eq!(method, Method::POST);
+                    assert_eq!(
+                        requests.fetch_add(1, Ordering::SeqCst),
+                        0,
+                        "one-use token was replayed"
+                    );
+                    assert_eq!(body, "token=fixture%2Btoken&filename=fixture.zip");
+                    assert_eq!(headers["content-type"], "application/x-www-form-urlencoded");
+                    assert_eq!(
+                        headers["referer"],
+                        "https://adsume.com/your-file-is-loading-please-wait/"
+                    );
+                    assert_eq!(headers["cookie"], "session=fixture");
+                    assert!(!headers.contains_key("range"));
+                    (
+                        [
+                            ("content-type", "application/octet-stream"),
+                            ("content-disposition", "attachment; filename=fixture.zip"),
+                            ("accept-ranges", "bytes"),
+                        ],
+                        bytes,
+                    )
+                }
+            }),
+        ))
+        .await;
+        let directory = tempfile::tempdir().unwrap();
+        let state = state(directory.path());
+        let downloads = state.downloads.clone();
+        let (address, api_task) = serve(build_router(state)).await;
+        let response = reqwest::Client::new().post(format!("{address}/downloads")).json(&serde_json::json!({
+            "url": format!("{source}/download.php"), "post_data": "token=fixture%2Btoken&filename=fixture.zip", "segments": 32,
+            "cookies": "session=fixture", "referrer": "https://adsume.com/your-file-is-loading-please-wait/"
+        })).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let item = downloads.lock().unwrap()[0].clone();
+                assert_ne!(item.status, Status::Failed, "{:?}", item.error);
+                if item.status == Status::Completed {
+                    assert_eq!(item.num_segments, 1);
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read(directory.path().join("fixture.zip")).unwrap(),
+            expected
+        );
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        api_task.abort();
+        source_task.abort();
+    }
+
+    #[tokio::test]
+    async fn token_form_errors_do_not_create_files_or_replay_tokens() {
+        for content_type in ["text/html; charset=utf-8", "application/json"] {
+            let (source, source_task) = serve(Router::new().route(
+                "/download.php",
+                post(move || async move { ([("content-type", content_type)], "Expired token") }),
+            ))
+            .await;
+            let directory = tempfile::tempdir().unwrap();
+            let downloads: Downloads = Arc::new(Mutex::new(Vec::new()));
+            let mut item = DownloadItem::new(
+                format!("{source}/download.php"),
+                directory.path().join("file.zip"),
+                8,
+            );
+            item.post_data = Some("token=expired".into());
+            let id = item.id.clone();
+            downloads.lock().unwrap().push(item);
+            let error = start_download(Arc::new(reqwest::Client::new()), downloads, id)
+                .await
+                .unwrap_err();
+            assert!(error.to_string().contains("fresh download token"));
+            assert!(!directory.path().join("file.zip").exists());
+            source_task.abort();
+        }
     }
 }

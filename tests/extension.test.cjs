@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, reload = false, diskVersion = "1.3.1" } = {}) {
+function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, reload = false, diskVersion = "1.3.1", items = [], postDownloads = true } = {}) {
   const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
@@ -14,7 +14,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
       sendNativeMessage(name, message, callback) {
         calls.push(['native', message]);
         if (!native) this.lastError = { message: 'Native host missing' };
-        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube } } : undefined);
+        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, post_downloads: postDownloads } } : undefined);
         delete this.lastError;
       },
     },
@@ -23,9 +23,11 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     storage: { local: { get: async () => ({ interceptEnabled: enabled, statusOnlyPopup: migrated }), set: async value => calls.push(['settings', value]) } },
     action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
     cookies: { getAll: async () => [{ name: 'session', value: 'test-cookie' }] },
-    webRequest: { onBeforeSendHeaders: event('requestHeaders') },
+    webRequest: { onBeforeSendHeaders: event('requestHeaders'), onBeforeRequest: event('beforeRequest') },
     downloads: {
       onCreated: event('created'),
+      onChanged: event('changed'),
+      search: async ({ id }) => items.filter(item => item.id === id),
       pause: async id => calls.push(['pause', id]),
       resume: async id => calls.push(['resume', id]),
       cancel: async id => calls.push(['cancel', id]),
@@ -41,7 +43,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     if (url.startsWith('chrome-extension://')) return { ok: true, json: async () => ({ version: diskVersion }) };
     if (url.endsWith('/health')) {
       if (!online) throw new Error('Offline');
-      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube } }) };
+      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, post_downloads: postDownloads } }) };
     }
     calls.push(['post', JSON.parse(options.body)]);
     return { ok: accepts, status: accepts ? 201 : 500 };
@@ -180,13 +182,15 @@ function overlayPage(reply = async () => ({ ok: true })) {
     querySelectorAll: () => [media], addEventListener: (name, handler) => { events[name] = handler; }, createElement: element,
   };
   let mutation;
-  const context = vm.createContext({ document, location, window: {}, URL,
+  const context = vm.createContext({ document, location, window: {}, URL, URLSearchParams,
+    CustomEvent: class { constructor(type, options = {}) { Object.assign(this, { type, ...options }); } },
     MutationObserver: class { constructor(callback) { mutation = callback; } observe() {} }, getComputedStyle: () => ({ position: 'relative' }),
     chrome: { runtime: { sendMessage: async message => { sent.push(message); return reply(message); } } },
   });
+  vm.runInContext(fs.readFileSync('extension/download-form.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('extension/content.js', 'utf8'), context);
   const event = overrides => ({ isTrusted: true, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }, ...overrides });
-  return { sent, parent, media, location, event, get overlay() { return parent.children[0]; },
+  return { sent, parent, media, location, event, events, document, context, get overlay() { return parent.children[0]; },
     scan: () => mutation([{ addedNodes: [{ nodeType: 1, tagName: 'DIV', hasAttribute: () => false, querySelectorAll: () => [media] }] }]),
     navigate: () => events['yt-navigate-finish'](),
   };
@@ -286,4 +290,213 @@ test('popup migration enables capture when the old switch had been disabled', as
   await events.created(download);
   assert.ok(calls.some(call => call[0] === 'post'));
   assert.ok(calls.some(call => call[0] === 'settings' && call[1].statusOnlyPopup === true));
+});
+
+test('PHP endpoints use the resolved filename even with an unknown MIME and size', async () => {
+  const { events, calls } = worker();
+  await events.created({ ...download, url: 'https://example.com/waiting-resource.php?token=secret', mime: '', filename: 'C:\\Downloads\\archive.7z', fileSize: -1 });
+  assert.deepEqual(calls.map(call => call[0]), ['pause', 'post', 'cancel', 'erase']);
+  assert.equal(calls[1][1].url, 'https://example.com/waiting-resource.php?token=secret');
+});
+
+test('late PHP metadata triggers exactly one handoff across concurrent browser events', async () => {
+  const item = { ...download, url: 'https://example.com/waiting-resource.php', mime: '', filename: '', fileSize: -1, state: 'in_progress' };
+  const { events, calls } = worker({ items: [item] });
+  await events.created(item);
+  assert.equal(calls.length, 0);
+  item.filename = 'C:\\Downloads\\setup.exe';
+  item.finalUrl = 'https://cdn.example.com/download?token=abc';
+  await Promise.all([events.changed({ id: item.id, filename: { current: item.filename } }), events.changed({ id: item.id, mime: { current: 'application/octet-stream' } })]);
+  await events.created(item);
+  assert.deepEqual(calls.map(call => call[0]), ['pause', 'post', 'cancel', 'erase']);
+  assert.equal(calls[1][1].url, item.finalUrl);
+});
+
+test('late MIME discovery works and a rejected handoff is not repeatedly retried', async () => {
+  const item = { ...download, url: 'https://example.com/resource.php', filename: '', mime: '', fileSize: -1 };
+  const { events, calls } = worker({ accepts: false, items: [item] });
+  await events.created(item);
+  item.mime = 'application/zip';
+  await events.changed({ id: item.id, mime: { current: item.mime } });
+  await events.changed({ id: item.id, totalBytes: { current: 200000 } });
+  assert.deepEqual(calls.map(call => call[0]), ['pause', 'post', 'resume']);
+});
+
+test('late events leave finished downloads, HTML waiting pages and removed items alone', async () => {
+  for (const state of ['complete', 'interrupted', 'in_progress']) {
+    const item = { ...download, state, url: 'https://example.com/your-file-is-loading-please-wait/', mime: 'text/html', filename: state === 'in_progress' ? 'wait.html' : 'file.zip' };
+    const { events, calls } = worker({ items: [item] });
+    await events.changed({ id: item.id, filename: { current: item.filename } });
+    await events.changed({ id: 999, filename: { current: 'removed.zip' } });
+    assert.equal(calls.length, 0);
+  }
+});
+
+function downloadButton(page, attributes = {}) {
+  page.document.baseURI = 'https://example.com/your-file-is-loading-please-wait/';
+  const control = { getAttribute: name => attributes[name] ?? null, disabled: false };
+  const event = page.event({ button: 0, target: { closest: () => control }, stopImmediatePropagation() { this.stopped = true; } });
+  return { control, event, click: () => page.events.click(event) };
+}
+
+test('a dynamically inserted button_dm forwards the direct URL and filename', async () => {
+  const page = overlayPage();
+  const button = downloadButton(page, { 'data-href': '/files/resource.php?token=abc', download: 'setup.zip' });
+  await button.click();
+  assert.equal(page.sent[0].url, 'https://example.com/files/resource.php?token=abc');
+  assert.equal(page.sent[0].filename, 'setup.zip');
+  assert.ok(button.event.prevented && button.event.stopped);
+});
+
+test('button_dm supports simple location assignments and navigation calls', async () => {
+  for (const onclick of ["location.href = '/file.zip';", "window.location = '/file.zip'; return false;", "window.location.assign('/file.zip');", "location.replace('/file.zip')"]) {
+    const page = overlayPage();
+    await downloadButton(page, { onclick }).click();
+    assert.equal(page.sent[0].url, 'https://example.com/file.zip');
+  }
+});
+
+test('button_dm keeps countdowns, token scripts, unsafe URLs and synthetic clicks in the page', async () => {
+  for (const attributes of [{ onclick: 'generateToken(); startDownload();', 'data-url': '/file.zip' }, { href: '#' }, { href: 'javascript:startDownload()' }, { href: '/waiting-resource.php' }, { href: '/your-file-is-loading-please-wait/' }, {}]) {
+    const page = overlayPage(), button = downloadButton(page, attributes);
+    await button.click();
+    assert.equal(page.sent.length, 0);
+    assert.ok(!button.event.prevented);
+  }
+  for (const overrides of [{ isTrusted: false }, { ctrlKey: true }, { defaultPrevented: true }]) {
+    const page = overlayPage(), button = downloadButton(page, { href: '/file.zip' });
+    Object.assign(button.event, overrides);
+    await button.click();
+    assert.equal(page.sent.length, 0);
+  }
+  const page = overlayPage(), button = downloadButton(page, { href: '/file.zip' });
+  button.control.disabled = true;
+  await button.click();
+  assert.equal(page.sent.length, 0);
+});
+
+test('button_dm falls back to the browser if the app rejects or the extension disconnects', async () => {
+  for (const reply of [async () => ({ ok: false }), async () => { throw new Error('Disconnected'); }]) {
+    const page = overlayPage(reply), navigated = [];
+    page.location.assign = url => navigated.push(url);
+    await downloadButton(page, { href: '/file.zip' }).click();
+    assert.deepEqual(navigated, ['https://example.com/file.zip']);
+  }
+});
+
+test('token POST handoff requires an updated desktop and preserves the encoded body', async () => {
+  for (const online of [true, false]) {
+    const { message, calls } = worker({ online });
+    const result = await message({ type: 'download', url: 'https://server.example/download.php', post_data: 'token=secret%2Bvalue&filename=file.zip' });
+    assert.equal(result.ok, true);
+    const request = online ? calls.find(call => call[0] === 'post')[1] : calls.find(call => call[0] === 'native' && call[1].type === 'download')[1].download;
+    assert.equal(request.post_data, 'token=secret%2Bvalue&filename=file.zip');
+  }
+  const old = worker({ postDownloads: false });
+  assert.equal((await old.message({ type: 'download', url: 'https://example.com/file', post_data: 'token=secret' })).ok, false);
+  assert.equal(old.calls.length, 0);
+});
+
+function postForm(page, { host = 'server53.safefilehosting.com', token = 'test+token', method = 'post' } = {}) {
+  const listeners = new Map();
+  let nativeSubmissions = 0;
+  class Form {
+    constructor() { this.tagName = 'FORM'; this.id = 'downloadForm'; this.method = method; this.action = `https://${host}/files/download.php`; }
+    get elements() { return [{ name: 'token', value: token }, { name: 'url_str', value: token }, { name: 'filename', value: 'fixture.zip' }, { name: 'sdomain', value: 'igetintopc.com' }].map(input => ({ tagName: 'INPUT', type: 'hidden', ...input })); }
+    addEventListener(name, fn) { listeners.set(name, fn); }
+    removeEventListener(name) { listeners.delete(name); }
+    dispatchEvent(event) {
+      event.target = this;
+      event.preventDefault = () => { event.defaultPrevented = true; };
+      event.stopImmediatePropagation = () => {};
+      if (listeners.has(event.type)) { const fn = listeners.get(event.type); listeners.delete(event.type); fn(event); }
+      else page.events[event.type]?.(event);
+      return !event.defaultPrevented;
+    }
+    submit() { nativeSubmissions++; }
+  }
+  page.context.HTMLFormElement = Form;
+  vm.runInContext(fs.readFileSync('extension/form-hook.js', 'utf8'), page.context);
+  return { form: new Form(), get nativeSubmissions() { return nativeSubmissions; } };
+}
+
+test('Adsume automatic form.submit preserves tokens and suppresses duplicate submissions', async () => {
+  const page = overlayPage();
+  page.location.hostname = 'adsume.com';
+  const fixture = postForm(page);
+  fixture.form.submit(); fixture.form.submit();
+  await new Promise(resolve => setImmediate(resolve));
+  fixture.form.submit();
+  assert.equal(page.sent.length, 1);
+  assert.equal(new URLSearchParams(page.sent[0].post_data).get('token'), 'test+token');
+  assert.equal(page.sent[0].url, 'https://server53.safefilehosting.com/files/download.php');
+  assert.equal(fixture.nativeSubmissions, 0);
+});
+
+test('POST hook restores the original browser form once if IDG fails', async () => {
+  const page = overlayPage(async () => ({ ok: false }));
+  page.location.hostname = 'adsume.com';
+  const fixture = postForm(page);
+  fixture.form.submit(); fixture.form.submit();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(page.sent.length, 1);
+  assert.equal(fixture.nativeSubmissions, 1);
+});
+
+test('POST hook leaves missing tokens, credential URLs and GET forms untouched', async () => {
+  for (const options of [{ host: 'user:password@example.com' }, { token: '' }, { method: 'get' }]) {
+    const page = overlayPage(); page.location.hostname = 'adsume.com';
+    const fixture = postForm(page, options);
+    fixture.form.submit();
+    assert.equal(page.sent.length, 0);
+    assert.equal(fixture.nativeSubmissions, 1);
+  }
+});
+
+test('native token POST fallback is never recaptured as a tokenless GET', async () => {
+  const { events, calls } = worker();
+  await events.created({ ...download, url: 'https://server53.safefilehosting.com/files/download.php', finalUrl: 'https://cdn.example.com/file.zip' });
+  assert.equal(calls.length, 0);
+});
+
+test('other websites with explicit hidden download forms preserve all request parameters', async () => {
+  const page = overlayPage(); page.location.hostname = 'downloads.example.org';
+  const fixture = postForm(page, { host: 'files.example.org' });
+  fixture.form.action = 'https://files.example.org/api/resource';
+  Object.defineProperty(fixture.form, 'elements', { value: [
+    { tagName: 'INPUT', type: 'hidden', name: 'file_name', value: 'fixture.7z' },
+    { tagName: 'INPUT', type: 'hidden', name: 'ticket', value: 'opaque+ticket' },
+    { tagName: 'INPUT', type: 'hidden', name: 'part', value: 'one' },
+    { tagName: 'INPUT', type: 'hidden', name: 'part', value: 'two' },
+  ] });
+  fixture.form.submit();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(fixture.nativeSubmissions, 0);
+  assert.equal(page.sent.length, 1);
+  const fields = new URLSearchParams(page.sent[0].post_data);
+  assert.equal(fields.get('ticket'), 'opaque+ticket');
+  assert.deepEqual(fields.getAll('part'), ['one', 'two']);
+});
+
+test('uploads, login inputs, unsupported encoding and ordinary POST forms stay in the browser', () => {
+  for (const change of [form => { form.id = 'login'; }, form => { form.enctype = 'multipart/form-data'; }, form => {
+    Object.defineProperty(form, 'elements', { value: [...form.elements, { tagName: 'INPUT', type: 'password', name: 'password', value: 'private' }] });
+  }, form => {
+    Object.defineProperty(form, 'elements', { value: [...form.elements, { tagName: 'INPUT', type: 'file', name: 'upload', value: '' }] });
+  }]) {
+    const page = overlayPage(), fixture = postForm(page);
+    change(fixture.form); fixture.form.submit();
+    assert.equal(page.sent.length, 0);
+    assert.equal(fixture.nativeSubmissions, 1);
+  }
+});
+
+test('unrecognized native POST downloads are not converted to GET on any website', async () => {
+  const { events, calls } = worker();
+  const url = 'https://small-site.example/download.php';
+  events.beforeRequest({ method: 'POST', tabId: 1, url });
+  await events.created({ ...download, url, finalUrl: 'https://cdn.example/file.zip' });
+  assert.equal(calls.length, 0);
+  await events.created({ ...download, id: 18, url: 'https://other.example/file.zip' });
+  assert.equal(calls.filter(call => call[0] === 'post').length, 1);
 });

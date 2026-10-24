@@ -61,6 +61,28 @@ function isMailExport(value) {
   } catch { return false; }
 }
 
+function isTokenDownload(value) {
+  try {
+    const url = new URL(value);
+    return /^[a-z0-9-]+\.safefilehosting\.com$/i.test(url.hostname) && url.pathname === "/files/download.php";
+  } catch { return false; }
+}
+
+// Never convert an unrecognized browser POST download into a tokenless GET.
+// This stores only method/URL metadata, not form contents or credentials.
+const browserPosts = new Map();
+chrome.webRequest.onBeforeRequest.addListener(details => {
+  if (details.method !== "POST" || details.tabId < 0) return;
+  browserPosts.delete(details.url);
+  browserPosts.set(details.url, Date.now());
+  for (const [url, time] of browserPosts) {
+    if (Date.now() - time > 120000 || browserPosts.size > 256) browserPosts.delete(url);
+  }
+}, { urls: ["<all_urls>"], types: ["main_frame", "sub_frame", "other"] });
+function browserPosted(url) {
+  return Date.now() - (browserPosts.get(url) || 0) < 120000;
+}
+
 // Some webmail sessions use authorization/CSRF headers as well as cookies.
 // Keep only the exact export request's credentials, in memory for two minutes.
 const exportRequests = new Map();
@@ -140,12 +162,12 @@ async function updateServerStatus() {
   return { interceptEnabled, serverOnline, installed, serverVersion: lastHealth?.version, youtubeReady: lastHealth?.capabilities?.youtube === true, error: connectionError };
 }
 
-function shouldIntercept(url, mime, filesize) {
+function shouldIntercept(url, mime, filesize, filename = "") {
   if (!interceptEnabled || !validUrl(url)) return false;
   if (isMailExport(url) || mime?.split(";")[0].trim().toLowerCase() === "message/rfc822") return true;
   if (mime && INTERCEPT_MIME.has(mime.split(";")[0].trim().toLowerCase()) &&
       (!filesize || filesize < 0 || filesize >= MIN_SIZE_BYTES)) return true;
-  return INTERCEPT_EXT.has(new URL(url).pathname.split(".").pop().toLowerCase());
+  return [new URL(url).pathname, filename].some(name => INTERCEPT_EXT.has(name.split(".").pop().toLowerCase()));
 }
 
 function youtubeVideoUrl(value) {
@@ -173,7 +195,7 @@ async function sendDownloadToIDG(...args) {
   try { return await sendDownloadRequest(...args); }
   finally { activeHandoffs--; }
 }
-async function sendDownloadRequest(url, filename, referrer, userAgent) {
+async function sendDownloadRequest(url, filename, referrer, userAgent, postData) {
   if (!validUrl(url)) return { ok: false, error: "Only HTTP and HTTPS links can be sent to IDG." };
   const youtube = youtubeVideoUrl(url);
   if (youtube) url = youtube;
@@ -193,6 +215,10 @@ async function sendDownloadRequest(url, filename, referrer, userAgent) {
     }
   } catch {}
   const download = { url, filename, referrer, cookies, media_cookies, user_agent: userAgent, show_dialog: true };
+  if (typeof postData === "string") {
+    if (postData.length > 65536) return { ok: false, error: "Download form is too large." };
+    download.post_data = postData;
+  }
   const captured = exportRequests.get(url);
   if (isMailExport(url) && captured && Date.now() - captured.time <= 120000) {
     download.headers = captured.headers;
@@ -201,6 +227,10 @@ async function sendDownloadRequest(url, filename, referrer, userAgent) {
   // Never retry a POST using another transport: a lost response could duplicate it.
   const online = await pingServer();
   try {
+    if (download.post_data !== undefined) {
+      const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
+      if (!capability?.capabilities?.post_downloads) return { ok: false, error: "POST downloads require IDG 1.4.4 or newer." };
+    }
     if (youtube) {
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
       if (!capability?.capabilities?.youtube) {
@@ -227,10 +257,18 @@ async function sendDownloadRequest(url, filename, referrer, userAgent) {
   }
 }
 
-chrome.downloads.onCreated.addListener(async item => {
+// PHP/redirect downloads may acquire their MIME type and filename after onCreated.
+// Mark the ID before pausing: onChanged also fires during our own handoff.
+const attemptedDownloads = new Set();
+async function interceptDownload(item) {
   await settingsReady;
   const url = item.finalUrl || item.url;
-  if (item.byExtensionId === chrome.runtime.id || !shouldIntercept(url, item.mime, item.fileSize)) return;
+  if (item.state === "complete" || item.state === "interrupted" || attemptedDownloads.has(item.id) ||
+      // A native fallback has already submitted this token. Never replay it as GET.
+      isTokenDownload(item.url) || isTokenDownload(url) || browserPosted(item.url) || browserPosted(url) ||
+      item.byExtensionId === chrome.runtime.id || !shouldIntercept(url, item.mime, item.fileSize, item.filename)) return;
+  attemptedDownloads.add(item.id);
+  if (attemptedDownloads.size > 1024) attemptedDownloads.delete(attemptedDownloads.values().next().value);
   activeHandoffs++;
   try {
   // Leave the original browser download intact if IDG cannot be reached.
@@ -246,6 +284,15 @@ chrome.downloads.onCreated.addListener(async item => {
     try { await chrome.downloads.resume(item.id); } catch (error) { console.warn("[IDG] Resume the download in Chrome", error); }
   }
   } finally { activeHandoffs--; }
+}
+chrome.downloads.onCreated.addListener(interceptDownload);
+chrome.downloads.onChanged.addListener(async delta => {
+  if (attemptedDownloads.has(delta.id) ||
+      !["filename", "mime", "fileSize", "totalBytes", "finalUrl", "url"].some(key => key in delta)) return;
+  try {
+    const [item] = await chrome.downloads.search({ id: delta.id });
+    if (item) await interceptDownload(item);
+  } catch (error) { console.warn("[IDG] Could not inspect updated download", error); }
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -281,7 +328,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return { interceptEnabled };
       case "download":
         if (sender.tab && !interceptEnabled) return { ok: false, error: "IDG interception is disabled." };
-        return sendDownloadToIDG(message.url, typeof message.filename === "string" ? message.filename : null, sender.tab ? sender.url : message.referrer, navigator.userAgent);
+        return sendDownloadToIDG(message.url, typeof message.filename === "string" ? message.filename : null, sender.tab ? sender.url : message.referrer, navigator.userAgent, message.post_data);
       case "list": {
         // Polling must not start the desktop app.
         if (!await pingServer()) return { ok: false, error: "Open IDG to view your downloads." };

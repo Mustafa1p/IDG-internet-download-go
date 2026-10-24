@@ -10,6 +10,11 @@ const FILES: &[(&str, &[u8])] = &[
         include_bytes!("../extension/background.js"),
     ),
     ("content.js", include_bytes!("../extension/content.js")),
+    (
+        "download-form.js",
+        include_bytes!("../extension/download-form.js"),
+    ),
+    ("form-hook.js", include_bytes!("../extension/form-hook.js")),
     ("popup.js", include_bytes!("../extension/popup.js")),
     ("popup.html", include_bytes!("../extension/popup.html")),
     (

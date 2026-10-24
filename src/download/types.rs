@@ -64,6 +64,8 @@ pub struct DownloadItem {
     /// Original URL.
     pub url: String,
     pub headers: reqwest::header::HeaderMap,
+    /// Token-bearing URL-encoded form, held in memory only.
+    pub post_data: Option<String>,
     pub awaiting_confirmation: bool,
     pub media_cookies: Option<String>,
     pub media_options: super::media::MediaOptions,
@@ -120,6 +122,7 @@ impl DownloadItem {
             id: Uuid::new_v4().to_string(),
             url,
             headers: reqwest::header::HeaderMap::new(),
+            post_data: None,
             awaiting_confirmation: false,
             media_cookies: None,
             media_options: super::media::MediaOptions::default(),

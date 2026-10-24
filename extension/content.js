@@ -2,6 +2,43 @@
 (() => {
   if (window.__idgInitialized) return;
   window.__idgInitialized = true;
+  document.addEventListener("idg-post-submit", event => {
+    const form = event.target;
+    const request = globalThis.__idgReadDownloadForm(form);
+    if (!request) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    (async () => {
+      let accepted = false;
+      try {
+        const response = await chrome.runtime.sendMessage({ type: "download", ...request });
+        accepted = response?.ok === true;
+      } catch { /* Restore the original form submission if integration fails. */ }
+      form.dispatchEvent(new CustomEvent("idg-post-result", { detail: accepted ? "accepted" : "fallback" }));
+    })();
+  }, true);
+  // Delegation also catches buttons inserted after a site's waiting countdown.
+  // Opaque scripts/forms must run in the page so their tokens and redirects work.
+  document.addEventListener("click", async event => {
+    if (!event.isTrusted || event.defaultPrevented || event.button !== 0 ||
+        event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const control = event.target.closest?.("#button_dm");
+    if (!control || control.disabled || control.getAttribute("aria-disabled") === "true") return;
+    const script = control.getAttribute("onclick");
+    const directScript = script?.match(/^\s*(?:(?:window\.)?location(?:\.href)?\s*=\s*|(?:window\.)?location\.(?:assign|replace)\(\s*)["']([^"']+)["']\s*\)?\s*;?\s*(?:return\s+false\s*;?)?\s*$/);
+    if (script && !directScript) return;
+    const value = directScript?.[1] || control.getAttribute("href") || control.getAttribute("data-href") || control.getAttribute("data-url");
+    if (!value || value.startsWith("#")) return;
+    let url;
+    try { url = new URL(value, document.baseURI); } catch { return; }
+    if (!["http:", "https:"].includes(url.protocol) || url.href === location.href ||
+        /\/(?:waiting-resource\.php|your-file-is-loading-please-wait)\/?$/i.test(url.pathname)) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "download", url: url.href, filename: control.getAttribute("download") || null });
+      if (response?.ok) return;
+    } catch { /* Keep the browser download available if IDG is unavailable. */ }
+    location.assign(url.href);
+  }, true);
   const buttons = new WeakMap();
   const dismissed = new Set();
   const watched = new WeakSet();

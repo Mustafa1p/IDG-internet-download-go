@@ -55,7 +55,7 @@ pub async fn start_download(
     id: String,
 ) -> Result<()> {
     // ── Read the configuration from shared state ─────────────────────────────
-    let (url, save_path, num_segments, cancel, pause, headers) = {
+    let (url, save_path, num_segments, cancel, pause, headers, post_data) = {
         let guard = downloads
             .lock()
             .map_err(|_| anyhow::anyhow!("lock poisoned"))?;
@@ -70,6 +70,7 @@ pub async fn start_download(
             item.cancel_flag.clone(),
             item.pause_flag.clone(),
             item.headers.clone(),
+            item.post_data.clone(),
         )
     };
 
@@ -91,9 +92,11 @@ pub async fn start_download(
     };
     with_item(&downloads, &id, |i| i.status = Status::Probing);
 
-    let mut probe_result = probe(&client, &url)
-        .await
-        .map_err(|error| anyhow::anyhow!("URL probe failed: {error:#}"))?;
+    let mut probe_result = match post_data {
+        Some(body) => super::probe::post_probe(&client, &url, body).await,
+        None => probe(&client, &url).await,
+    }
+    .map_err(|error| anyhow::anyhow!("URL probe failed: {error:#}"))?;
 
     // Persist probe results; update the save path if the server suggested a
     // different filename via Content-Disposition.

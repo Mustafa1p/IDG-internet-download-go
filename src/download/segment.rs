@@ -84,9 +84,9 @@ pub async fn run_segment(mut args: SegmentArgs, max_retries: u32) -> Result<()> 
                 // Generated exports cannot be resumed by byte offset or replayed
                 // reliably. Report the original error instead of appending a new export.
                 if streaming_export {
-                    return Err(
-                        e.context("Email export interrupted; export again from the browser")
-                    );
+                    return Err(e.context(
+                        "Download stream interrupted; request a fresh download from the browser",
+                    ));
                 }
                 if args.cancel.load(Ordering::Relaxed) {
                     bail!("segment {} cancelled", args.id);

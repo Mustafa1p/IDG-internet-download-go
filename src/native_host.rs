@@ -77,7 +77,7 @@ async fn dispatch(client: &reqwest::Client, message: Value) -> anyhow::Result<Va
             .iter()
             .all(|name| tools.join(name).is_file());
         return Ok(
-            json!({"ok": true, "installed": true, "serverOnline": online, "version": env!("CARGO_PKG_VERSION"), "capabilities": {"youtube": youtube}}),
+            json!({"ok": true, "installed": true, "serverOnline": online, "version": env!("CARGO_PKG_VERSION"), "capabilities": {"youtube": youtube, "post_downloads": true}}),
         );
     }
     let response = if kind == "list" {

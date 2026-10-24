@@ -107,6 +107,7 @@ mod tests {
         std::fs::write(&output, b"partial bytes").unwrap();
         let mut item = DownloadItem::new("https://example.com/file.zip".into(), output.clone(), 4);
         item.media_cookies = Some("secret session cookie".into());
+        item.post_data = Some("token=secret-form-token".into());
         item.headers
             .insert("authorization", "secret-token".parse().unwrap());
         item.status = Status::Downloading;

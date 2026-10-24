@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IDG Integration Module",
   "description": "Intercepts browser downloads and sends them to IDG for parallel multi-segment downloading",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "icons": {
     "16": "images/icon16.png",
     "32": "images/icon32.png",
@@ -24,6 +24,7 @@
   "content_scripts": [
     {
       "js": [
+        "download-form.js",
         "content.js"
       ],
       "matches": [
@@ -31,6 +32,13 @@
       ],
       "all_frames": true,
       "run_at": "document_start"
+    },
+    {
+      "js": ["form-hook.js"],
+      "matches": ["*://*/*"],
+      "all_frames": true,
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "permissions": [
@@ -48,6 +56,6 @@
     "<all_urls>",
     "http://127.0.0.1:17843/"
   ],
-  "minimum_chrome_version": "109.0",
+  "minimum_chrome_version": "111.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAusd/Yp4X+6YbY/FqVLHjxHUt4TgztNSA9L+CNgB996SnPKfAADpNZN+C3qSAaDsUuFzcem2bh0YYsbTcmVh+icb5djj2zam2A7QPgtB6m8Nxb/Ivge/YNyuaJ2F9Oa98uQSsOA5RduPkZg2ICinMT6sbNu7TWYkFetNIyrea60vSoHjYJOnV9pSilSGVETGJqt5zOol1ILS3bGdIhoaSpnzt1cK8DNmm3fYItUmo3OH+lj5EgZTgKfONJZkn+G9/E4wG/ic4Qa8IZRkBZ0f2/X+kJ2mDJ/bNsSujfT57XXDDK0LdqoB4TY/+oOyQ5MplDzAdZxTDu/KJtamOXdYWkQIDAQAB"
 }
