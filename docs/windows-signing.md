@@ -1,6 +1,6 @@
 # Windows publisher verification and release signing
 
-The existing v1.4.2 downloads are unsigned. A GitHub upload, SHA-256 checksum,
+The existing v1.4.2 and v1.4.3 downloads are unsigned. A GitHub upload, SHA-256 checksum,
 installer metadata, or self-signed certificate cannot make Windows display a
 trusted publisher. This repository now supports signing; that does not change
 already-published downloads or mean a trusted signing account exists.
@@ -11,6 +11,17 @@ and may also block unknown unsigned executables and DLLs. Signing establishes a
 publisher and protects file integrity. SmartScreen can still warn on a new signed
 release while reputation builds; even EV certificates do not guarantee a bypass.
 Do not tell users to disable Windows security or install a project root certificate.
+
+## Release modes
+
+GitHub tag releases publish unsigned Windows packages by default, without Azure
+credentials. Release notes explicitly label these packages as unsigned.
+
+To enable signing, set the **windows-release** environment variable
+`IDG_SIGN_RELEASE` to `true` and configure all six variables below. Signing then
+becomes required: missing credentials, signing failures, and invalid signatures
+stop publication. Leaving `IDG_SIGN_RELEASE` unset or `false` skips Azure login,
+signing-client setup, application signing, and installer signature verification.
 
 ## One-time owner setup
 
@@ -42,11 +53,11 @@ Do not tell users to disable Windows security or install a project root certific
 
 4. Publish a **new version**, updating Cargo.toml/Cargo.lock, the extension manifest,
    installer version, release notes, and README links together, then push its
-   matching `vX.Y.Z` tag. Do not replace existing release assets silently. Until
-   configuration exists, tag releases fail before signing/publishing; main-branch
-   and PR builds still run without credentials.
+   matching `vX.Y.Z` tag. Do not replace existing release assets silently. When
+   `IDG_SIGN_RELEASE=true`, tag releases fail if signing configuration is missing;
+   unsigned releases, main-branch builds, and PR builds need no signing credentials.
 
-The release job signs the app, native bridge, bundled EXE/DLL media tools, and
+With signing enabled, the release job signs the app, native bridge, bundled EXE/DLL media tools, and
 portable registration script before packaging. It preserves valid upstream
 signatures, rejects broken signatures, and requires a trusted timestamp for every
 executable file. Bundled files without upstream signatures receive the release

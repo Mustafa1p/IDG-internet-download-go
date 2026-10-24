@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- Publish unsigned Windows releases without Azure credentials by default; retain opt-in signing through `IDG_SIGN_RELEASE=true` and label unsigned downloads in release notes.
+
 ## 1.4.3 — 2026-10-24
 
 - Keep the last usable window size and position when IDG is minimized or hidden in the tray, preventing tiny windows at the screen edge on restart.

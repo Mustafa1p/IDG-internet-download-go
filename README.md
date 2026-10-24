@@ -68,7 +68,7 @@ It works the same way as **IDM (Internet Download Manager)** — it splits every
 
 ### Step 2 — Run the installer
 
-**Windows publisher warning:** The existing v1.4.2 downloads are unsigned and may
+**Windows publisher warning:** The v1.4.3 downloads are unsigned and may
 trigger “Windows protected your PC” (SmartScreen) or a Smart App Control block.
 Trusted signing requires a verified publisher identity. Release signing support
 is implemented, but a signed release has not yet been published. See

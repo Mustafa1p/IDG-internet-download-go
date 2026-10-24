@@ -81,12 +81,14 @@ jobs:
       contents: write
       id-token: write
     env:
+      IDG_SIGN_RELEASE: ${{ vars.IDG_SIGN_RELEASE || 'false' }}
       IDG_SIGNING_ENDPOINT: ${{ vars.IDG_SIGNING_ENDPOINT }}
       IDG_SIGNING_ACCOUNT: ${{ vars.IDG_SIGNING_ACCOUNT }}
       IDG_SIGNING_PROFILE: ${{ vars.IDG_SIGNING_PROFILE }}
     steps:
       - uses: actions/checkout@v4
       - name: Require release signing configuration
+        if: env.IDG_SIGN_RELEASE == 'true'
         shell: pwsh
         env:
           AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
@@ -97,14 +99,17 @@ jobs:
             if (-not [Environment]::GetEnvironmentVariable($name)) { throw "Missing $name. Configure windows-release; see docs/windows-signing.md. No unsigned release will be published." }
           }
       - uses: azure/login@v2
+        if: env.IDG_SIGN_RELEASE == 'true'
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - uses: actions/setup-dotnet@v4
+        if: env.IDG_SIGN_RELEASE == 'true'
         with:
           dotnet-version: '8.0.x'
       - name: Prepare signing client
+        if: env.IDG_SIGN_RELEASE == 'true'
         shell: pwsh
         run: ./installer/prepare-signing.ps1
       - uses: actions/setup-python@v5
@@ -115,6 +120,7 @@ jobs:
           name: IDG-windows-x64
           path: target/release
       - name: Sign and verify application and bundled tools
+        if: env.IDG_SIGN_RELEASE == 'true'
         shell: pwsh
         run: ./installer/sign-windows.ps1 -Path target/release/IDG.exe, target/release/IDG-native.exe, target/release/tools, installer/register-native-host.ps1
       - name: Validate release version and prepare assets
@@ -136,22 +142,35 @@ jobs:
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $signer = Join-Path $env:GITHUB_WORKSPACE 'installer/sign-windows.ps1'
-          $signCommand = 'pwsh.exe -NoProfile -NonInteractive -File $q' + $signer + '$q -Path $f'
-          & $env:IDG_ISCC '/DIDG_SIGN_RELEASE' "/Sidg=$signCommand" installer/setup.iss
+          if ($env:IDG_SIGN_RELEASE -eq 'true') {
+            $signer = Join-Path $env:GITHUB_WORKSPACE 'installer/sign-windows.ps1'
+            $signCommand = 'pwsh.exe -NoProfile -NonInteractive -File $q' + $signer + '$q -Path $f'
+            & $env:IDG_ISCC '/DIDG_SIGN_RELEASE' "/Sidg=$signCommand" installer/setup.iss
+          } else {
+            & $env:IDG_ISCC installer/setup.iss
+          }
           if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
           $version = "${{ github.ref_name }}".TrimStart('v')
           Move-Item -LiteralPath "dist/IDG-Setup-$version.exe" -Destination "dist/IDG-Setup-${{ github.ref_name }}.exe"
       - name: Verify final installer signature
+        if: env.IDG_SIGN_RELEASE == 'true'
         shell: pwsh
         run: ./installer/sign-windows.ps1 -VerifyOnly -Path "dist/IDG-Setup-${{ github.ref_name }}.exe"
       - name: Verify assets and create checksums
         run: python installer/checksums.py "${{ github.ref_name }}"
+      - name: Prepare release notes
+        shell: pwsh
+        run: |
+          $notes = Get-Content -LiteralPath docs/release-notes.md -Raw
+          if ($env:IDG_SIGN_RELEASE -ne 'true') {
+            $notes = "**Windows signing status:** This release is unsigned. Windows may display an unknown-publisher or SmartScreen warning.`n`n" + $notes
+          }
+          Set-Content -LiteralPath target/release-notes.md -Value $notes -Encoding utf8
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           name: "IDG ${{ github.ref_name }}"
-          body_path: docs/release-notes.md
+          body_path: target/release-notes.md
           files: |
             dist/IDG-Setup-${{ github.ref_name }}.exe
             dist/IDG-extension-${{ github.ref_name }}.zip
