@@ -1065,7 +1065,7 @@ impl IDGApp {
         let selected = self.selected_id.clone();
         let details = items
             .iter()
-            .find(|item| Some(&item.id) == selected.as_ref());
+            .find(|item| Some(&item.id) == selected.as_ref() && item.status != Status::Completed);
         let details_height = if details.is_some() {
             if ui.ctx().screen_rect().height() < 650.0 {
                 140.0
@@ -1084,17 +1084,22 @@ impl IDGApp {
             .fill(Color32::TRANSPARENT)
             .inner_margin(Margin::symmetric(6.0, 0.0))
             .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
                 ui.set_min_height(table_height);
                 let compact = ui.available_width() < 900.0;
                 if self.library_state.grid && !filtered.is_empty() {
                     egui::ScrollArea::vertical()
                         .max_height(table_height - 8.0)
                         .show(ui, |ui| {
-                            let columns = ((ui.available_width() / 255.0).floor() as usize).max(1);
+                            let gap = 12.0;
+                            let columns = (((ui.available_width() + gap) / (255.0 + gap)).floor()
+                                as usize)
+                                .max(1);
                             let width = (ui.available_width() - 12.0 * (columns - 1) as f32)
                                 / columns as f32;
                             for chunk in filtered.chunks(columns) {
                                 ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = gap;
                                     for item in chunk {
                                         card()
                                             .fill(
@@ -1109,84 +1114,125 @@ impl IDGApp {
                                                 },
                                             )
                                             .show(ui, |ui| {
-                                                ui.set_width((width - 28.0).max(100.0));
-                                                let mut checked = self
-                                                    .library_state
-                                                    .selected_ids
-                                                    .contains(&item.id);
-                                                ui.horizontal(|ui| {
-                                                    if selection_box(ui, &mut checked).changed() {
-                                                        toggled = Some((item.id.clone(), checked));
-                                                    }
-                                                    let (icon, color) = file_icon(item);
-                                                    let (r, _) = ui.allocate_exact_size(
-                                                        Vec2::splat(25.0),
-                                                        egui::Sense::hover(),
-                                                    );
-                                                    draw_icon(ui.painter(), r, icon, color);
-                                                    if ui
-                                                        .add(
+                                                // Frames inherit the row layout; each card needs its own
+                                                // vertical flow so metadata cannot collide with the title.
+                                                ui.with_layout(
+                                                    egui::Layout::top_down(egui::Align::Min),
+                                                    |ui| {
+                                                        ui.set_width((width - 30.0).max(100.0));
+                                                        ui.set_min_height(166.0);
+                                                        let mut checked = self
+                                                            .library_state
+                                                            .selected_ids
+                                                            .contains(&item.id);
+                                                        ui.horizontal(|ui| {
+                                                            if selection_box(ui, &mut checked)
+                                                                .changed()
+                                                            {
+                                                                toggled = Some((
+                                                                    item.id.clone(),
+                                                                    checked,
+                                                                ));
+                                                            }
+                                                            let (icon, color) = file_icon(item);
+                                                            let (r, _) = ui.allocate_exact_size(
+                                                                Vec2::splat(25.0),
+                                                                egui::Sense::hover(),
+                                                            );
+                                                            draw_icon(ui.painter(), r, icon, color);
+                                                            if ui
+                                                                .add(
+                                                                    egui::Label::new(
+                                                                        RichText::new(
+                                                                            &item.filename,
+                                                                        )
+                                                                        .strong(),
+                                                                    )
+                                                                    .truncate()
+                                                                    .sense(egui::Sense::click()),
+                                                                )
+                                                                .on_hover_text(&item.filename)
+                                                                .clicked()
+                                                            {
+                                                                clicked =
+                                                                    Some(Some(item.id.clone()));
+                                                            }
+                                                        });
+                                                        let (label, color) =
+                                                            status_info(&item.status);
+                                                        ui.colored_label(color, label);
+                                                        ui.add(
                                                             egui::Label::new(
-                                                                RichText::new(&item.filename)
-                                                                    .strong(),
+                                                                RichText::new(host(&item.url))
+                                                                    .size(11.0)
+                                                                    .color(TEXT_DIM),
                                                             )
-                                                            .truncate()
-                                                            .sense(egui::Sense::click()),
-                                                        )
-                                                        .on_hover_text(&item.filename)
-                                                        .clicked()
-                                                    {
-                                                        clicked = Some(Some(item.id.clone()));
-                                                    }
-                                                });
-                                                let (label, color) = status_info(&item.status);
-                                                ui.colored_label(color, label);
-                                                ui.label(
-                                                    RichText::new(host(&item.url))
-                                                        .size(11.0)
-                                                        .color(TEXT_DIM),
-                                                );
-                                                ui.add(
-                                                    egui::ProgressBar::new(
-                                                        if item.status == Status::Completed {
-                                                            1.0
-                                                        } else {
-                                                            item.progress()
-                                                        },
-                                                    )
-                                                    .desired_height(5.0)
-                                                    .fill(ACCENT),
-                                                );
-                                                ui.label(format!(
-                                                    "{}   {}",
-                                                    fmt_size(item.downloaded_bytes),
-                                                    if item.status.is_active() {
-                                                        fmt_speed(item.speed_bps)
-                                                    } else {
-                                                        String::new()
-                                                    }
-                                                ));
-                                                ui.horizontal(|ui| {
-                                                    if item.status == Status::Paused
-                                                        && icon_button(ui, Icon::Play, "Resume")
+                                                            .truncate(),
+                                                        );
+                                                        ui.add(
+                                                            egui::ProgressBar::new(
+                                                                if item.status == Status::Completed
+                                                                {
+                                                                    1.0
+                                                                } else {
+                                                                    item.progress()
+                                                                },
+                                                            )
+                                                            .desired_height(5.0)
+                                                            .fill(ACCENT),
+                                                        );
+                                                        ui.label(format!(
+                                                            "{}   {}",
+                                                            fmt_size(item.downloaded_bytes),
+                                                            if item.status.is_active() {
+                                                                fmt_speed(item.speed_bps)
+                                                            } else {
+                                                                String::new()
+                                                            }
+                                                        ));
+                                                        ui.horizontal(|ui| {
+                                                            if item.status == Status::Paused
+                                                                && icon_button(
+                                                                    ui,
+                                                                    Icon::Play,
+                                                                    "Resume",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                action = Some((
+                                                                    item.id.clone(),
+                                                                    "Resume",
+                                                                ));
+                                                            }
+                                                            if item.status.is_active()
+                                                                && item.supports_pause()
+                                                                && icon_button(
+                                                                    ui,
+                                                                    Icon::Pause,
+                                                                    "Pause",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                action = Some((
+                                                                    item.id.clone(),
+                                                                    "Pause",
+                                                                ));
+                                                            }
+                                                            if icon_button(
+                                                                ui,
+                                                                Icon::Folder,
+                                                                "Open folder",
+                                                            )
                                                             .clicked()
-                                                    {
-                                                        action = Some((item.id.clone(), "Resume"));
-                                                    }
-                                                    if item.status.is_active()
-                                                        && item.supports_pause()
-                                                        && icon_button(ui, Icon::Pause, "Pause")
-                                                            .clicked()
-                                                    {
-                                                        action = Some((item.id.clone(), "Pause"));
-                                                    }
-                                                    if icon_button(ui, Icon::Folder, "Open folder")
-                                                        .clicked()
-                                                    {
-                                                        action =
-                                                            Some((item.id.clone(), "OpenFolder"));
-                                                    }
-                                                });
+                                                            {
+                                                                action = Some((
+                                                                    item.id.clone(),
+                                                                    "OpenFolder",
+                                                                ));
+                                                            }
+                                                        });
+                                                    },
+                                                );
                                             });
                                     }
                                 });

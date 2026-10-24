@@ -1,5 +1,7 @@
-IDG v1.4.3 refresh fixes the compact desktop, browser transfer visibility, update detection and installer closing.
+IDG v1.4.3 refresh fixes the compact desktop, browser transfer visibility, update detection and installer closing, with cleaner completed downloads and grid cards.
 
+- Hide the selected-download details panel after completion while keeping the finished file in the library.
+- Fix grid cards laying out all content on one line: use vertical metadata, consistent card widths and spacing, and truncate long source hosts.
 - Place each download's folder icon in a dedicated column at the far right, after Added, instead of underneath its status. Use folder icons in compact details and the toolbar, with Open folder tooltips and accessible labels.
 - Hide the sidebar download-folder path and its path tooltip; keep the Download folder action. Refresh the README screenshots and remove obsolete interface images.
 - Fix sidebar category labels overlapping count badges: reserve a separate label area, keep a clear gap and size badges for their counts.

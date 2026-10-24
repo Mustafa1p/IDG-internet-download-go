@@ -472,8 +472,11 @@ impl IDGApp {
                             "The server connection was interrupted. Retry the download.".into(),
                         );
                     }
-                    if std::env::args().any(|argument| argument == "--preview-selected")
-                        && index == 2
+                    if (std::env::args().any(|argument| argument == "--preview-selected")
+                        && index == 2)
+                        || (std::env::args()
+                            .any(|argument| argument == "--preview-selected-completed")
+                            && index == 1)
                     {
                         app.selected_id = Some(item.id.clone());
                         app.library_state.selected_ids.insert(item.id.clone());
