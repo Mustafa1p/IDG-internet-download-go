@@ -379,6 +379,7 @@ impl IDGApp {
                 });
             });
             section(ui, Icon::Refresh, "Application updates", |ui| {
+                hint(ui, &format!("IDG {} · build {}", APP_VERSION, &env!("IDG_BUILD_ID")[..env!("IDG_BUILD_ID").len().min(8)]));
                 checkbox(ui, &mut draft.download_updates, "Download and verify new updates automatically");
                 checkbox(ui, &mut draft.install_updates, "Install updates automatically when downloads are finished");
                 ui.add_space(3.0);

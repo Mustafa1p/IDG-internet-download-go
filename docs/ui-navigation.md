@@ -123,7 +123,7 @@ Outside Settings, an available update, prepared installer or update error produc
 - **Release notes:** opens the actual GitHub release URL.
 - **What's new:** reopens `show_update_prompt` after dismissal.
 
-Automatic installation follows the same readiness check. Pending and paused downloads must finish or be removed before restarting. Checks require a release with a newer version; replacing assets on the same version does not trigger an update alert.
+Automatic installation follows the same readiness check. Pending and paused downloads must finish or be removed before restarting. Checks accept a newer version or a later source build of the same version, using the generated release-notes build marker. Older installed binaries without this logic require a one-time manual update.
 
 ## Window controls, More menu and tray
 
@@ -135,7 +135,7 @@ Automatic installation follows the same readiness check. Pending and paused down
 | Maximize / header double-click | Disabled in production to preserve the reference size |
 | Minimize | `ViewportCommand::Minimized(true)` |
 | Close | `ViewportCommand::Close`; `IDGApp::update` hides to tray when configured and available |
-| Window size | Fixed 1540×930 logical pixels, capped to monitor; resize/maximize disabled in production |
+| Window size | Fixed 960 x 640 logical pixels, capped to monitor; resize/maximize disabled in production |
 
 The **More options** menu connects:
 
@@ -165,7 +165,7 @@ The status bar's browser-ready indicator reports bridge/API errors when present.
 
 ## Existing behavior and boundaries
 
-- Queue/history is session-only; this redesign does not add persistent transfer history or resume-after-restart. Saved app preferences and connection settings retain their existing persistence.
+- History persists across restarts without cookies/authorization headers. Interrupted workers are not resumed after restart; entries remain visible with an explanation. Saved preferences and connection settings retain their existing persistence.
 - Pause/resume is available for ordinary file transfers; `DownloadItem::supports_pause` excludes YouTube toolchain downloads. Failed items have no dedicated Retry action in this interface.
 - Remove cancels/removes an entry and leaves downloaded or partial files on disk. No Delete downloaded file action is introduced.
 - Folder browsing is a native OS dialog from `rfd`; Explorer, clipboard integration and external release-note links retain OS behavior and styling.
@@ -174,3 +174,5 @@ The status bar's browser-ready indicator reports bridge/API errors when present.
 - At short window heights, details use the compact summary. Navigation and Settings scroll to keep their real actions reachable.
 - Settings-preview fixtures are debug-only and isolate saved settings, clipboard auto-paste and updater behavior; preview controls are not product navigation routes.
 
+
+Build-aware updates are parsed in `src/updater.rs` from the generated release-notes marker; `build.rs` embeds the local source revision/timestamp. Browser handoffs place `idg-reveal-download` in the egui event context, which `IDGApp::reveal_download` consumes to select the visible transfer. Persistent history lives in `src/download/history.rs` and excludes credentials/live worker state.

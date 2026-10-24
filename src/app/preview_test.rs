@@ -19,6 +19,7 @@ enum Action {
     Click(&'static str),
     Key(Key, Modifiers),
     Text(&'static str),
+    BrowserHandoff,
 }
 
 struct Step {
@@ -68,6 +69,11 @@ fn steps() -> Vec<Step> {
             "Settings shortcut",
             Action::Key(Key::Comma, Modifiers::CTRL),
         ),
+        ("Browser download switches to queue", Action::BrowserHandoff),
+        (
+            "Settings shortcut again",
+            Action::Key(Key::Comma, Modifiers::CTRL),
+        ),
         ("Leave settings", Action::Click("All downloads")),
         ("Grid view", Action::Click("Grid view")),
         ("List view", Action::Click("List view")),
@@ -84,7 +90,7 @@ fn steps() -> Vec<Step> {
         ("Focus search", Action::Key(Key::F, Modifiers::CTRL)),
         ("Search report", Action::Text("report")),
         ("Select search text", Action::Key(Key::A, Modifiers::CTRL)),
-        ("Clear search", Action::Key(Key::Backspace, Modifiers::NONE)),
+        ("Browser download clears search", Action::BrowserHandoff),
         ("Maximize", Action::Click("Maximize")),
         ("Restore", Action::Click("Restore")),
         ("Minimize and restore", Action::Click("Minimize")),
@@ -157,6 +163,14 @@ impl PreviewTest {
             }
             Action::Text(text) if pressed => input.events.push(Event::Text(text.into())),
             Action::Text(_) => {}
+            Action::BrowserHandoff if pressed => {
+                if let Some(id) =
+                    ctx.data(|data| data.get_temp::<String>(Id::new("qa:first-download")))
+                {
+                    ctx.data_mut(|data| data.insert_temp(Id::new("idg-reveal-download"), id));
+                }
+            }
+            Action::BrowserHandoff => {}
         }
     }
 
@@ -183,7 +197,13 @@ impl PreviewTest {
         let okay = match step.name {
             "New download shortcut" => snapshot.show_add,
             "Close add dialog" => !snapshot.show_add,
-            "Settings shortcut" => snapshot.show_settings,
+            "Settings shortcut" | "Settings shortcut again" => snapshot.show_settings,
+            "Browser download switches to queue" | "Browser download clears search" => {
+                !snapshot.show_settings
+                    && snapshot.category == "All downloads"
+                    && snapshot.selection_count == 1
+                    && snapshot.search.is_empty()
+            }
             "Leave settings" => !snapshot.show_settings && snapshot.category == "All downloads",
             "Grid view" => snapshot.grid,
             "List view" => !snapshot.grid,

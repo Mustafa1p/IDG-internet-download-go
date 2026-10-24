@@ -319,7 +319,7 @@ impl IDGApp {
         self.show_add = true;
     }
     pub(super) fn sidebar(&mut self, ui: &mut Ui, items: &[DownloadItem]) {
-        let short = ui.ctx().screen_rect().height() < 600.0;
+        let short = ui.ctx().screen_rect().height() < 700.0;
         if short {
             ui.spacing_mut().button_padding.y = 2.0;
             ui.spacing_mut().interact_size.y = 22.0;
@@ -666,7 +666,7 @@ impl IDGApp {
                 "Queued",
             ),
         ];
-        if ui.ctx().screen_rect().height() < 600.0 {
+        if ui.ctx().screen_rect().height() < 700.0 {
             card()
                 .inner_margin(Margin::symmetric(10.0, 8.0))
                 .show(ui, |ui| {
@@ -843,7 +843,7 @@ impl IDGApp {
                         .any(|i| i.status.is_active() && i.supports_pause()),
                 ),
                 (Icon::Remove, "Remove", !selected.is_empty()),
-                (Icon::Folder, "Open folder", !selected.is_empty()),
+                (Icon::Folder, "Open folder", true),
             ] {
                 let response = ui.add_enabled(
                     enabled,
@@ -888,7 +888,13 @@ impl IDGApp {
                 if response.clicked() {
                     match label {
                         "Remove" => self.library_state.confirm_remove = true,
-                        "Open folder" => command = Some("OpenFolder"),
+                        "Open folder" => {
+                            if selected.is_empty() {
+                                open_path(std::path::Path::new(&self.default_save_dir));
+                            } else {
+                                command = Some("OpenFolder");
+                            }
+                        }
                         _ => command = Some(label),
                     }
                 }
@@ -1003,7 +1009,7 @@ impl IDGApp {
             .find(|item| Some(&item.id) == selected.as_ref());
         let details_height = if details.is_some() {
             if ui.ctx().screen_rect().height() < 650.0 {
-                96.0
+                140.0
             } else {
                 166.0
             }
@@ -1293,16 +1299,21 @@ impl IDGApp {
                                     });
                                 });
                                 row.col(|ui| {
-                                    let (label, color) = status_info(&item.status);
-                                    ui.add(
-                                        egui::Label::new(
-                                            RichText::new(label)
-                                                .size(if compact { 12.0 } else { 13.0 })
-                                                .color(color),
+                                    ui.vertical(|ui| {
+                                        let (label, color) = status_info(&item.status);
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(label)
+                                                    .size(if compact { 12.0 } else { 13.0 })
+                                                    .color(color),
+                                            )
+                                            .truncate(),
                                         )
-                                        .truncate(),
-                                    )
-                                    .on_hover_text(item.error.as_deref().unwrap_or(label));
+                                        .on_hover_text(item.error.as_deref().unwrap_or(label));
+                                        if ui.small_button("Open folder").clicked() {
+                                            action = Some((item.id.clone(), "OpenFolder"));
+                                        }
+                                    });
                                 });
                                 row.col(|ui| {
                                     ui.label(
@@ -1537,6 +1548,7 @@ impl IDGApp {
     fn download_details(&self, ui: &mut Ui, item: &DownloadItem) {
         if ui.ctx().screen_rect().height() < 650.0 {
             card().inner_margin(Margin::same(10.0)).show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
                 ui.add(
                     egui::Label::new(RichText::new(&item.filename).size(13.0).strong()).truncate(),
                 )
@@ -1550,6 +1562,22 @@ impl IDGApp {
                     .truncate(),
                 )
                 .on_hover_text(item.save_path.to_string_lossy());
+                ui.horizontal(|ui| {
+                    if ui.button("Open folder").clicked()
+                        && let Some(path) = item.save_path.parent()
+                    {
+                        open_path(path);
+                    }
+                    if ui
+                        .add_enabled(
+                            item.status == Status::Completed,
+                            egui::Button::new("Open file"),
+                        )
+                        .clicked()
+                    {
+                        open_path(&item.save_path);
+                    }
+                });
                 let (label, color) = status_info(&item.status);
                 ui.horizontal(|ui| {
                     ui.colored_label(color, label);

@@ -24,7 +24,7 @@ pub type Downloads = Arc<Mutex<Vec<DownloadItem>>>;
 // ---------------------------------------------------------------------------
 
 /// Current lifecycle state of a single download.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Status {
     /// Waiting in queue; no network activity yet.
     Queued,

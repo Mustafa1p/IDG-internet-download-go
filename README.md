@@ -40,6 +40,8 @@ Splits every file into multiple parallel connections — just like IDM, but free
 
 ## 📸 Screenshot
 
+Windows setup: [**x64 (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.3/IDG-Setup-v1.4.3.exe) | [**x86 (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.3/IDG-Setup-v1.4.3-x86.exe).
+
 ![IDG Windows 11 Fluent desktop interface](docs/screenshot.png)
 
 The refreshed **v1.4.3** interface is implemented directly in Rust/egui: blue sidebar navigation, search and filters, four live statistics, list/grid views, selection checkboxes, and a consistent Settings and download-dialog design. The screenshot above is captured from the actual desktop application.
@@ -53,7 +55,7 @@ The refreshed **v1.4.3** interface is implemented directly in Rust/egui: blue si
 | Settings | Sidebar **Settings** or **Ctrl+,**; save folder, connections, browser integration, startup/tray and updates |
 | New versions | Update popup and banner with release fixes, progress, Update now, Install and Later |
 
-See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md) and [implementation comparison](docs/fluent-redesign-report.md). At smaller window sizes, statistics and details become compact while the same actions remain available. Existing window size, saved preferences and user files are preserved. This refresh still reports **1.4.3**; install the refreshed package once if you already have an earlier 1.4.3 build.
+See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md) and [implementation comparison](docs/fluent-redesign-report.md). At smaller window sizes, statistics and details become compact while the same actions remain available. The normal window is locked to 960 x 640 logical pixels, capped to the monitor work area; saved preferences and user files are preserved. This refresh still reports **1.4.3**; install the refreshed package once if you have an earlier 1.4.3 build without build-aware update checks. After that, later 1.4.3 builds are detected by their published source identity and timestamp, even when the version stays the same.
 
 ---
 
@@ -184,7 +186,7 @@ Populated preview rows above are explicitly labeled QA fixtures; production stat
 
 ## Existing persistence limits
 
-Downloads already written to disk remain intact. The current queue/history is session-only, and paused workers are not restored after the application exits. This redesign preserves that existing behavior and does not introduce a new history format. The Windows folder chooser remains the native OS dialog. Changing the default folder affects manual downloads immediately; the existing browser server takes a fresh default-folder snapshot after restarting IDG.
+Downloads already written to disk remain intact. Download history now persists across restarts. Interrupted transfers remain listed with an explanation; live paused workers are not restored after the application exits. Cookies and authorization headers are excluded from saved history. The Windows folder chooser remains the native OS dialog. Changing the default folder affects manual downloads immediately; the existing browser server takes a fresh default-folder snapshot after restarting IDG.
 
 ## YouTube downloads
 
@@ -296,12 +298,12 @@ YouTube links open **New download** before transferring media. Choose MP4, MKV, 
 
 Windows startup is enabled by default by the installer and on the first portable run. IDG starts in the system tray; the setting remains editable. The app, installer, shortcuts, and taskbar use the embedded IDG icon. If an old pinned shortcut retains Windows' cached generic icon, unpin it and pin the updated IDG once.
 
-## Compact desktop design (v1.4.1)
+## Compact desktop design (v1.4.3)
 
-Settings now opens as a full page inside the existing **960 × 600** window
-(minimum **800 × 500**). Save directory, parallel connections, app behavior,
+Settings now opens as a full page inside the existing **960 x 640** window
+(rendering fallback **800 x 500**). Save directory, parallel connections, app behavior,
 updates, and browser integration have separate cards with readable labels and
-teal controls. Scroll to reach the remaining sections; **Save changes** and
+blue controls. Scroll to reach the remaining sections; **Save changes** and
 **Reset to defaults** stay visible. Changes are applied when saved, and the
 download folder is remembered across restarts. Reset stages the defaults for
 review before saving. Opening Settings does not enlarge the window.
@@ -309,12 +311,12 @@ review before saving. Opening Settings does not enlarge the window.
 ![Compact Settings page](docs/settings.png)
 
 For isolated visual review from a development build, run
-`cargo run --bin IDG -- --settings-preview --settings-preview-size=960x600`.
+`cargo run --bin IDG -- --settings-preview --settings-preview-size=960x640`.
 It writes `target/settings-preview.png` using the app renderer. This development
 mode uses a separate window, skips the API/startup/extension/update initialization,
 and does not save preferences. Release builds ignore the preview flag.
 
-The desktop app opens at **960 × 600** logical pixels and can shrink to **800 × 500**. Its dark teal library includes a sidebar Add download action, status and file-type categories, live speed/count summaries, search, newest/oldest sorting, transfer progress, and selected-file details. Speeds remain in Mbps. Large lists scroll without pushing the action buttons outside the window.
+The desktop app opens at **960 x 640** logical pixels with manual resizing disabled. Its dark blue library includes a sidebar Add download action, status and file-type categories, live speed/count summaries, search, newest/oldest sorting, transfer progress, and selected-file details. Speeds remain in Mbps. Large lists scroll without pushing the action buttons outside the window.
 
 The extension popup now contains only connection status. Capture controls, manual download forms, recent downloads, YouTube buttons, and release links have been removed from the popup. Existing page overlays and browser context-menu download actions remain available.
 
@@ -335,3 +337,13 @@ python installer/package.py v1.4.3 x86
 ```
 
 The x86 package includes 32-bit IDG, native bridge, yt-dlp, FFmpeg/FFprobe and Node.js. The x64 package retains Deno. Packaging validates the PE architecture of every bundled executable and DLL. The x86 updater selects the x86 installer; the existing unsuffixed setup name remains the x64 download for older updater compatibility. Windows 10/11 are the supported OS family; Windows 11 itself requires a 64-bit PC.
+
+### Compact window, visible transfers, and build updates
+
+The normal locked window is now 960 x 640 logical pixels, capped to the monitor work area. IDM's official main-window screenshots were used as a compact, table-first reference; IDM does not specify one fixed default window size.
+
+Browser handoffs switch out of Settings, clear category/search filters, select the new transfer and show IDG. Open folder is visible on each download row and in the compact details panel; the toolbar can also open the default folder without a selection.
+
+Download history is saved under `%LOCALAPPDATA%/IDG/download-history.json`, including completed and failed entries. Cookies, authorization headers, and live download-worker state are excluded. Transfers interrupted by closing/restarting IDG remain listed with an explanation; restarting a transfer requires adding the link again. Existing files are preserved. Older builds did not save history, so this cannot reconstruct their previous session lists.
+
+Updates compare both the version and the published source build. A later 1.4.3 build triggers an alert with its fixes; the installed build is not repeatedly offered, and older releases are ignored. Release notes include a generated `IDG-BUILD` marker. Existing binaries without this logic need a one-time manual installation of this refresh. Windows Setup now uses Restart Manager's force-close fallback and disables automatic app restarting, so close-to-tray cannot leave installation waiting indefinitely. Setup's close-applications confirmation stops running transfers.

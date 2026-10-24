@@ -46,6 +46,7 @@ pub async fn check_for_update(
     let release: GhRelease = client
         .get(RELEASES_API)
         .header("User-Agent", "IDG-update-checker")
+        .header("Cache-Control", "no-cache")
         .timeout(std::time::Duration::from_secs(20))
         .send()
         .await?
@@ -56,8 +57,41 @@ pub async fn check_for_update(
 }
 
 fn update_from_release(release: GhRelease, current: &str) -> Result<Option<UpdateInfo>> {
+    update_from_release_at(
+        release,
+        current,
+        env!("IDG_BUILD_ID"),
+        env!("IDG_BUILD_TIMESTAMP").parse().unwrap_or(0),
+    )
+}
+
+fn release_build(notes: &str) -> Option<(&str, u64)> {
+    let marker = notes
+        .split("<!-- IDG-BUILD:")
+        .nth(1)?
+        .split(" -->")
+        .next()?;
+    let (revision, timestamp) = marker.split_once(':')?;
+    if revision.len() != 40 || !revision.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some((revision, timestamp.parse().ok()?))
+}
+
+fn update_from_release_at(
+    release: GhRelease,
+    current: &str,
+    build: &str,
+    built_at: u64,
+) -> Result<Option<UpdateInfo>> {
     let version = release.tag_name.trim_start_matches('v');
-    if !is_newer(version, current) {
+    let refreshed = version == current
+        && release
+            .body
+            .as_deref()
+            .and_then(release_build)
+            .is_some_and(|(revision, timestamp)| revision != build && timestamp > built_at);
+    if !is_newer(version, current) && !refreshed {
         return Ok(None);
     }
     ensure!(
@@ -290,6 +324,77 @@ mod tests {
         release.assets[0].digest = None;
         assert!(update_from_release(release, "1.4.2").is_err());
     }
+    #[test]
+    fn refreshed_same_version_is_offered_once_and_never_downgrades() {
+        let old = "a".repeat(40);
+        let new = "b".repeat(40);
+        let fixture = |timestamp| {
+            let mut release = release_fixture("1.4.3");
+            release.body = Some(format!("Fixes\n<!-- IDG-BUILD:{new}:{timestamp} -->"));
+            release
+        };
+        assert!(
+            update_from_release_at(fixture(200), "1.4.3", &old, 100)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            update_from_release_at(fixture(200), "1.4.3", &new, 200)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            update_from_release_at(fixture(50), "1.4.3", &old, 100)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            update_from_release_at(fixture(200), "1.4.4", &old, 100)
+                .unwrap()
+                .is_none()
+        );
+        let mut missing_installer = fixture(200);
+        missing_installer.assets.clear();
+        assert!(update_from_release_at(missing_installer, "1.4.3", &old, 100).is_err());
+    }
+
+    #[tokio::test]
+    #[ignore = "Run immediately after publishing this source build"]
+    async fn published_same_version_build_is_detected_without_a_repeat_offer() {
+        let client = reqwest::Client::new();
+        let json: serde_json::Value = client
+            .get(RELEASES_API)
+            .header("User-Agent", "IDG-update-checker")
+            .header("Cache-Control", "no-cache")
+            .timeout(std::time::Duration::from_secs(20))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let release: GhRelease = serde_json::from_value(json.clone()).unwrap();
+        let info = update_from_release_at(release, crate::APP_VERSION, &"0".repeat(40), 0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(info.version, crate::APP_VERSION);
+        let release: GhRelease = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            release_build(release.body.as_deref().unwrap()).unwrap().0,
+            env!("IDG_BUILD_ID")
+        );
+        assert!(
+            update_from_release(release, crate::APP_VERSION)
+                .unwrap()
+                .is_none()
+        );
+        println!(
+            "Published same-version build is available to older builds and not offered to the installed build"
+        );
+    }
+
     #[test]
     fn versions_are_compared_numerically() {
         assert!(is_newer("1.10.0", "1.9.9"));

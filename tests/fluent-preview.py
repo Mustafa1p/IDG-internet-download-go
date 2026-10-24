@@ -20,7 +20,9 @@ CASES = [
 ] + [
     (f"scale-{scale}", 800, 500, scale, []) for scale in [1.25, 1.5, 2.0]
 ] + [
-    ("reference", 1540, 930, 1.0, []),
+    ("reference", 960, 640, 1.0, []),
+    ("compact-list", 960, 640, 1.0, ["--preview-populated", "--preview-selected"]),
+    ("compact-update", 960, 640, 1.0, ["--update-preview"]),
     ("list", 1280, 800, 1.0, ["--preview-populated"]),
     ("selected", 1280, 800, 1.0, ["--preview-populated", "--preview-selected"]),
     ("grid", 1280, 800, 1.0, ["--preview-populated", "--preview-grid"]),

@@ -60,6 +60,17 @@ jobs:
       - name: Signing regression tests
         shell: pwsh
         run: ./tests/signing.test.ps1
+      - name: Verify installer closes tray applications
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $compiler = @("C:/Program Files (x86)/Inno Setup 6/ISCC.exe", "C:/Program Files/Inno Setup 6/ISCC.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Could not install Inno Setup" }
+          }
+          python tests/installer-close-smoke.py
+          if ($LASTEXITCODE -ne 0) { throw "Installer close regression failed" }
       - name: Build release binaries
         run: cargo build --locked --release --bins ${{ matrix.cargo_args }}
       - name: Test update handover
@@ -184,6 +195,9 @@ jobs:
           if ($env:IDG_SIGN_RELEASE -ne 'true') {
             $notes = "**Windows signing status:** This release is unsigned. Windows may display an unknown-publisher or SmartScreen warning.`n`n" + $notes
           }
+          $revision = git rev-parse HEAD
+          $builtAt = git show -s --format=%ct HEAD
+          $notes += "`n`n<!-- IDG-BUILD:${revision}:${builtAt} -->`n"
           Set-Content -LiteralPath target/release-notes.md -Value $notes -Encoding utf8
       - name: Publish release
         uses: softprops/action-gh-release@v2

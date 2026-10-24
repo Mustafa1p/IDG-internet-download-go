@@ -4,6 +4,7 @@ import json
 import tomllib
 import sys
 import struct
+import subprocess
 from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path(__file__).resolve().parents[1]
@@ -35,6 +36,13 @@ for path in [build / "IDG.exe", build / "IDG-native.exe", *tools.rglob("*.exe"),
         machine = struct.unpack("<H", source.read(2))[0]
     if machine != (0x14c if arch == "x86" else 0x8664):
         raise SystemExit(f"Wrong architecture in {arch} package: {path}")
+# A same-version update must identify exactly the source build being published.
+try:
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, stderr=subprocess.DEVNULL).strip()
+except (FileNotFoundError, subprocess.CalledProcessError):
+    revision = None
+if revision and revision not in (build / "IDG.exe").read_bytes():
+    raise SystemExit("IDG.exe does not contain the current source build identity. Rebuild after committing before packaging.")
 (root / "dist").mkdir(exist_ok=True)
 extension_files = sorted(path for path in (root / "extension").rglob("*") if path.is_file())
 extension_zip = root / f"dist/IDG-extension-{tag}.zip"

@@ -98,13 +98,37 @@
   {
     "name": "reference",
     "logical_size": [
-      1540,
-      930
+      960,
+      640
     ],
     "scale": 1.0,
     "raster": [
-      1540,
-      930
+      960,
+      640
+    ]
+  },
+  {
+    "name": "compact-list",
+    "logical_size": [
+      960,
+      640
+    ],
+    "scale": 1.0,
+    "raster": [
+      960,
+      640
+    ]
+  },
+  {
+    "name": "compact-update",
+    "logical_size": [
+      960,
+      640
+    ],
+    "scale": 1.0,
+    "raster": [
+      960,
+      640
     ]
   },
   {

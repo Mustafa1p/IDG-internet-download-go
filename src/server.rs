@@ -69,6 +69,7 @@ pub struct AddDownloadResponse {
 struct HealthResponse {
     status: &'static str,
     version: &'static str,
+    build: &'static str,
     capabilities: serde_json::Value,
 }
 
@@ -80,6 +81,7 @@ async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
+        build: env!("IDG_BUILD_ID"),
         capabilities: serde_json::json!({"youtube": crate::download::media::tools_available()}),
     })
 }
@@ -214,9 +216,10 @@ async fn add_download(
             }
         });
     }
-    if req.show_dialog {
-        crate::desktop::show_window(&state.egui_ctx);
-    }
+    state
+        .egui_ctx
+        .data_mut(|data| data.insert_temp(egui::Id::new("idg-reveal-download"), id.clone()));
+    crate::desktop::show_window(&state.egui_ctx);
     state.egui_ctx.request_repaint();
     (
         StatusCode::CREATED,
@@ -536,6 +539,7 @@ mod tests {
         let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
         let state = state(&directory);
         let downloads = state.downloads.clone();
+        let context = state.egui_ctx.clone();
         let (address, server) = serve(build_router(state)).await;
         let client = reqwest::Client::new();
         let response = client
@@ -550,6 +554,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
         {
             let items = downloads.lock().unwrap();
+            assert_eq!(
+                context.data(|data| data.get_temp::<String>(egui::Id::new("idg-reveal-download"))),
+                Some(items[0].id.clone())
+            );
             assert!(items[0].awaiting_confirmation);
             assert_eq!(items[0].status, Status::Queued);
             assert_eq!(items[0].save_path, directory.join("file.zip"));

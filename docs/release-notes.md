@@ -1,15 +1,15 @@
-IDG v1.4.3 refreshes the Windows desktop interface to follow the supplied Windows 11 Fluent design reference, while retaining the Rust download engine and browser integration.
+IDG v1.4.3 refresh fixes the compact desktop, browser transfer visibility, update detection and installer closing.
 
-- Blue Fluent navigation, integrated search/filter controls, real window controls, and separate live speed/active/completed/queued cards.
-- Functional list and grid views, seven table columns, multi-selection, date sorting, bulk pause/resume, and remove-from-list confirmation that keeps files on disk.
-- A locally rendered folder empty state, consistent Settings cards, download/media dialogs, details and error/update messages.
-- Compact layouts at 800×500, plus larger desktop layouts; Windows reduced-motion preference and Segoe typography.
-- Keep the tiny-window restoration fix and newer-version update popup with release highlights, progress, Update now and Later.
-- Bundle the UI route guide, QA report and screenshots with installed/portable packages so README paths remain usable offline.
-- Preserve the existing HTTP, authenticated export, YouTube/media, native bridge, updater, startup and tray workflows.
+- Reduce the locked desktop to 960 x 640 logical pixels, capped to the monitor work area, with a compact sidebar and table.
+- Detect later builds of the same version using the published source identity and timestamp. Show an update popup with release fixes; avoid repeated offers of the installed build or downgrades.
+- Browser handoffs leave Settings, clear search/category filters, select the incoming transfer and show IDG, including when confirmation is disabled.
+- Restore visible Open folder actions on rows and in compact details; allow opening the default folder without a selection.
+- Save completed/failed/interrupted download history across restarts without cookies or authorization headers. Interrupted workers are not resumed across a restart; entries explain how to restart and preserve partial files.
+- Prevent Windows Setup from waiting on close-to-tray using Restart Manager force-close fallback and explicit launch control. The installer asks to close applications; running transfers stop when closed.
+- Keep both Windows x64 and x86 installers/portable packages, native bridge and media tools.
 
-**The version remains 1.4.3.** This is a refreshed package under the existing release. If you already installed an earlier 1.4.3 build, quit IDG from its tray menu and run the refreshed **IDG-Setup-v1.4.3.exe** once. Equal version numbers do not trigger an automatic update loop. User downloads and saved preferences remain intact; the existing queue/history is still session-only.
+**The version remains 1.4.3.** Install this refresh once manually if your installed build lacks build-aware update detection. Later refreshed 1.4.3 source builds can then be detected automatically. Older releases did not persist download history, so their previous session lists cannot be reconstructed.
 
-The release includes Windows x64 (`IDG-Setup-v1.4.3.exe`) and x86 (`IDG-Setup-v1.4.3-x86.exe`) installers, matching portable packages, browser extension, and SHA-256 checksums. Keep the native bridge and bundled media tools with the portable app.
+Windows setup: **IDG-Setup-v1.4.3.exe** (x64) or **IDG-Setup-v1.4.3-x86.exe** (x86). Keep the native bridge and bundled media tools with portable IDG.
 
-Validation and limitations are documented in [the QA report](https://github.com/Mustafa1p/IDG-internet-download-go/blob/main/docs/fluent-qa.md), and every UI/integration route is mapped in [the navigation guide](https://github.com/Mustafa1p/IDG-internet-download-go/blob/main/docs/ui-navigation.md). Rendering-scale tests are not actual Windows display-DPI changes; a live signed-in browser/media session and Windows Snap-layout flyout are not certified by these checks.
+Validation: both Rust targets, same-version update/downgrade tests, browser handoff UI checks, history replacement/restart tests, and an isolated Inno upgrade against a fixture that hides when closed. Actual signed-in browser/media sessions and a physical 32-bit Windows installation are not certified by these checks.

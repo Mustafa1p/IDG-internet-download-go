@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 
 /// Initial client size and recovery size for invalid persisted geometry.
-pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(1540.0, 930.0);
+pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(960.0, 640.0);
 /// Smallest supported desktop layout, in egui points.
 pub const MIN_WINDOW_SIZE: egui::Vec2 = egui::vec2(800.0, 500.0);
 

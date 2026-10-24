@@ -458,6 +458,76 @@
     {
       "add_dialog": false,
       "category": "All downloads",
+      "check": "Browser download switches to queue",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 1,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Settings shortcut again",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 1,
+      "settings": true,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
       "check": "Leave settings",
       "confirm_remove": false,
       "grid": false,
@@ -465,7 +535,7 @@
       "passed": true,
       "search": "",
       "search_cursor": "None",
-      "selection_count": 0,
+      "selection_count": 1,
       "settings": false,
       "statuses": [
         [
@@ -500,7 +570,7 @@
       "passed": true,
       "search": "",
       "search_cursor": "None",
-      "selection_count": 0,
+      "selection_count": 1,
       "settings": false,
       "statuses": [
         [
@@ -535,7 +605,7 @@
       "passed": true,
       "search": "",
       "search_cursor": "None",
-      "selection_count": 0,
+      "selection_count": 1,
       "settings": false,
       "statuses": [
         [
@@ -1018,14 +1088,14 @@
     {
       "add_dialog": false,
       "category": "All downloads",
-      "check": "Clear search",
+      "check": "Browser download clears search",
       "confirm_remove": false,
       "grid": false,
       "newest_first": true,
       "passed": true,
       "search": "",
-      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
-      "selection_count": 0,
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: false } })",
+      "selection_count": 1,
       "settings": false,
       "statuses": [
         [
@@ -1059,8 +1129,8 @@
       "newest_first": true,
       "passed": true,
       "search": "",
-      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
-      "selection_count": 0,
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: false } })",
+      "selection_count": 1,
       "settings": false,
       "statuses": [
         [
@@ -1094,8 +1164,8 @@
       "newest_first": true,
       "passed": true,
       "search": "",
-      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
-      "selection_count": 0,
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: false } })",
+      "selection_count": 1,
       "settings": false,
       "statuses": [
         [
@@ -1129,8 +1199,8 @@
       "newest_first": true,
       "passed": true,
       "search": "",
-      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
-      "selection_count": 0,
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: false } })",
+      "selection_count": 1,
       "settings": false,
       "statuses": [
         [

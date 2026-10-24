@@ -265,7 +265,48 @@ impl IDGApp {
         };
         let connection_settings = Arc::new(std::sync::Mutex::new(connections));
 
-        let downloads: Downloads = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(if crate::settings_preview() {
+            Vec::new()
+        } else {
+            crate::download::history::load_default().unwrap_or_else(|error| {
+                cc.egui_ctx.data_mut(|data| {
+                    data.insert_temp(egui::Id::new("idg-history-error"), error.to_string())
+                });
+                Vec::new()
+            })
+        }));
+        if !crate::settings_preview() {
+            let history_downloads = downloads.clone();
+            let context = cc.egui_ctx.clone();
+            rt.spawn(async move {
+                loop {
+                    let downloads = history_downloads.clone();
+                    let result = tokio::task::spawn_blocking(move || {
+                        // Serialize disk snapshots with queue mutations and App::save.
+                        crate::download::history::save_default(&downloads.lock().unwrap())
+                    })
+                    .await;
+                    match result {
+                        Ok(Err(error)) => {
+                            context.data_mut(|data| {
+                                data.insert_temp(
+                                    egui::Id::new("idg-history-error"),
+                                    error.to_string(),
+                                )
+                            });
+                            context.request_repaint();
+                        }
+                        Ok(Ok(())) => {
+                            context.data_mut(|data| {
+                                data.remove::<String>(egui::Id::new("idg-history-error"))
+                            });
+                        }
+                        Err(_) => {}
+                    }
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+            });
+        }
 
         // ── Start the local API server (used by the browser extension) ───────
         let srv_state = ServerState {
@@ -321,8 +362,8 @@ impl IDGApp {
                         .await
                         .map_err(|e| e.to_string());
                     let notify = if let Ok(Some(info)) = &result {
-                        let notify = announced.as_ref() != Some(&info.version);
-                        announced = Some(info.version.clone());
+                        let notify = announced.as_ref() != Some(&info.sha256);
+                        announced = Some(info.sha256.clone());
                         notify
                     } else {
                         false
@@ -459,9 +500,9 @@ impl IDGApp {
         {
             app.show_settings = false;
             app.show_update_prompt = true;
-            app.update_status = "IDG 1.4.4 is available".into();
+            app.update_status = "A refreshed IDG 1.4.3 build with fixes is available".into();
             app.update_info = Some(UpdateInfo {
-                version: "1.4.4".into(),
+                version: "1.4.3".into(),
                 release_notes: "- Restore download windows at their last usable size and position.\n- Show a clear update alert with release fixes.\n- Check for updates while IDG runs in the system tray.".into(),
                 release_url: "https://github.com/Mustafa1p/IDG-internet-download-go/releases".into(),
                 installer_url: String::new(),
@@ -473,7 +514,7 @@ impl IDGApp {
     }
 
     fn enqueue(
-        &self,
+        &mut self,
         url: String,
         save_path: PathBuf,
         preserve_filename: bool,
@@ -488,6 +529,7 @@ impl IDGApp {
         item.media_options = options;
         let id = item.id.clone();
         self.downloads.lock().unwrap().push(item);
+        self.reveal_download(&id);
         let dl = self.downloads.clone();
         let cl = self.client.clone();
         self.rt.spawn(async move {
@@ -791,6 +833,7 @@ impl IDGApp {
     fn check_updates(&mut self, ctx: &egui::Context) {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.update_rx = Some(rx);
+        self.announced_update = None;
         self.update_error = None;
         self.update_status = "Checking for updates…".into();
         let client = self.client.clone();
@@ -902,14 +945,21 @@ impl IDGApp {
         match result {
             Ok(info) => {
                 if let Some(info) = &info {
-                    if self.announced_update.as_ref() != Some(&info.version) {
-                        self.announced_update = Some(info.version.clone());
+                    if self.announced_update.as_ref() != Some(&info.sha256) {
+                        self.announced_update = Some(info.sha256.clone());
                         self.show_update_prompt = true;
                         desktop::show_window(ctx);
                     }
                     // Preserve download/ready status across repeated checks.
                     if self.update_download_rx.is_none() && self.prepared_update.is_none() {
-                        self.update_status = format!("IDG {} is available", info.version);
+                        self.update_status = if info.version == APP_VERSION {
+                            format!(
+                                "A refreshed IDG {} build with fixes is available",
+                                info.version
+                            )
+                        } else {
+                            format!("IDG {} is available", info.version)
+                        };
                     }
                 } else if self.update_info.is_none() {
                     self.update_status = "IDG is up to date".into();
@@ -945,8 +995,15 @@ impl IDGApp {
             .order(egui::Order::Foreground)
             .default_width(500.0)
             .show(ctx, |ui| {
-                ui.heading(format!("Please update to IDG {}", info.version));
-                ui.label(format!("You are using IDG {APP_VERSION}."));
+                if info.version == APP_VERSION {
+                    ui.heading(format!("Please update IDG {}", info.version));
+                    ui.label(
+                        "A newer build with fixes is available. The version number stays the same.",
+                    );
+                } else {
+                    ui.heading(format!("Please update to IDG {}", info.version));
+                    ui.label(format!("You are using IDG {APP_VERSION}."));
+                }
                 ui.add_space(10.0);
                 ui.label(RichText::new("What’s new").strong().color(ACCENT));
                 egui::ScrollArea::vertical()
@@ -1059,6 +1116,16 @@ impl IDGApp {
         }
     }
 
+    fn reveal_download(&mut self, id: &str) {
+        self.show_settings = false;
+        self.settings_draft = None;
+        self.category = Category::All;
+        self.search.clear();
+        self.library_state.selected_ids.clear();
+        self.library_state.selected_ids.insert(id.to_owned());
+        self.selected_id = Some(id.to_owned());
+    }
+
     fn pause_all(&self) {
         let mut lock = self.downloads.lock().unwrap();
         for i in lock.iter_mut() {
@@ -1082,6 +1149,7 @@ impl eframe::App for IDGApp {
         if crate::settings_preview() {
             return;
         }
+        let _ = crate::download::history::save_default(&self.downloads.lock().unwrap());
         self.window_geometry.save(storage);
         eframe::set_value(storage, "compact_layout_v1", &true);
         eframe::set_value(storage, "close_to_tray", &self.close_to_tray);
@@ -1163,10 +1231,24 @@ impl eframe::App for IDGApp {
             ctx.request_repaint_after(Duration::from_millis(250));
             return;
         }
+        if let Some(id) =
+            ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("idg-reveal-download")))
+        {
+            self.reveal_download(&id);
+        }
         let items: Vec<DownloadItem> = self.downloads.lock().unwrap().clone();
+        #[cfg(debug_assertions)]
+        if crate::settings_preview()
+            && let Some(item) = items.first()
+        {
+            ctx.data_mut(|data| {
+                data.insert_temp(egui::Id::new("qa:first-download"), item.id.clone())
+            });
+        }
         if !self.show_add
             && let Some(item) = items.iter().find(|item| item.awaiting_confirmation)
         {
+            self.reveal_download(&item.id);
             self.dialog = AddDialog::new(&self.default_save_dir);
             self.dialog.url = item.url.clone();
             self.dialog.filename = item.filename.clone();
@@ -1189,7 +1271,9 @@ impl eframe::App for IDGApp {
                         .fill(PANEL)
                         .inner_margin(Margin::symmetric(12.0, 8.0)),
                 )
-                .show(ctx, |ui| self.update_controls(ui, ctx));
+                .show(ctx, |ui| {
+                    ui.horizontal_wrapped(|ui| self.update_controls(ui, ctx));
+                });
         }
 
         if let Some(error) =
@@ -1197,6 +1281,14 @@ impl eframe::App for IDGApp {
         {
             egui::TopBottomPanel::top("api_error").show(ctx, |ui| {
                 ui.colored_label(RED, error);
+            });
+        }
+
+        if let Some(error) =
+            ctx.data(|data| data.get_temp::<String>(egui::Id::new("idg-history-error")))
+        {
+            egui::TopBottomPanel::top("history-error").show(ctx, |ui| {
+                ui.colored_label(RED, format!("Download history could not be saved: {error}"));
             });
         }
 

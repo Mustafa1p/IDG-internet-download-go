@@ -152,3 +152,15 @@ The production window now overrides persisted sizes with the 1540×930 logical-p
 The Open folder button reserves additional width. Empty-state artwork is smaller and the artwork/text/action group is centered in the table body. The title-bar search and controls reserve enough trailing space.
 
 Windows x86 is built with i686-pc-windows-msvc and includes 32-bit native bridge, yt-dlp, FFmpeg/FFprobe and Node.js v22.23.4. Every bundled EXE and DLL must match the selected PE machine type. Both update handover smoke tests and x86 tool version smoke checks pass on the Windows x64 test host; a physical 32-bit Windows installation is not available for testing.
+
+## Compact window and workflow fixes (v1.4.3 refresh)
+
+The current production size is **960 x 640 logical pixels**, replacing the earlier 1540 x 930 setting. Small details reserve room for Open folder/Open file; per-row Open folder is also visible.
+
+The actual-app interaction harness now includes browser handoff while Settings is open and while search text would hide the download (35 checks). The server regression asserts that a real browser handoff queues the correct UI selection event. Saved history tests verify restart behavior, atomic file replacement/removal, partial-file preservation and exclusion of cookies/authorization headers. Interrupted workers are marked failed with an explanation; no cross-restart partial resume is claimed.
+
+The isolated installer close smoke test compiles a WinForms fixture that hides/cancels Close, starts it from a temporary installation directory, then upgrades it with Inno Setup's force-close mode. The locked process exits and its binary is replaced successfully; the real installed IDG and user registry are untouched.
+
+Same-version update regressions cover a newer build, the currently installed build, an older build, an older version, and a missing installer. `build.rs` watches Git HEAD/refs and embeds the source revision and commit timestamp; release publication writes the matching `IDG-BUILD` marker. An older binary without this logic requires one manual update.
+
+The current renderer matrix has 21 cases, including the 960 x 640 list and same-version update prompt. Both Rust targets pass 32 non-network tests; 4 live/publication tests are intentionally opt-in. The extension suite passes 23 checks, signing mocks pass 10 scenarios, and the interaction harness passes 35 checks. Package creation rejects an executable that lacks the current Git source identity.

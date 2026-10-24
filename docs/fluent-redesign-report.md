@@ -23,7 +23,7 @@ mapped in [ui-navigation.md](ui-navigation.md).
 - `src/app/library.rs`: navigation, statistics, speed history, bulk selection and
   actions, list/grid, table, vector illustration, details and status.
 - `src/app/shell.rs`: search/filter/menu, shortcuts, draggable title bar, native
-  minimize/restore/close. The later locked-window refresh disables production resize/maximize, fixes the size to 1540 x 930 logical pixels (monitor capped), and adds x86 packages.
+  minimize/restore/close. The later locked-window refresh disables production resize/maximize, now fixes the size to 960 x 640 logical pixels (monitor capped), and adds x86 packages.
 - `src/app/settings.rs`: Fluent settings cards, inputs, toggles, save/reset controls
   and isolated real-app screenshot capture.
 - `src/app/preview_test.rs`: development-only actual-control interaction checks.
@@ -88,10 +88,7 @@ Actual Windows display-setting changes and cross-monitor DPI transitions,
 manual screen-reader testing, live authenticated browser/media sessions and
 cold-start/tray smoke against the installed instance were not performed. The
 custom title bar does not provide Windows Snap Layouts' maximize-hover flyout.
-The real folder picker remains OS-native. Existing queue/history remains
-session-only; paused workers are not restored after exit, and browser default
-folder changes take effect after restarting the existing server. These existing
-persistence/networking behaviors were documented rather than replaced.
+The real folder picker remains OS-native. Download history now persists without credentials. Interrupted workers are not restored after exit; entries remain visible with an explanation. Browser default-folder changes take effect after restarting the existing server. The compact refresh adds build-aware same-version updates, browser-handoff navigation and the tested installer force-close fallback.
 
 ## Build and run
 
