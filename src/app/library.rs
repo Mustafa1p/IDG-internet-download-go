@@ -899,7 +899,7 @@ impl IDGApp {
                     egui::Button::new("")
                         .min_size(Vec2::new(
                             if label == "Open folder" {
-                                if roomy { 156.0 } else { 116.0 }
+                                if roomy { 50.0 } else { 34.0 }
                             } else if roomy {
                                 116.0
                             } else {
@@ -917,19 +917,29 @@ impl IDGApp {
                 draw_icon(
                     ui.painter(),
                     egui::Rect::from_center_size(
-                        egui::pos2(response.rect.left() + 18.0, response.rect.center().y),
+                        egui::pos2(
+                            if label == "Open folder" {
+                                response.rect.center().x
+                            } else {
+                                response.rect.left() + 18.0
+                            },
+                            response.rect.center().y,
+                        ),
                         Vec2::splat(18.0),
                     ),
                     icon,
                     color,
                 );
-                ui.painter().text(
-                    egui::pos2(response.rect.left() + 33.0, response.rect.center().y),
-                    egui::Align2::LEFT_CENTER,
-                    label,
-                    FontId::proportional(if roomy { 14.0 } else { 11.0 }),
-                    color,
-                );
+                if label != "Open folder" {
+                    ui.painter().text(
+                        egui::pos2(response.rect.left() + 33.0, response.rect.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        label,
+                        FontId::proportional(if roomy { 14.0 } else { 11.0 }),
+                        color,
+                    );
+                }
+                let response = response.on_hover_text(label);
                 qa_control(ui.ctx(), label, response.rect);
                 response.widget_info(|| {
                     egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label)
@@ -1359,7 +1369,7 @@ impl IDGApp {
                                             .truncate(),
                                         )
                                         .on_hover_text(item.error.as_deref().unwrap_or(label));
-                                        if ui.small_button("Open folder").clicked() {
+                                        if icon_button(ui, Icon::Folder, "Open folder").clicked() {
                                             action = Some((item.id.clone(), "OpenFolder"));
                                         }
                                     });
@@ -1550,7 +1560,7 @@ impl IDGApp {
                 )
                 .on_hover_text(item.save_path.to_string_lossy());
                 ui.horizontal(|ui| {
-                    if ui.button("Open folder").clicked()
+                    if icon_button(ui, Icon::Folder, "Open folder").clicked()
                         && let Some(path) = item.save_path.parent()
                     {
                         open_path(path);

@@ -56,7 +56,7 @@ Other sidebar actions:
 | Resume | `handle_action(id, "Resume", items)` clears `pause_flag`; paused items return to downloading |
 | Pause | `handle_action(id, "Pause", items)` sets `pause_flag` and `Status::Paused` for active transfers that support pause |
 | Remove | Opens `library_state.confirm_remove`; confirmation calls `handle_action(id, "Delete", items)` for the selected entries |
-| Open folder | `handle_action(id, "OpenFolder", items)` opens each selected item's parent directory using `open_path` |
+| Folder icon (Open folder tooltip) | `handle_action(id, "OpenFolder", items)` opens each selected item's parent directory using `open_path` |
 | Copy link | The `download_table` context-menu dispatcher copies `DownloadItem::url` through `Context::copy_text` |
 | Open file | `handle_action(id, "OpenFile", items)` uses `open_path`; the row context-menu item is enabled for completed files |
 
