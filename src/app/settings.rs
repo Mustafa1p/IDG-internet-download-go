@@ -1,4 +1,4 @@
-//! Full-page preferences with a scrollable body and persistent action bar.
+//! Compact preference tabs with a persistent action bar.
 use super::library::{Icon, draw_icon};
 use super::*;
 
@@ -6,6 +6,7 @@ use super::*;
 pub(super) struct SettingsDraft {
     directory: String,
     segments: usize,
+    pub(super) speed_limit_kbps: u64,
     close_to_tray: bool,
     startup: bool,
     download_updates: bool,
@@ -20,42 +21,43 @@ pub(super) fn default_download_folder() -> String {
 }
 
 fn hint(ui: &mut Ui, text: &str) {
-    ui.add(egui::Label::new(RichText::new(text).size(13.0).color(TEXT_DIM)).wrap());
+    ui.add(egui::Label::new(RichText::new(text).size(12.0).color(TEXT_DIM)).wrap());
 }
 
 fn section(ui: &mut Ui, icon: Icon, title: &str, body: impl FnOnce(&mut Ui)) {
-    Frame::none()
+    let response = Frame::none()
         .fill(PANEL)
         .stroke(Stroke::new(1.0_f32, BORDER))
         .rounding(12.0)
-        .inner_margin(Margin::same(18.0))
+        .inner_margin(Margin::same(10.0))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_top(|ui| {
-                let (rect, _) = ui.allocate_exact_size(Vec2::splat(38.0), egui::Sense::hover());
+                let (rect, _) = ui.allocate_exact_size(Vec2::splat(28.0), egui::Sense::hover());
                 ui.painter().rect_filled(rect, 10.0, ROW_SEL);
                 draw_icon(ui.painter(), rect.shrink(9.0), icon, ACCENT);
-                ui.add_space(12.0);
+                ui.add_space(6.0);
                 ui.vertical(|ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
                         RichText::new(title)
-                            .size(17.0)
+                            .size(15.0)
                             .color(TEXT)
                             .family(egui::FontFamily::Name("idg-heading".into())),
                     );
-                    ui.add_space(7.0);
+                    ui.add_space(4.0);
                     body(ui);
                 });
             });
         });
-    ui.add_space(12.0);
+    qa_control(ui.ctx(), "Settings section", response.response.rect);
+    ui.add_space(6.0);
 }
 
 fn action(ui: &mut Ui, icon: Icon, text: &str, primary: bool) -> egui::Response {
     let response = ui.add(
         egui::Button::new(RichText::new(format!("        {text}")).color(TEXT))
-            .min_size(Vec2::new(0.0, 38.0))
+            .min_size(Vec2::new(0.0, 30.0))
             .fill(if primary { ACCENT } else { ROW_EVEN })
             .stroke(Stroke::new(1.0_f32, if primary { ACCENT2 } else { BORDER }))
             .rounding(8.0),
@@ -65,6 +67,7 @@ fn action(ui: &mut Ui, icon: Icon, text: &str, primary: bool) -> egui::Response 
         Vec2::splat(18.0),
     );
     draw_icon(ui.painter(), rect, icon, TEXT);
+    qa_control(ui.ctx(), text, response.rect);
     response
 }
 
@@ -85,16 +88,20 @@ fn checkbox(ui: &mut Ui, value: &mut bool, label: &str) -> egui::Response {
 
 fn radio(ui: &mut Ui, value: &mut bool, selected: bool, label: &str) -> egui::Response {
     let checked = *value == selected;
-    ui.scope(|ui| {
-        let widgets = &mut ui.visuals_mut().widgets;
-        widgets.inactive.bg_fill = BG;
-        widgets.inactive.bg_stroke = Stroke::new(1.5_f32, if checked { ACCENT } else { TEXT_DIM });
-        widgets.inactive.fg_stroke = Stroke::new(2.0_f32, ACCENT);
-        widgets.hovered.bg_stroke = Stroke::new(1.5_f32, ACCENT);
-        widgets.hovered.fg_stroke = Stroke::new(2.0_f32, ACCENT);
-        ui.radio_value(value, selected, label)
-    })
-    .inner
+    let response = ui
+        .scope(|ui| {
+            let widgets = &mut ui.visuals_mut().widgets;
+            widgets.inactive.bg_fill = BG;
+            widgets.inactive.bg_stroke =
+                Stroke::new(1.5_f32, if checked { ACCENT } else { TEXT_DIM });
+            widgets.inactive.fg_stroke = Stroke::new(2.0_f32, ACCENT);
+            widgets.hovered.bg_stroke = Stroke::new(1.5_f32, ACCENT);
+            widgets.hovered.fg_stroke = Stroke::new(2.0_f32, ACCENT);
+            ui.radio_value(value, selected, label)
+        })
+        .inner;
+    qa_control(ui.ctx(), label, response.rect);
+    response
 }
 
 fn toggle(ui: &mut Ui, value: &mut bool, label: &str, description: &str) {
@@ -191,6 +198,10 @@ impl IDGApp {
                 "pixels_per_point": ctx.pixels_per_point(), "native_pixels_per_point": ctx.native_pixels_per_point(),
                 "image_width": image.width(), "image_height": image.height(),
                 "version": APP_VERSION,
+                "controls": (["Search downloads", "Minimize", "Maximize", "Close", "Settings section", "Save changes", "Reset to defaults"].into_iter().filter_map(|label| {
+                    ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new(format!("qa:{label}"))))
+                        .map(|rect| (label, [rect.left(), rect.top(), rect.right(), rect.bottom()]))
+                }).collect::<std::collections::BTreeMap<_, _>>()),
             });
             let _ = std::fs::write(
                 output.with_extension("json"),
@@ -203,9 +214,11 @@ impl IDGApp {
     }
 
     fn current_settings(&self) -> SettingsDraft {
+        let connections = self.connection_settings.lock().unwrap().clone();
         SettingsDraft {
             directory: self.default_save_dir.clone(),
-            segments: self.connection_settings.lock().unwrap().requested_count(),
+            segments: connections.requested_count(),
+            speed_limit_kbps: connections.speed_limit_bps.unwrap_or(0) / 1024,
             close_to_tray: self.close_to_tray,
             startup: self.startup_enabled,
             download_updates: self.auto_download_updates,
@@ -233,6 +246,8 @@ impl IDGApp {
         let previous = self.connection_settings.lock().unwrap().clone();
         let connections = ConnectionSettings {
             parallel_segments: (draft.segments != 0).then_some(draft.segments.clamp(1, 32)),
+            speed_limit_bps: (draft.speed_limit_kbps > 0)
+                .then_some(draft.speed_limit_kbps.saturating_mul(1024)),
         };
         connections
             .save()
@@ -286,9 +301,15 @@ impl IDGApp {
         {
             draft.segments = 8;
         }
+        if opening
+            && crate::settings_preview()
+            && std::env::args().any(|arg| arg == "--settings-preview-limited")
+        {
+            draft.speed_limit_kbps = 1024;
+        }
         let initial_draft = draft.clone();
-        ui.spacing_mut().item_spacing = Vec2::new(8.0, 6.0);
-        ui.spacing_mut().button_padding = Vec2::new(12.0, 8.0);
+        ui.spacing_mut().item_spacing = Vec2::new(8.0, 4.0);
+        ui.spacing_mut().button_padding = Vec2::new(10.0, 5.0);
         ui.spacing_mut().interact_size.y = 26.0;
         ui.spacing_mut().icon_width = 19.0;
         ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
@@ -302,157 +323,223 @@ impl IDGApp {
         ui.visuals_mut().selection.bg_fill = ACCENT2;
         ui.visuals_mut().widgets.inactive.bg_stroke = Stroke::new(1.0_f32, BORDER);
 
-        ui.label(
-            RichText::new("Settings")
-                .size(32.0)
-                .color(TEXT)
-                .family(egui::FontFamily::Name("idg-heading".into())),
-        );
-        ui.label(
-            RichText::new("Make IDG GO work your way.")
-                .size(16.0)
-                .color(TEXT_DIM),
-        );
-        ui.horizontal_wrapped(|ui| {
-            ui.hyperlink_to(
-                "GitHub source code",
-                "https://github.com/Mustafa1p/IDG-internet-download-go",
-            );
-            ui.separator();
-            ui.label(RichText::new("Developed by Mustafa Ali").color(TEXT_DIM));
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Settings").size(25.0).color(TEXT).strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.hyperlink_to(
+                    "GitHub source",
+                    "https://github.com/Mustafa1p/IDG-internet-download-go",
+                );
+            });
         });
-        ui.add_space(12.0);
-
-        // Reserve the footer before laying out the scroll area, so Save is always reachable.
-        let body_height = (ui.available_height() - 86.0).max(80.0);
-        let mut scroll = egui::ScrollArea::vertical()
-            .id_salt("settings-page")
-            .auto_shrink([false, false])
-            .max_height(body_height)
-            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible);
-        if crate::settings_preview()
-            && std::env::args().any(|argument| argument == "--settings-preview-bottom")
-            && ctx.data(|data| data.get_temp::<usize>(egui::Id::new("settings-preview-frame")))
-                == Some(2)
-        {
-            scroll = scroll.vertical_scroll_offset(10_000.0);
-        }
-        scroll.show(ui, |ui| {
-            section(ui, Icon::Folder, "Save directory", |ui| {
-                hint(ui, "Choose the default folder where downloads are saved.");
-                ui.add_space(2.0);
+        let tab_id = egui::Id::new("settings-tab");
+        let mut tab = ctx
+            .data(|data| data.get_temp::<usize>(tab_id))
+            .unwrap_or_else(|| {
+                if crate::settings_preview() {
+                    std::env::args()
+                        .find_map(|arg| {
+                            arg.strip_prefix("--preview-settings-tab=")
+                                .and_then(|v| v.parse().ok())
+                        })
+                        .unwrap_or(0)
+                } else {
+                    0
+                }
+            });
+        ui.horizontal(|ui| {
+            for (index, label) in ["Downloads", "App", "Updates", "Browser"]
+                .iter()
+                .enumerate()
+            {
+                let response = ui.selectable_value(&mut tab, index, *label);
+                qa_control(ctx, &format!("Settings {label}"), response.rect);
+            }
+        });
+        ctx.data_mut(|data| data.insert_temp(tab_id, tab));
+        ui.add_space(6.0);
+        match tab {
+            0 => section(ui, Icon::Folder, "Downloads & bandwidth", |ui| {
+                ui.label("Save directory");
                 ui.horizontal(|ui| {
-                    ui.add_sized([ (ui.available_width() - 115.0).max(80.0), 35.0 ],
-                        egui::TextEdit::singleline(&mut draft.directory).margin(Vec2::new(10.0, 8.0)))
-                        .on_hover_text("Default download folder");
+                    let width = (ui.available_width() - 132.0).max(80.0);
+                    ui.add_sized(
+                        [width, 30.0],
+                        egui::TextEdit::singleline(&mut draft.directory).desired_width(width),
+                    );
                     if action(ui, Icon::Folder, "Browse…", false).clicked()
-                        && let Some(path) = rfd::FileDialog::new().set_directory(&draft.directory).pick_folder() {
-                            draft.directory = path.to_string_lossy().into_owned();
-                        }
+                        && let Some(path) = rfd::FileDialog::new()
+                            .set_directory(&draft.directory)
+                            .pick_folder()
+                    {
+                        draft.directory = path.to_string_lossy().into_owned();
+                    }
                 });
-            });
-            section(ui, Icon::Link, "Parallel connections", |ui| {
-                hint(ui, "Set the number of simultaneous connections for faster downloads.");
-                ui.add_space(4.0);
-                let mut automatic = draft.segments == 0;
-                let wide = ui.available_width() >= 700.0;
-                let options = |ui: &mut Ui, automatic: &mut bool, segments: &mut usize| {
-                    ui.vertical(|ui| {
-                        if radio(ui, automatic, true, "Automatic (recommended)").changed() { *segments = 0; }
-                        hint(ui, "Selects up to 32 connections based on file size and server support.");
-                    });
-                    ui.vertical(|ui| {
-                        if radio(ui, automatic, false, "Manual").changed() { *segments = 32; }
-                        if *automatic { hint(ui, "Set a specific number of connections."); }
-                        else {
-                            ui.horizontal(|ui| {
-                                ui.label("Connections:");
-                                ui.add(egui::DragValue::new(segments).range(1..=32));
-                            });
-                        }
-                    });
-                };
-                if wide { ui.horizontal(|ui| { options(ui, &mut automatic, &mut draft.segments); }); }
-                else { options(ui, &mut automatic, &mut draft.segments); }
-                if let Some(error) = &self.connection_settings_error { ui.colored_label(RED, error); }
-            });
-            section(ui, Icon::Monitor, "App behavior", |ui| {
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.label("Connections");
+                    let mut automatic = draft.segments == 0;
+                    if radio(ui, &mut automatic, true, "Automatic").changed() {
+                        draft.segments = 0;
+                    }
+                    if radio(ui, &mut automatic, false, "Manual").changed() {
+                        draft.segments = 8;
+                    }
+                    if !automatic {
+                        ui.add(egui::DragValue::new(&mut draft.segments).range(1..=32));
+                    }
+                });
+                hint(
+                    ui,
+                    "Automatic selects up to 32 connections when the server supports ranges.",
+                );
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("Speed limit");
+                    let mut limited = draft.speed_limit_kbps > 0;
+                    if radio(ui, &mut limited, false, "Unlimited").changed() {
+                        draft.speed_limit_kbps = 0;
+                    }
+                    if radio(ui, &mut limited, true, "Limit").changed() {
+                        draft.speed_limit_kbps = 1024;
+                    }
+                    if limited {
+                        ui.add(
+                            egui::DragValue::new(&mut draft.speed_limit_kbps)
+                                .range(1..=1_000_000)
+                                .suffix(" KiB/s"),
+                        );
+                    }
+                });
+                hint(
+                    ui,
+                    "Per download, shared by all connections. Applies to new downloads.",
+                );
+                if let Some(error) = &self.connection_settings_error {
+                    ui.colored_label(RED, error);
+                }
+            }),
+            1 => section(ui, Icon::Monitor, "App behavior", |ui| {
                 ui.add_enabled_ui(self.tray.is_some(), |ui| {
-                    toggle(ui, &mut draft.close_to_tray, "Keep IDG running in the system tray when I close the window",
-                        "Closing the window keeps downloads and browser integration active. Use Quit IDG in the tray menu to exit.");
+                    toggle(
+                        ui,
+                        &mut draft.close_to_tray,
+                        "Keep running when the window closes",
+                        "Downloads continue in the tray. Choose Quit IDG to exit.",
+                    );
                 });
                 ui.add_space(6.0);
                 ui.add_enabled_ui(cfg!(windows), |ui| {
-                    toggle(ui, &mut draft.startup, "Start IDG with Windows (in the system tray)", "Automatically launch IDG when Windows starts.");
+                    toggle(
+                        ui,
+                        &mut draft.startup,
+                        "Start IDG with Windows",
+                        "Launch quietly in the system tray.",
+                    );
                 });
-            });
-            section(ui, Icon::Refresh, "Application updates", |ui| {
-                hint(ui, &format!("IDG {} · build {}", APP_VERSION, &env!("IDG_BUILD_ID")[..env!("IDG_BUILD_ID").len().min(8)]));
-                checkbox(ui, &mut draft.download_updates, "Download and verify new updates automatically");
-                checkbox(ui, &mut draft.install_updates, "Install updates automatically when downloads are finished");
-                ui.add_space(3.0);
-                ui.separator();
-                let wide = ui.available_width() > 760.0;
-                let mut controls = |ui: &mut Ui| {
-                    ui.vertical(|ui| {
-                        if wide { ui.set_width((ui.available_width() - 232.0).max(180.0)); }
-                        self.update_controls(ui, ctx);
-                        hint(ui, "Check for the latest version manually at any time.");
-                    });
-                    ui.add_enabled_ui(self.update_rx.is_none() && self.update_download_rx.is_none(), |ui| {
-                        if action(ui, Icon::Refresh, "Check for updates now", false).clicked() { self.check_updates(ctx); }
-                    });
-                };
-                if wide { ui.horizontal_top(|ui| controls(ui)); } else { controls(ui); }
-            });
-            section(ui, Icon::Puzzle, "Browser integration", |ui| {
-                hint(ui, "Integrate with Chrome and Edge to capture downloads from your browser.");
-                let connection = ctx.data(|data| data.get_temp::<crate::integration::Connection>(egui::Id::new("extension-connection")));
-                if let Some(connection) = connection.filter(|connection| connection.seen.elapsed() < Duration::from_secs(150)) {
-                    ui.horizontal_wrapped(|ui| {
-                        Frame::none().fill(ROW_SEL).stroke(Stroke::new(1.0_f32, ACCENT2)).rounding(6.0).inner_margin(Margin::symmetric(8.0, 4.0)).show(ui, |ui| {
-                            ui.label(RichText::new("Extension module connected").color(SUCCESS).size(12.0));
-                        });
-                        hint(ui, &format!("v{} ({})", connection.version, connection.install_type));
-                    });
-                    if let Some(error) = connection.error { ui.colored_label(RED, error); }
-                } else { hint(ui, "Extension not connected. Open its popup in Chrome or Edge to connect."); }
-                checkbox(ui, &mut draft.extension_updates, "Update the detected Chrome / Edge extension with IDG");
-                hint(ui, "Reload v1.2.x once after upgrading. Future updates can reload automatically.");
-                ui.add_space(4.0);
-                ui.horizontal_wrapped(|ui| {
-                    if action(ui, Icon::Refresh, "Detect and update extension now", false).clicked() {
-                        self.settings_message = Some(match crate::integration::synchronize() {
-                            Ok(count) if count > 0 => format!("Updated {count} extension folder(s). Open its popup to reload."),
-                            Ok(_) => "No older unpacked extension found. It may be current; otherwise choose its existing folder.".into(),
-                            Err(error) => { self.settings_error = Some(error.to_string()); String::new() },
-                        });
-                    }
-                    if action(ui, Icon::Folder, "Choose existing extension folder…", false).clicked()
-                        && let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                            match crate::integration::sync_folder(&folder).and_then(|updated| { crate::integration::remember_folder(&folder)?; Ok(updated) }) {
-                                Ok(_) => self.settings_message = Some("Extension files are current. Reload it in Chrome or Edge, then refresh open pages.".into()),
-                                Err(error) => self.settings_error = Some(error.to_string()),
-                            }
+                ui.add_space(6.0);
+                hint(ui, "Developed by Mustafa Ali");
+            }),
+            2 => section(ui, Icon::Refresh, "Application updates", |ui| {
+                hint(
+                    ui,
+                    &format!(
+                        "IDG {} · build {}",
+                        APP_VERSION,
+                        &env!("IDG_BUILD_ID")[..env!("IDG_BUILD_ID").len().min(8)]
+                    ),
+                );
+                checkbox(
+                    ui,
+                    &mut draft.download_updates,
+                    "Download and verify updates automatically",
+                );
+                checkbox(
+                    ui,
+                    &mut draft.install_updates,
+                    "Install when downloads are finished",
+                );
+                self.update_controls(ui, ctx);
+                ui.add_enabled_ui(
+                    self.update_rx.is_none() && self.update_download_rx.is_none(),
+                    |ui| {
+                        if action(ui, Icon::Refresh, "Check for updates now", false).clicked() {
+                            self.check_updates(ctx);
                         }
-                    #[cfg(windows)]
-                    if action(ui, Icon::Wrench, "Repair Chrome / Edge integration", false).clicked() {
-                        match desktop::repair_browser_integration() {
-                            Ok(()) => { self.desktop_error = None; self.settings_message = Some("Chrome / Edge integration repaired.".into()); }
-                            Err(error) => self.settings_error = Some(format!("Browser integration: {error}")),
-                        }
-                    }
+                    },
+                );
+            }),
+            _ => section(ui, Icon::Puzzle, "Browser integration", |ui| {
+                let connection = ctx.data(|data| {
+                    data.get_temp::<crate::integration::Connection>(egui::Id::new(
+                        "extension-connection",
+                    ))
                 });
-                if let Some(error) = ctx.data(|data| data.get_temp::<String>(egui::Id::new("idg-extension-error"))) { ui.colored_label(RED, error); }
-                if let Some(error) = &self.desktop_error { ui.colored_label(RED, error); }
-            });
-        });
-
+                if let Some(connection) = connection
+                    .filter(|connection| connection.seen.elapsed() < Duration::from_secs(150))
+                {
+                    ui.label(
+                        RichText::new(format!(
+                            "Connected · {} ({})",
+                            connection.version, connection.install_type
+                        ))
+                        .color(SUCCESS),
+                    );
+                    if let Some(error) = connection.error {
+                        ui.colored_label(RED, error);
+                    }
+                } else {
+                    hint(ui, "Open the extension popup in Chrome or Edge to connect.");
+                }
+                checkbox(
+                    ui,
+                    &mut draft.extension_updates,
+                    "Update the detected extension with IDG",
+                );
+                if action(ui, Icon::Refresh, "Detect and update extension", false).clicked() {
+                    match crate::integration::synchronize() {
+                        Ok(count) => {
+                            self.settings_message = Some(format!(
+                                "Updated {count} extension folder(s). Reload the extension and website tabs."
+                            ))
+                        }
+                        Err(error) => self.settings_error = Some(error.to_string()),
+                    }
+                }
+                if action(ui, Icon::Folder, "Choose extension folder…", false).clicked()
+                    && let Some(folder) = rfd::FileDialog::new().pick_folder()
+                {
+                    match crate::integration::sync_folder(&folder)
+                        .and_then(|_| crate::integration::remember_folder(&folder))
+                    {
+                        Ok(()) => {
+                            self.settings_message = Some(
+                                "Extension files are current. Reload it and website tabs.".into(),
+                            )
+                        }
+                        Err(error) => self.settings_error = Some(error.to_string()),
+                    }
+                }
+                #[cfg(windows)]
+                if action(ui, Icon::Wrench, "Repair Chrome / Edge integration", false).clicked() {
+                    match desktop::repair_browser_integration() {
+                        Ok(()) => {
+                            self.desktop_error = None;
+                            self.settings_message = Some("Browser integration repaired.".into());
+                        }
+                        Err(error) => self.settings_error = Some(error.to_string()),
+                    }
+                }
+                if let Some(error) = &self.desktop_error {
+                    ui.colored_label(RED, error);
+                }
+            }),
+        };
         if draft != initial_draft {
             self.settings_error = None;
             self.settings_message = None;
         }
-        ui.add_space((ui.available_height() - 78.0).max(0.0));
+        ui.add_space((ui.available_height() - 65.0).max(0.0));
         ui.separator();
         let dirty = draft != self.current_settings();
         let feedback = self
@@ -468,7 +555,7 @@ impl IDGApp {
                 if dirty {
                     "Unsaved changes"
                 } else {
-                    "Scroll for more settings. Changes apply after Save."
+                    "Changes apply after Save. Speed limits apply to new downloads."
                 },
                 TEXT_DIM,
             ));
@@ -495,6 +582,7 @@ impl IDGApp {
                 draft = SettingsDraft {
                     directory: default_download_folder(),
                     segments: 0,
+                    speed_limit_kbps: 0,
                     close_to_tray: self.tray.is_some(),
                     startup: cfg!(windows),
                     download_updates: true,

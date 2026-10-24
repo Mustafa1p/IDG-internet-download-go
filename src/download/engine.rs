@@ -55,7 +55,7 @@ pub async fn start_download(
     id: String,
 ) -> Result<()> {
     // ── Read the configuration from shared state ─────────────────────────────
-    let (url, save_path, num_segments, cancel, pause, headers, post_data) = {
+    let (url, save_path, num_segments, cancel, pause, headers, post_data, bandwidth) = {
         let guard = downloads
             .lock()
             .map_err(|_| anyhow::anyhow!("lock poisoned"))?;
@@ -71,6 +71,7 @@ pub async fn start_download(
             item.pause_flag.clone(),
             item.headers.clone(),
             item.post_data.clone(),
+            item.bandwidth.clone(),
         )
     };
 
@@ -180,6 +181,7 @@ pub async fn start_download(
             let id = id.clone();
 
             let args = SegmentArgs {
+                bandwidth: bandwidth.clone(),
                 response: initial_response.take(),
                 client: client.clone(),
                 id: seg_id,
@@ -421,6 +423,55 @@ mod regression_tests {
         assert_eq!(item.downloaded_bytes, 0);
         assert!(item.completed_at.is_none());
         assert!(path.exists(), "cancelling must not delete downloaded files");
+        source.abort();
+    }
+    #[tokio::test]
+    async fn speed_limit_is_shared_across_segments_and_preserves_exact_bytes() {
+        let (url, source) = source().await;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("limited.bin");
+        let mut item = crate::download::types::DownloadItem::new(url, path.clone(), 4);
+        item.bandwidth = Arc::new(super::super::bandwidth::BandwidthLimiter::new(512 * 1024));
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        let started = tokio::time::Instant::now();
+        tokio::time::timeout(
+            Duration::from_secs(8),
+            start_download(Arc::new(reqwest::Client::new()), downloads.clone(), id),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(started.elapsed() >= Duration::from_millis(480));
+        assert_eq!(downloads.lock().unwrap()[0].num_segments, 4);
+        let expected: Vec<u8> = (0..SIZE).map(|n| (n % 251) as u8).collect();
+        assert_eq!(std::fs::read(path).unwrap(), expected);
+        source.abort();
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_slow_speed_limit_does_not_wait_for_the_bandwidth_budget() {
+        let (url, source) = source().await;
+        let directory = tempfile::tempdir().unwrap();
+        let mut item =
+            crate::download::types::DownloadItem::new(url, directory.path().join("cancel.bin"), 1);
+        item.bandwidth = Arc::new(super::super::bandwidth::BandwidthLimiter::new(1024));
+        let cancel = item.cancel_flag.clone();
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        let worker = tokio::spawn(start_download(
+            Arc::new(reqwest::Client::new()),
+            downloads.clone(),
+            id,
+        ));
+        tokio::time::sleep(Duration::from_millis(180)).await;
+        cancel.store(true, Ordering::Relaxed);
+        tokio::time::timeout(Duration::from_secs(1), worker)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(downloads.lock().unwrap()[0].status, Status::Cancelled);
         source.abort();
     }
 }

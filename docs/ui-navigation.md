@@ -8,7 +8,7 @@ This inventory maps the implemented Rust desktop interface to its control state 
 
 | Surface | Source |
 | --- | --- |
-| Window header, search, menus, keyboard shortcuts, locked sizing | `src/app/shell.rs` |
+| Window header, search, menus, keyboard shortcuts, resizing and maximize | `src/app/shell.rs` |
 | Sidebar, statistic cards, toolbar, list/grid, details, footer | `src/app/library.rs` |
 | New download, media inspection, update controls and action dispatch | `src/app.rs` |
 | Settings draft, sections and Save / Reset | `src/app/settings.rs` |
@@ -92,12 +92,13 @@ When a browser sends a request with `awaiting_confirmation`, `IDGApp::update` po
 
 ## Settings routes and actions
 
-`settings_page` uses a scrollable body and persistent Save / Reset footer. Editing changes the local `SettingsDraft`; **Save changes** runs `apply_settings`, then `eframe::App::save` and storage flush. Changing a draft clears previous feedback. Leaving Settings for a library category discards its unsaved draft.
+`settings_page` uses Downloads, App, Updates and Browser tabs with a persistent Save / Reset footer. Editing changes the local `SettingsDraft`; **Save changes** runs `apply_settings`, then `eframe::App::save` and storage flush. Changing a draft clears previous feedback. Leaving Settings for a library category discards its unsaved draft.
 
 | Section | Controls | Implementation |
 | --- | --- | --- |
 | Save directory | Path field; Browse | Edits `draft.directory`; `rfd::FileDialog::pick_folder`; `apply_settings` requires an existing directory |
 | Parallel connections | Automatic; Manual; Connections 1–32 | `radio` and `DragValue` edit `draft.segments`; `ConnectionSettings::save` persists policy; zero represents automatic |
+| Downloads → Speed limit | Unlimited (default); Limit in KiB/s | Persists `ConnectionSettings::speed_limit_bps`; new downloads share one limiter across their segments; media passes the rate to its downloader |
 | App behavior | Close to tray; Start IDG with Windows | `toggle` edits draft values; `desktop::set_startup` applies Windows startup; tray option is disabled when the tray is unavailable |
 | Application updates | Automatic verified download; automatic installation; current status; Check for updates now | Draft update preferences plus live `update_controls` / `check_updates` |
 | Browser integration | Connection status and reported error; automatic extension updates | Reads recent `integration::Connection` heartbeat; stores `auto_extension_updates` on Save |
@@ -132,10 +133,10 @@ Automatic installation follows the same readiness check. Pending and paused down
 | Control | Handler |
 | --- | --- |
 | Drag free header area | `ViewportCommand::StartDrag` |
-| Maximize / header double-click | Disabled in production to preserve the reference size |
+| Maximize / header double-click | Toggle native maximize/restore while respecting the monitor work area |
 | Minimize | `ViewportCommand::Minimized(true)` |
 | Close | `ViewportCommand::Close`; `IDGApp::update` hides to tray when configured and available |
-| Window size | Fixed 960 x 640 logical pixels, capped to monitor; resize/maximize disabled in production |
+| Window size | Starts at 960 x 640 logical points; native DPI scaling, remembered normal size, resizing and maximize |
 
 The **More options** menu connects:
 
@@ -171,10 +172,10 @@ The status bar's browser-ready indicator reports bridge/API errors when present.
 - Folder browsing is a native OS dialog from `rfd`; Explorer, clipboard integration and external release-note links retain OS behavior and styling.
 - YouTube downloads require the bundled yt-dlp / FFmpeg / Deno tools and working upstream access. A selected format cannot improve original source quality.
 - Extension synchronization operates on IDG's own recognized unpacked module folders. It does not install a store extension or rewrite browser preferences; a browser reload may still be required as described in Settings.
-- At short window heights, details use the compact summary. Navigation and Settings scroll to keep their real actions reachable.
+- At short window heights, details use the compact summary. The sidebar and every Settings tab fit without scrolling at the 800 × 500 logical minimum.
 - Settings-preview fixtures are debug-only and isolate saved settings, clipboard auto-paste and updater behavior; preview controls are not product navigation routes.
 
 
 Build-aware updates are parsed in `src/updater.rs` from the generated release-notes marker; `build.rs` embeds the local source revision/timestamp. Browser handoffs place `idg-reveal-download` in the egui event context, which `IDGApp::reveal_download` consumes to select the visible transfer. Persistent history lives in `src/download/history.rs` and excludes credentials/live worker state.
 
-The sidebar uses its bounded panel height directly, without a navigation scroll container. New downloads use the sidebar button, header menu or Ctrl+N; the empty-state split action has been removed. Settings includes the repository link and developer credit in its header.
+The sidebar uses its bounded panel height directly, without a navigation scroll container. New downloads use the sidebar button, header menu or Ctrl+N; the empty-state split action has been removed. Settings includes the repository link in its header and developer credit on the App tab.

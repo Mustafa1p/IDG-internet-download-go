@@ -37,6 +37,7 @@ use tokio::{
 
 /// Arguments passed to a single segment worker.
 pub struct SegmentArgs {
+    pub bandwidth: Arc<super::bandwidth::BandwidthLimiter>,
     /// A GET already opened by the probe; consume it instead of requesting again.
     pub response: Option<reqwest::Response>,
     pub client: Arc<Client>,
@@ -166,6 +167,8 @@ async fn download_range(
         bail!("Server ignored the requested byte range");
     }
     let mut stream = resp.bytes_stream();
+    let mut buffered = Vec::with_capacity(256 * 1024);
+    let mut last_write = std::time::Instant::now();
 
     while let Some(chunk_result) = stream.next().await {
         // Check cancel / pause before processing each chunk.
@@ -179,35 +182,89 @@ async fn download_range(
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
 
-        let mut chunk: Bytes = chunk_result.context("stream read error")?;
-        if let Some(end) = end {
-            let remaining = (end + 1).saturating_sub(*cursor) as usize;
-            chunk = chunk.slice(..chunk.len().min(remaining));
+        let chunk: Bytes = chunk_result.context("stream read error")?;
+        let rate = args.bandwidth.rate();
+        let quantum = if rate == 0 {
+            256 * 1024
+        } else {
+            (rate / 20).clamp(1, 64 * 1024) as usize
+        };
+        for part in chunk.chunks(quantum) {
+            if cancel.load(Ordering::Relaxed) {
+                bail!("cancelled");
+            }
+            let remaining = end.map_or(part.len(), |end| {
+                (end + 1)
+                    .saturating_sub(*cursor + buffered.len() as u64)
+                    .min(part.len() as u64) as usize
+            });
+            let part = &part[..remaining];
+            if rate > 0 {
+                let permit = args.bandwidth.acquire(part.len());
+                tokio::pin!(permit);
+                loop {
+                    tokio::select! {
+                        _ = &mut permit => break,
+                        _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                            if cancel.load(Ordering::Relaxed) { bail!("cancelled while speed limited"); }
+                        }
+                    }
+                }
+            }
+            while pause.load(Ordering::Relaxed) {
+                if cancel.load(Ordering::Relaxed) {
+                    bail!("cancelled during pause");
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            buffered.extend_from_slice(part);
+            let finished = end.is_some_and(|end| *cursor + buffered.len() as u64 > end);
+            if buffered.len() >= 256 * 1024
+                || last_write.elapsed() >= Duration::from_millis(50)
+                || finished
+            {
+                write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                last_write = std::time::Instant::now();
+            }
+            if finished {
+                break;
+            }
         }
-        let chunk_len = chunk.len() as u64;
-
-        // Seek to the current write position and flush the chunk.
-        {
-            let mut f = file.lock().await;
-            f.seek(std::io::SeekFrom::Start(*cursor))
-                .await
-                .context("seek failed")?;
-            f.write_all(&chunk).await.context("write failed")?;
-        }
-
-        *cursor += chunk_len;
-        on_progress(chunk_len);
-
-        // Stop consuming once we have written past the segment boundary.
-        if let Some(e) = end
-            && *cursor > e
-        {
+        if end.is_some_and(|end| *cursor > end) {
             break;
         }
     }
+    if cancel.load(Ordering::Relaxed) {
+        bail!("cancelled");
+    }
+    write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
 
     if end.is_some_and(|end| *cursor <= end) {
         bail!("Response ended before the requested range was complete");
     }
+    Ok(())
+}
+
+// Coalesce small network packets before taking the shared seek/write lock.
+async fn write_buffer(
+    file: &Arc<Mutex<File>>,
+    cursor: &mut u64,
+    buffered: &mut Vec<u8>,
+    on_progress: &(dyn Fn(u64) + Send + Sync),
+) -> Result<()> {
+    if buffered.is_empty() {
+        return Ok(());
+    }
+    let count = buffered.len() as u64;
+    {
+        let mut file = file.lock().await;
+        file.seek(std::io::SeekFrom::Start(*cursor))
+            .await
+            .context("seek failed")?;
+        file.write_all(buffered).await.context("write failed")?;
+    }
+    *cursor += count;
+    buffered.clear();
+    on_progress(count);
     Ok(())
 }

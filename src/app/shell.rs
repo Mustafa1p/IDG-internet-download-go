@@ -17,7 +17,7 @@ pub(super) fn surface(painter: &egui::Painter, rect: egui::Rect, top: Color32, b
 
 fn chrome_button(ui: &mut Ui, label: &str, kind: u8, height: f32) -> egui::Response {
     let response = ui.add_sized(
-        [if height > 50.0 { 50.0 } else { 40.0 }, height],
+        [44.0, height],
         egui::Button::new("")
             .fill(Color32::TRANSPARENT)
             .frame(false),
@@ -70,17 +70,17 @@ impl IDGApp {
             egui::Id::new("window-drag-region"),
             egui::Sense::click_and_drag(),
         );
-        if drag.double_clicked() && crate::settings_preview() {
+        if drag.double_clicked() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
         } else if drag.drag_started_by(egui::PointerButton::Primary) {
             ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
         let wide = ctx.screen_rect().width() >= 1100.0;
-        let height = if wide { 62.0 } else { 48.0 };
+        let height = if wide { 44.0 } else { 38.0 };
         ui.horizontal_centered(|ui| {
-            ui.spacing_mut().item_spacing.x = if wide { 12.0 } else { 6.0 };
-            let controls = if wide { 300.0 } else { 280.0 };
-            let search_width = (ui.available_width() * 0.49).clamp(170.0, 500.0);
+            ui.spacing_mut().item_spacing.x = 6.0;
+            let controls = 280.0;
+            let search_width = (ui.available_width() - controls).clamp(90.0, 500.0);
             ui.add_space((ui.available_width() - controls - search_width).max(4.0));
             Frame::none()
                 .fill(Color32::from_rgb(28, 46, 70))
@@ -88,7 +88,7 @@ impl IDGApp {
                 .rounding(24.0)
                 .inner_margin(Margin::symmetric(14.0, 9.0))
                 .show(ui, |ui| {
-                    ui.set_width((search_width - 28.0).max(140.0));
+                    ui.set_width((search_width - 28.0).max(62.0));
                     ui.horizontal(|ui| {
                         let (icon, _) =
                             ui.allocate_exact_size(Vec2::splat(18.0), egui::Sense::hover());
@@ -103,10 +103,12 @@ impl IDGApp {
                             [ui.available_width(), 22.0],
                             egui::TextEdit::singleline(&mut self.search)
                                 .id(egui::Id::new("download-search"))
+                                .desired_width((ui.available_width() - 2.0).max(30.0))
                                 .frame(false)
                                 .hint_text("Search downloads...")
                                 .font(FontId::proportional(if wide { 15.0 } else { 13.0 })),
                         );
+                        qa_control(ctx, "Search downloads", search.rect);
                         search.widget_info(|| {
                             egui::WidgetInfo::labeled(
                                 egui::WidgetType::TextEdit,
@@ -204,7 +206,7 @@ impl IDGApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
             }
             if ui
-                .add_enabled_ui(crate::settings_preview(), |ui| {
+                .add_enabled_ui(true, |ui| {
                     chrome_button(
                         ui,
                         if maximized { "Restore" } else { "Maximize" },
@@ -250,9 +252,6 @@ impl IDGApp {
             egui::Id::new("window-border"),
         ));
         painter.rect_stroke(rect.shrink(1.0), 12.0, Stroke::new(1.2_f32, BORDER));
-        if !crate::settings_preview() {
-            return;
-        }
         let Some(position) = ctx.pointer_hover_pos() else {
             return;
         };

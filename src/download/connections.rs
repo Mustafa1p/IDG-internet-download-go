@@ -10,6 +10,9 @@ const MIN_SEGMENT_BYTES: u64 = 2 * 1024 * 1024;
 pub struct ConnectionSettings {
     /// None means automatic; manual counts are restricted to 1..=32.
     pub parallel_segments: Option<usize>,
+    /// Per-download bytes/second; absent or zero means unlimited.
+    #[serde(default)]
+    pub speed_limit_bps: Option<u64>,
 }
 
 pub type SharedConnectionSettings = Arc<Mutex<ConnectionSettings>>;
@@ -85,16 +88,21 @@ mod tests {
         let path = directory.join("connections.json");
         ConnectionSettings {
             parallel_segments: Some(12),
+            speed_limit_bps: Some(1_250_000),
         }
         .save_to(&path)
         .unwrap();
         let restored: ConnectionSettings =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(restored.requested_count(), 12);
+        assert_eq!(restored.speed_limit_bps, Some(1_250_000));
         ConnectionSettings::default().save_to(&path).unwrap();
         let restored: ConnectionSettings =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(restored.requested_count(), 0);
+        assert_eq!(restored.speed_limit_bps, None);
+        let old: ConnectionSettings = serde_json::from_str(r#"{"parallel_segments":8}"#).unwrap();
+        assert_eq!(old.speed_limit_bps, None);
         std::fs::remove_file(path).unwrap();
         std::fs::remove_dir(directory).unwrap();
     }

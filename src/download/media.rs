@@ -289,6 +289,7 @@ fn command(
     connections: usize,
     cookies: Option<&Path>,
     options: &MediaOptions,
+    speed_limit_bps: u64,
 ) -> Command {
     let mut command = Command::new(tools.join("yt-dlp.exe"));
     #[cfg(windows)]
@@ -315,7 +316,9 @@ fn command(
     command.arg("--js-runtimes").arg(js_runtime(tools));
     command.args(format_args(options));
     command.arg("--concurrent-fragments").arg(
-        if connections == 0 {
+        if speed_limit_bps > 0 {
+            1
+        } else if connections == 0 {
             8
         } else {
             connections.clamp(1, 32)
@@ -335,6 +338,9 @@ fn command(
     command.arg("--output").arg(format!("{stem}.%(ext)s"));
     if let Some(cookies) = cookies {
         command.arg("--cookies").arg(cookies);
+    }
+    if speed_limit_bps > 0 {
+        command.arg("--limit-rate").arg(speed_limit_bps.to_string());
     }
     command
         .arg("--")
@@ -404,7 +410,9 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
     };
     with_item(&downloads, &id, |item| {
         item.status = Status::Probing;
-        item.num_segments = if item.num_segments == 0 {
+        item.num_segments = if item.bandwidth.rate() > 0 {
+            1
+        } else if item.num_segments == 0 {
             8
         } else {
             item.num_segments.clamp(1, 32)
@@ -412,16 +420,18 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
         item.save_path = output.clone();
         item.filename = output.file_name().unwrap().to_string_lossy().into_owned();
     });
-    let mut child = command(
+    let mut downloader = command(
         &tools,
         &url,
         &output,
         item.num_segments,
         cookies.as_deref(),
         &item.media_options,
-    )
-    .spawn()
-    .context("Could not start the bundled YouTube downloader")?;
+        item.bandwidth.rate(),
+    );
+    let mut child = downloader
+        .spawn()
+        .context("Could not start the bundled YouTube downloader")?;
     let process_id = child.id();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let errors = Arc::new(Mutex::new(VecDeque::<String>::new()));
@@ -659,6 +669,7 @@ mod tests {
             0,
             None,
             &MediaOptions::default(),
+            0,
         );
         let args: Vec<_> = cmd
             .as_std()
@@ -667,6 +678,32 @@ mod tests {
             .collect();
         assert!(args.iter().any(|arg| arg == "--no-playlist"));
         assert!(args.iter().any(|arg| arg.contains("100%% video")));
+        assert!(!args.iter().any(|arg| arg == "--limit-rate"));
+        let limited = command(
+            Path::new("tools"),
+            "https://youtu.be/5TBlPQrcweQ",
+            Path::new("video.mp4"),
+            32,
+            None,
+            &MediaOptions::default(),
+            1024,
+        );
+        let limited: Vec<_> = limited
+            .as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        let rate = limited
+            .iter()
+            .position(|arg| arg == "--limit-rate")
+            .unwrap();
+        assert_eq!(limited[rate + 1], "1024");
+        assert!(rate < limited.iter().position(|arg| arg == "--").unwrap());
+        let fragments = limited
+            .iter()
+            .position(|arg| arg == "--concurrent-fragments")
+            .unwrap();
+        assert_eq!(limited[fragments + 1], "1");
         let item = super::super::types::DownloadItem::new(
             "https://youtu.be/5TBlPQrcweQ".into(),
             "video.mp4".into(),

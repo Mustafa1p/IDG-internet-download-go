@@ -66,6 +66,7 @@ pub struct DownloadItem {
     pub headers: reqwest::header::HeaderMap,
     /// Token-bearing URL-encoded form, held in memory only.
     pub post_data: Option<String>,
+    pub bandwidth: Arc<super::bandwidth::BandwidthLimiter>,
     pub awaiting_confirmation: bool,
     pub media_cookies: Option<String>,
     pub media_options: super::media::MediaOptions,
@@ -98,7 +99,9 @@ pub struct DownloadItem {
     pub pause_flag: Arc<AtomicBool>,
 
     /// Internal rolling window of `(sample_instant, bytes)` for speed calc.
-    speed_window: Vec<(Instant, u64)>,
+    speed_window: std::collections::VecDeque<(Instant, u64)>,
+    speed_window_bytes: u64,
+    speed_started: Option<Instant>,
 }
 
 impl DownloadItem {
@@ -123,6 +126,7 @@ impl DownloadItem {
             url,
             headers: reqwest::header::HeaderMap::new(),
             post_data: None,
+            bandwidth: Arc::default(),
             awaiting_confirmation: false,
             media_cookies: None,
             media_options: super::media::MediaOptions::default(),
@@ -139,7 +143,9 @@ impl DownloadItem {
             completed_at: None,
             cancel_flag: Arc::new(AtomicBool::new(false)),
             pause_flag: Arc::new(AtomicBool::new(false)),
-            speed_window: Vec::new(),
+            speed_window: std::collections::VecDeque::new(),
+            speed_window_bytes: 0,
+            speed_started: None,
         }
     }
 
@@ -179,11 +185,36 @@ impl DownloadItem {
         let window = std::time::Duration::from_secs(4);
         let cutoff = now - window;
 
-        self.speed_window.push((now, delta_bytes));
-        self.speed_window.retain(|(t, _)| *t >= cutoff);
-
-        let total_in_window: u64 = self.speed_window.iter().map(|(_, b)| b).sum();
-        self.speed_bps = total_in_window as f64 / window.as_secs_f64();
+        if self
+            .speed_window
+            .back()
+            .is_some_and(|(time, _)| *time < cutoff)
+        {
+            self.speed_started = None;
+        }
+        while self
+            .speed_window
+            .front()
+            .is_some_and(|(time, _)| *time < cutoff)
+        {
+            self.speed_window_bytes -= self.speed_window.pop_front().unwrap().1;
+        }
+        if let Some((_, bytes)) = self
+            .speed_window
+            .back_mut()
+            .filter(|(time, _)| now.duration_since(*time).as_millis() < 100)
+        {
+            *bytes += delta_bytes;
+        } else {
+            self.speed_window.push_back((now, delta_bytes));
+        }
+        self.speed_window_bytes += delta_bytes;
+        let started = *self.speed_started.get_or_insert(now);
+        let elapsed = now
+            .duration_since(started)
+            .as_secs_f64()
+            .clamp(0.25, window.as_secs_f64());
+        self.speed_bps = self.speed_window_bytes as f64 / elapsed;
     }
 }
 

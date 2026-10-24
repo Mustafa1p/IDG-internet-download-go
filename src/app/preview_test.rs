@@ -5,6 +5,7 @@ use egui::{Context, Event, Id, Key, Modifiers, PointerButton, RawInput, Rect};
 pub(super) struct Snapshot {
     pub category: String,
     pub show_settings: bool,
+    pub speed_limit_kbps: u64,
     pub show_add: bool,
     pub grid: bool,
     pub selection_count: usize,
@@ -74,6 +75,16 @@ fn steps() -> Vec<Step> {
             "Settings shortcut again",
             Action::Key(Key::Comma, Modifiers::CTRL),
         ),
+        ("Settings Browser tab", Action::Click("Settings Browser")),
+        ("Settings Updates tab", Action::Click("Settings Updates")),
+        (
+            "Settings Downloads tab",
+            Action::Click("Settings Downloads"),
+        ),
+        ("Enable speed limit", Action::Click("Limit")),
+        ("Settings App tab", Action::Click("Settings App")),
+        ("Return to Downloads", Action::Click("Settings Downloads")),
+        ("Unlimited speed", Action::Click("Unlimited")),
         ("Leave settings", Action::Click("All downloads")),
         ("Grid view", Action::Click("Grid view")),
         ("List view", Action::Click("List view")),
@@ -187,6 +198,13 @@ impl PreviewTest {
             self.finish(ctx, None);
             return;
         };
+        if matches!(step.name, "Maximize" | "Restore")
+            && self
+                .step_started
+                .is_some_and(|start| start.elapsed() < std::time::Duration::from_millis(400))
+        {
+            return;
+        }
         if step.name == "Minimize and restore"
             && self
                 .step_started
@@ -198,6 +216,21 @@ impl PreviewTest {
             "New download shortcut" => snapshot.show_add,
             "Close add dialog" => !snapshot.show_add,
             "Settings shortcut" | "Settings shortcut again" => snapshot.show_settings,
+            "Settings Browser tab" => {
+                ctx.data(|data| data.get_temp::<usize>(Id::new("settings-tab"))) == Some(3)
+            }
+            "Settings Updates tab" => {
+                ctx.data(|data| data.get_temp::<usize>(Id::new("settings-tab"))) == Some(2)
+            }
+            "Settings Downloads tab" => {
+                ctx.data(|data| data.get_temp::<usize>(Id::new("settings-tab"))) == Some(0)
+            }
+            "Settings App tab" => {
+                snapshot.speed_limit_kbps == 1024
+                    && ctx.data(|data| data.get_temp::<usize>(Id::new("settings-tab"))) == Some(1)
+            }
+            "Return to Downloads" | "Enable speed limit" => snapshot.speed_limit_kbps == 1024,
+            "Unlimited speed" => snapshot.speed_limit_kbps == 0,
             "Browser download switches to queue" | "Browser download clears search" => {
                 !snapshot.show_settings
                     && snapshot.category == "All downloads"

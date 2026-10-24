@@ -100,11 +100,8 @@ pub fn repair_window_builder(mut builder: egui::ViewportBuilder) -> egui::Viewpo
         builder.position = None;
     }
     if !crate::settings_preview() {
-        builder.inner_size = Some(DEFAULT_WINDOW_SIZE);
-        builder.resizable = Some(false);
-        builder.maximize_button = Some(false);
-        builder.maximized = Some(false);
-        builder.fullscreen = Some(false);
+        builder.resizable = Some(true);
+        builder.maximize_button = Some(true);
     }
     builder
 }
@@ -451,7 +448,7 @@ mod tests {
                 egui::ViewportBuilder::default().with_inner_size([1200.0, 800.0])
             )
             .inner_size,
-            Some(DEFAULT_WINDOW_SIZE)
+            Some(egui::vec2(1200.0, 800.0))
         );
     }
 

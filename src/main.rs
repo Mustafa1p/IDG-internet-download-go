@@ -34,8 +34,8 @@ fn settings_preview_size() -> [f32; 2] {
                 .strip_prefix("--settings-preview-size=")?
                 .split_once('x')?;
             Some([
-                width.parse::<f32>().ok()?.clamp(800.0, 2000.0),
-                height.parse::<f32>().ok()?.clamp(500.0, 1400.0),
+                width.parse::<f32>().ok()?.clamp(800.0, 3840.0),
+                height.parse::<f32>().ok()?.clamp(500.0, 2160.0),
             ])
         })
         .unwrap_or([1440.0, 1000.0])

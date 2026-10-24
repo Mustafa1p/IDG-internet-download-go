@@ -526,8 +526,12 @@ impl IDGApp {
         if crate::settings_preview() {
             return;
         }
-        let segments = self.connection_settings.lock().unwrap().requested_count();
+        let settings = self.connection_settings.lock().unwrap().clone();
+        let segments = settings.requested_count();
         let mut item = DownloadItem::new(url, save_path, segments);
+        item.bandwidth = Arc::new(crate::download::bandwidth::BandwidthLimiter::new(
+            settings.speed_limit_bps.unwrap_or(0),
+        ));
         item.preserve_filename = preserve_filename;
         item.media_options = options;
         let id = item.id.clone();
@@ -1382,6 +1386,10 @@ impl eframe::App for IDGApp {
             preview_test::Snapshot {
                 category: self.category.label().into(),
                 show_settings: self.show_settings,
+                speed_limit_kbps: self
+                    .settings_draft
+                    .as_ref()
+                    .map_or(0, |draft| draft.speed_limit_kbps),
                 show_add: self.show_add,
                 grid: self.library_state.grid,
                 selection_count: self.library_state.selected_ids.len(),

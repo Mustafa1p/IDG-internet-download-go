@@ -6,6 +6,7 @@
 //! - [`engine`]  – Orchestrator: splits file, spawns workers, tracks progress
 //! - [`types`]   – Shared data types and state
 
+pub mod bandwidth;
 pub mod connections;
 pub mod engine;
 pub mod history;

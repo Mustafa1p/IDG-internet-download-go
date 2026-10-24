@@ -144,6 +144,14 @@ async fn add_download(
         .min(32);
 
     let mut item = DownloadItem::new(req.url, save_path, segments);
+    item.bandwidth = Arc::new(crate::download::bandwidth::BandwidthLimiter::new(
+        state
+            .connection_settings
+            .lock()
+            .unwrap()
+            .speed_limit_bps
+            .unwrap_or(0),
+    ));
     item.preserve_filename = preserve_filename;
     let id = item.id.clone();
 
@@ -550,6 +558,7 @@ mod tests {
     async fn browser_request_waits_for_confirmation_and_reports_popup_schema() {
         let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
         let state = state(&directory);
+        state.connection_settings.lock().unwrap().speed_limit_bps = Some(65536);
         let downloads = state.downloads.clone();
         let context = state.egui_ctx.clone();
         let (address, server) = serve(build_router(state)).await;
@@ -575,6 +584,7 @@ mod tests {
             assert_eq!(items[0].save_path, directory.join("file.zip"));
             assert_eq!(items[0].headers["cookie"], "session=abc");
             assert_eq!(items[0].num_segments, 32);
+            assert_eq!(items[0].bandwidth.rate(), 65536);
             assert!(!directory.exists());
         }
         let list: serde_json::Value = client
