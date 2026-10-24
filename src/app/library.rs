@@ -604,7 +604,7 @@ impl IDGApp {
         draw_icon(
             ui.painter(),
             egui::Rect::from_center_size(
-                egui::pos2(r.left() + 24.0, r.top() + 19.0),
+                egui::pos2(r.left() + 24.0, r.center().y),
                 Vec2::splat(23.0),
             ),
             Icon::Folder,
@@ -613,47 +613,23 @@ impl IDGApp {
         draw_icon(
             ui.painter(),
             egui::Rect::from_center_size(
-                egui::pos2(r.right() - 12.0, r.top() + 17.0),
+                egui::pos2(r.right() - 12.0, r.center().y),
                 Vec2::splat(16.0),
             ),
             Icon::Link,
             TEXT_DIM,
         );
         ui.painter().text(
-            egui::pos2(
-                r.left() + if spacious { 57.0 } else { 49.0 },
-                r.top() + 14.0,
-            ),
+            egui::pos2(r.left() + if spacious { 57.0 } else { 49.0 }, r.center().y),
             egui::Align2::LEFT_CENTER,
             "Download folder",
             FontId::proportional(if spacious { 14.0 } else { 11.0 }),
             TEXT,
         );
-        let path = ui.painter().layout_no_wrap(
-            self.default_save_dir.clone(),
-            FontId::proportional(if spacious { 12.0 } else { 10.0 }),
-            TEXT_DIM,
-        );
-        ui.painter()
-            .with_clip_rect(egui::Rect::from_min_max(
-                egui::pos2(
-                    r.left() + if spacious { 57.0 } else { 49.0 },
-                    r.top() + 27.0,
-                ),
-                r.right_bottom(),
-            ))
-            .galley(
-                egui::pos2(
-                    r.left() + if spacious { 57.0 } else { 49.0 },
-                    r.top() + 27.0,
-                ),
-                path,
-                TEXT_DIM,
-            );
         folder.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Open download folder")
         });
-        if folder.on_hover_text(&self.default_save_dir).clicked() {
+        if folder.on_hover_text("Open download folder").clicked() {
             open_path(std::path::Path::new(&self.default_save_dir));
         }
     }

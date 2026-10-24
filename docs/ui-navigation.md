@@ -36,7 +36,7 @@ Other sidebar actions:
 
 - **New download:** `open_add` resets `AddDialog`, clears any pending browser request and sets `show_add`.
 - **Settings:** `open_settings` creates a `SettingsDraft` from `current_settings` and sets `show_settings`.
-- **Download folder:** calls `open_path` with `default_save_dir` to open the real folder in Windows Explorer.
+- **Download folder:** shows only the action label, without a path subtitle or path tooltip; calls `open_path` with `default_save_dir` to open the real folder in Windows Explorer.
 
 ## Search, filters, statistic cards and display controls
 

@@ -7,7 +7,7 @@
 # IDG — Internet Download GO
 
 **A Rust download manager with a Windows 11 Fluent-style desktop interface.**
-Splits every file into multiple parallel connections — just like IDM, but free and open source.
+Developed by **Mustafa Ali**. Supports multiple parallel connections — just like IDM, but free and open source.
 
 <br/>
 
@@ -38,13 +38,13 @@ Splits every file into multiple parallel connections — just like IDM, but free
 
 ---
 
-## 📸 Screenshot
+## Current desktop
 
 Windows setup: [**x64 (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.3/IDG-Setup-v1.4.3.exe) | [**x86 (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.3/IDG-Setup-v1.4.3-x86.exe).
 
 ![IDG Windows 11 Fluent desktop interface](docs/screenshot.png)
 
-The refreshed **v1.4.3** interface is implemented directly in Rust/egui: blue sidebar navigation, search and filters, four live statistics, list/grid views, selection checkboxes, and a consistent Settings and download-dialog design. The screenshot above is captured from the actual desktop application.
+The refreshed **v1.4.3** interface is implemented directly in Rust/egui: blue sidebar navigation, search and filters, four live statistics, list/grid views, selection checkboxes, and a consistent Settings and download-dialog design. The screenshot above is captured from the current desktop application.
 
 | Desktop workflow | Where to find it |
 | --- | --- |
@@ -79,7 +79,7 @@ It works the same way as **IDM (Internet Download Manager)** — it splits every
 
 ### Step 1 — Download the installer
 
-👉 **[Download IDG-Setup-v1.4.3.exe](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.4.3.exe)**
+Choose [**x64 setup (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.3/IDG-Setup-v1.4.3.exe) or [**x86 setup (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.3/IDG-Setup-v1.4.3-x86.exe).
 
 ### Step 2 — Run the installer
 
@@ -176,13 +176,11 @@ Transfer rates use **Mbps** (decimal megabits per second), with 8 bits per byte;
 
 ---
 
-## Desktop screenshots
+## Settings
 
-![Download library and real controls, rendered with QA fixture rows](docs/download-library.png)
+![Current IDG Settings](docs/settings.png)
 
-Populated preview rows above are explicitly labeled QA fixtures; production statistics use the real download engine. Settings and dialogs use the same design system.
-
-![Fluent Settings](docs/settings.png)
+Settings includes a GitHub source link beside **Developed by Mustafa Ali**.
 
 ## Existing persistence limits
 
@@ -192,7 +190,7 @@ Downloads already written to disk remain intact. Download history now persists a
 
 Install the **complete v1.4.3 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
 
-Open a YouTube video and click **Download with IDG** over the player, use its browser context menu, or paste a watch/Shorts/youtu.be link into IDG. Choose the video format and quality or an audio format in the desktop chooser. Radio and playlist parameters are removed so the selected video is downloaded once. IDG uses the bundled yt-dlp, FFmpeg, and Deno tools. Cancel through **Remove**; pause/resume is available for regular direct-file downloads.
+Open a YouTube video and click **Download with IDG** over the player, use its browser context menu, or paste a watch/Shorts/youtu.be link into IDG. Choose the video format and quality or an audio format in the desktop chooser. Radio and playlist parameters are removed so the selected video is downloaded once. IDG uses bundled yt-dlp and FFmpeg/FFprobe, plus Deno on x64 or Node.js on x86. Cancel through **Remove**; pause/resume is available for regular direct-file downloads.
 
 The media tools are pinned and checksum-verified at build time. Their licenses, versions, and source locations are included in `tools/licenses`. Keep the `tools` folder beside `IDG.exe` for portable use. A standalone EXE alone cannot download YouTube videos. Some videos may require an authenticated session or be unavailable; the extension passes the selected site's cookies in a temporary file that is removed when the media job ends. Errors now explain missing registration or an outdated app instead of only showing “IDG unavailable”.
 
@@ -279,53 +277,6 @@ python tests/tray-smoke.py
 
 Automated tests exercise handoff success/failure, native framing, stable extension identity, saved interception settings, API confirmation, and exact bytes for authenticated parallel downloads. To verify Chrome installation end to end, install the current build, load the extension, close IDG, and download a direct ZIP link. Confirm that IDG opens with an editable filename, then start it and compare the result with the source. The extension popup shows connection status only. Check that failed handoffs resume the original browser download.
 
-## Updates, YouTube choices, and Windows startup (v1.4.1)
-
-IDG checks for newer versions at startup and hourly, including while hidden in the tray. A **Please update** popup shows what changed and offers **Update now** or **Later**. After dismissing it, use **What’s new** in the update banner to reopen it. The refreshed v1.4.3 installer adds this popup; users of the earlier v1.4.3 package must reinstall it once because equal versions do not trigger an update.
-
-Open **Settings → Application updates** to check for a new release, automatically download and verify it, or enable automatic installation when all downloads are finished. **Install update and restart IDG** replaces the complete app in its current folder and reopens it. Finish or remove queued/paused transfers first. No browser download or manual installer search is needed after installing v1.4.1 once. Windows can still request elevation for a protected installation folder.
-
-The updater verifies the installer size and SHA-256 digest published by GitHub. An interrupted or altered download is rejected, with a retry option. Update checks run at launch and every six hours while the UI is active.
-
-**Settings → IDG Integration Module** detects the existing unpacked extension in Chrome/Edge profiles, updates only IDG's own files, and lets the extension reload itself. Browser preferences are read without modification. If detection misses a custom profile, select the existing extension folder once. After migrating from v1.2.x, reload the extension once in `chrome://extensions` or `edge://extensions` and refresh open YouTube pages. Future unpacked updates can reload automatically; store-managed extensions remain managed by the browser.
-
-YouTube links open **New download** before transferring media. Choose MP4, MKV, or WebM video and **Best available** or a maximum resolution. IDG checks the video's available qualities. For audio choose MP3, M4A, Opus, WAV, or FLAC; compressed formats offer bitrate choices. Conversion cannot improve the original source quality.
-
-![Application and extension update settings](docs/updates.png)
-
-![YouTube format and video quality choices](docs/youtube-options.png)
-![YouTube MP3 audio choices](docs/youtube-audio.png)
-
-Windows startup is enabled by default by the installer and on the first portable run. IDG starts in the system tray; the setting remains editable. The app, installer, shortcuts, and taskbar use the embedded IDG icon. If an old pinned shortcut retains Windows' cached generic icon, unpin it and pin the updated IDG once.
-
-## Compact desktop design (v1.4.3)
-
-Settings now opens as a full page inside the existing **960 x 640** window
-(rendering fallback **800 x 500**). Save directory, parallel connections, app behavior,
-updates, and browser integration have separate cards with readable labels and
-blue controls. Scroll to reach the remaining sections; **Save changes** and
-**Reset to defaults** stay visible. Changes are applied when saved, and the
-download folder is remembered across restarts. Reset stages the defaults for
-review before saving. Opening Settings does not enlarge the window.
-
-![Compact Settings page](docs/settings.png)
-
-For isolated visual review from a development build, run
-`cargo run --bin IDG -- --settings-preview --settings-preview-size=960x640`.
-It writes `target/settings-preview.png` using the app renderer. This development
-mode uses a separate window, skips the API/startup/extension/update initialization,
-and does not save preferences. Release builds ignore the preview flag.
-
-The desktop app opens at **960 x 640** logical pixels with manual resizing disabled. Its dark blue library includes a sidebar Add download action, status and file-type categories, live speed/count summaries, search, newest/oldest sorting, transfer progress, and selected-file details. Speeds remain in Mbps. Large lists scroll without pushing the action buttons outside the window.
-
-The extension popup now contains only connection status. Capture controls, manual download forms, recent downloads, YouTube buttons, and release links have been removed from the popup. Existing page overlays and browser context-menu download actions remain available.
-
-### Slim, dismissible media overlay (v1.4.1)
-
-The page's **Download with IDG** overlay is now 28px tall. Click **×** to hide it for that video until the page reloads, or press **Escape** while the overlay has keyboard focus. The close button also removes any error notice and remains available while a handoff is in progress. Different videos can show their own download button. Downloads already sent to IDG remain in its desktop queue.
-
-![Slim media overlay with close button](docs/media-overlay.png)
-
 ### Build Windows x86 packages
 
 ```powershell
@@ -348,4 +299,4 @@ Download history is saved under `%LOCALAPPDATA%/IDG/download-history.json`, incl
 
 Updates compare both the version and the published source build. A later 1.4.3 build triggers an alert with its fixes; the installed build is not repeatedly offered, and older releases are ignored. Release notes include a generated `IDG-BUILD` marker. Existing binaries without this logic need a one-time manual installation of this refresh. Windows Setup now uses Restart Manager's force-close fallback and disables automatic app restarting, so close-to-tray cannot leave installation waiting indefinitely. Setup's close-applications confirmation stops running transfers.
 
-The compact statistics use four colored icon cards. The sidebar fits without scrolling, with clear separation between category labels and count badges, and the empty-state Add download split button has been removed. Settings includes a GitHub source link next to **Developed by Mustafa Ali**.
+The compact statistics use four colored icon cards. The sidebar shows only **Download folder**, with its path hidden in both the row and tooltip. Click it to open the configured folder; change that folder in Settings. The sidebar fits without scrolling, with clear separation between category labels and count badges, and the empty-state Add download split button has been removed. Settings includes a GitHub source link next to **Developed by Mustafa Ali**.

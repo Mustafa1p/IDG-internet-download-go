@@ -1,5 +1,6 @@
 IDG v1.4.3 refresh fixes the compact desktop, browser transfer visibility, update detection and installer closing.
 
+- Hide the sidebar download-folder path and its path tooltip; keep the Download folder action. Refresh the README screenshots and remove obsolete interface images.
 - Fix sidebar category labels overlapping count badges: reserve a separate label area, keep a clear gap and size badges for their counts.
 - Restore colored statistics icons, fit sidebar navigation without a scrollbar, and remove the empty-state Add download split button.
 - Add GitHub source code beside Developed by Mustafa Ali in Settings.
