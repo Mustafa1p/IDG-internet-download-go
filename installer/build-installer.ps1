@@ -6,20 +6,25 @@
 .EXAMPLE
   .\installer\build-installer.ps1
 #>
-param([switch]$SignRelease)
+param([switch]$SignRelease, [ValidateSet("x64", "x86")][string]$Architecture = "x64")
+$buildDir = if ($Architecture -eq "x86") { "target/i686-pc-windows-msvc/release" } else { "target/release" }
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 
 # ── 1. Build release binary ──────────────────────────────────────────────────
 Write-Host "`n[1/3] Building IDG release binary..." -ForegroundColor Cyan
 Push-Location $root
-cargo build --release --bins
+if ($Architecture -eq "x86") {
+    rustup target add i686-pc-windows-msvc
+    if ($LASTEXITCODE -ne 0) { throw "x86 Rust target unavailable" }
+    cargo build --locked --release --bins --target i686-pc-windows-msvc
+} else { cargo build --locked --release --bins }
 if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 Pop-Location
-python "$root/installer/fetch-media-tools.py"
+python "$root/installer/fetch-media-tools.py" $Architecture
 if ($LASTEXITCODE -ne 0) { throw "media tools download failed" }
 if ($SignRelease) {
-    & "$PSScriptRoot/sign-windows.ps1" -Path "$root/target/release/IDG.exe", "$root/target/release/IDG-native.exe", "$root/target/release/tools", "$PSScriptRoot/register-native-host.ps1"
+    & "$PSScriptRoot/sign-windows.ps1" -Path "$root/$buildDir/IDG.exe", "$root/$buildDir/IDG-native.exe", "$root/$buildDir/tools", "$PSScriptRoot/register-native-host.ps1"
 } else {
     Write-Warning 'Unsigned Windows installer. Windows may display an unknown-publisher or SmartScreen warning. Use -SignRelease to enable trusted signing; see docs/windows-signing.md.'
 }
@@ -62,6 +67,9 @@ Write-Host "`n[3/3] Compiling installer..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force "$root\dist" | Out-Null
 
 $compilerArgs = @("$root\installer\setup.iss")
+if ($Architecture -eq "x86") {
+    $compilerArgs = @("/DPackageArch=x86", "/DPackageSuffix=-x86", "/DBuildDir=..\target\i686-pc-windows-msvc\release") + $compilerArgs
+}
 if ($SignRelease) {
     $signCommand = 'pwsh.exe -NoProfile -NonInteractive -File $q' + "$PSScriptRoot/sign-windows.ps1" + '$q -Path $f'
     $compilerArgs = @('/DIDG_SIGN_RELEASE', "/Sidg=$signCommand") + $compilerArgs

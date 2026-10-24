@@ -21,7 +21,7 @@ Splits every file into multiple parallel connections — just like IDM, but free
 ## ⬇️ Download
 
 <a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.4.3.exe">
-  <img src="https://img.shields.io/badge/Download%20Installer-Setup%20.exe-1976d2?style=for-the-badge&logo=windows&logoColor=white" height="42"/>
+  <img src="https://img.shields.io/badge/Download%20Installer-Windows%20x64-1976d2?style=for-the-badge&logo=windows&logoColor=white" height="42"/>
 </a>
 &nbsp;&nbsp;
 <a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.3.zip">
@@ -323,3 +323,15 @@ The extension popup now contains only connection status. Capture controls, manua
 The page's **Download with IDG** overlay is now 28px tall. Click **×** to hide it for that video until the page reloads, or press **Escape** while the overlay has keyboard focus. The close button also removes any error notice and remains available while a handoff is in progress. Different videos can show their own download button. Downloads already sent to IDG remain in its desktop queue.
 
 ![Slim media overlay with close button](docs/media-overlay.png)
+
+### Build Windows x86 packages
+
+```powershell
+rustup target add i686-pc-windows-msvc
+cargo build --locked --release --bins --target i686-pc-windows-msvc
+python installer/fetch-media-tools.py x86
+python installer/package.py v1.4.3 x86
+./installer/build-installer.ps1 -Architecture x86
+```
+
+The x86 package includes 32-bit IDG, native bridge, yt-dlp, FFmpeg/FFprobe and Node.js. The x64 package retains Deno. Packaging validates the PE architecture of every bundled executable and DLL. The x86 updater selects the x86 installer; the existing unsuffixed setup name remains the x64 download for older updater compatibility. Windows 10/11 are the supported OS family; Windows 11 itself requires a 64-bit PC.

@@ -3,17 +3,22 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
 import urllib.request
 from zipfile import ZipFile
 
 root = Path(__file__).resolve().parents[1]
-destination = root / "target/release/tools"
+arch = sys.argv[1] if len(sys.argv) > 1 else "x64"
+if arch not in ("x64", "x86"): raise SystemExit("Architecture must be x64 or x86")
+build = "target/i686-pc-windows-msvc/release" if arch == "x86" else "target/release"
+destination = root / build / "tools"
 cache = root / "target/media-cache"
 destination.mkdir(parents=True, exist_ok=True)
 cache.mkdir(parents=True, exist_ok=True)
 notices = destination / "licenses"
 notices.mkdir(exist_ok=True)
-lock = json.loads((root / "installer/media-tools.json").read_text(encoding="utf-8"))
+lock_path = root / ("installer/media-tools-x86.json" if arch == "x86" else "installer/media-tools.json")
+lock = json.loads(lock_path.read_text(encoding="utf-8"))
 
 
 def fetch(url, path):
@@ -53,13 +58,13 @@ for tool in lock["tools"]:
 # The complete GPLv3 text was already fetched from FFmpeg's pinned source revision.
 # Reuse it rather than making release packaging depend on another host's uptime.
 shutil.copyfile(notices / "ffmpeg-0-COPYING.GPLv3.txt", notices / "GPL-3.0.txt")
-shutil.copyfile(root / "installer/media-tools.json", notices / "upstream-sources.json")
+shutil.copyfile(lock_path, notices / "upstream-sources.json")
 (notices / "README.txt").write_text(
     "IDG invokes these independent tools as subprocesses. Their licenses and upstream source locations "
     "are included here. yt-dlp's Windows executable and this FFmpeg build contain GPLv3+ components. "
     "Sources: https://github.com/yt-dlp/yt-dlp ; https://github.com/yt-dlp/FFmpeg-Builds ; "
-    "https://github.com/FFmpeg/FFmpeg/tree/7045cc9b80 ; https://github.com/denoland/deno\n",
+    "https://github.com/FFmpeg/FFmpeg/tree/7045cc9b80 ; https://github.com/denoland/deno ; https://github.com/nodejs/node\n",
     encoding="utf-8")
-for executable in ["yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe"]:
+for executable in ["yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "node.exe" if arch == "x86" else "deno.exe"]:
     if not (destination / executable).is_file():
         raise SystemExit(f"Missing required media tool: {executable}")

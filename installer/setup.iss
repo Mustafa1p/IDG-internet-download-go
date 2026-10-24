@@ -9,6 +9,16 @@
 #define AppExeName   "IDG.exe"
 #define AppId        "{{A8B3C4D5-E6F7-4890-ABCD-EF1234567890}"
 
+#ifndef BuildDir
+#define BuildDir "..\target\release"
+#endif
+#ifndef PackageArch
+#define PackageArch "x64"
+#endif
+#ifndef PackageSuffix
+#define PackageSuffix ""
+#endif
+
 [Setup]
 AppId={#AppId}
 AppName={#AppName}
@@ -20,13 +30,17 @@ DefaultDirName={autopf}\IDG
 DefaultGroupName=IDG
 AllowNoIcons=yes
 OutputDir=..\dist
-OutputBaseFilename=IDG-Setup-{#AppVersion}
+OutputBaseFilename=IDG-Setup-v{#AppVersion}{#PackageSuffix}
 Compression=lzma2/normal
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=..\assets\idg.ico
+#if PackageArch == "x64"
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#else
+ArchitecturesAllowed=x86compatible
+#endif
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DisableProgramGroupPage=yes
@@ -50,10 +64,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startupicon"; Description: "Start IDG when Windows starts"; GroupDescription: "Startup"
 
 [Files]
-Source: "..\target\release\IDG-native.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\target\release\IDG.exe";   DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\IDG-native.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\IDG.exe";   DestDir: "{app}"; Flags: ignoreversion
 Source: "..\extension\*";              DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\target\release\tools\*"; DestDir: "{app}\tools"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#BuildDir}\tools\*"; DestDir: "{app}\tools"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md";                DestDir: "{app}"; Flags: ignoreversion
 Source: "..\docs\*";                  DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 

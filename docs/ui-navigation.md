@@ -8,7 +8,7 @@ This inventory maps the implemented Rust desktop interface to its control state 
 
 | Surface | Source |
 | --- | --- |
-| Window header, search, menus, keyboard shortcuts, resizing | `src/app/shell.rs` |
+| Window header, search, menus, keyboard shortcuts, locked sizing | `src/app/shell.rs` |
 | Sidebar, statistic cards, toolbar, list/grid, details, footer | `src/app/library.rs` |
 | New download, media inspection, update controls and action dispatch | `src/app.rs` |
 | Settings draft, sections and Save / Reset | `src/app/settings.rs` |
@@ -132,10 +132,10 @@ Automatic installation follows the same readiness check. Pending and paused down
 | Control | Handler |
 | --- | --- |
 | Drag free header area | `ViewportCommand::StartDrag` |
-| Double-click free header / Maximize / Restore | `ViewportCommand::Maximized` |
+| Maximize / header double-click | Disabled in production to preserve the reference size |
 | Minimize | `ViewportCommand::Minimized(true)` |
 | Close | `ViewportCommand::Close`; `IDGApp::update` hides to tray when configured and available |
-| Drag window edges/corners | `resize_edges` â†’ `ViewportCommand::BeginResize` |
+| Window size | Fixed 1540×930 logical pixels, capped to monitor; resize/maximize disabled in production |
 
 The **More options** menu connects:
 

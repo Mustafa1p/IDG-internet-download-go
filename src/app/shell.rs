@@ -70,7 +70,7 @@ impl IDGApp {
             egui::Id::new("window-drag-region"),
             egui::Sense::click_and_drag(),
         );
-        if drag.double_clicked() {
+        if drag.double_clicked() && crate::settings_preview() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
         } else if drag.drag_started_by(egui::PointerButton::Primary) {
             ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
@@ -79,7 +79,7 @@ impl IDGApp {
         let height = if wide { 62.0 } else { 48.0 };
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = if wide { 12.0 } else { 6.0 };
-            let controls = if wide { 360.0 } else { 280.0 };
+            let controls = if wide { 300.0 } else { 280.0 };
             let search_width = (ui.available_width() * 0.49).clamp(170.0, 500.0);
             ui.add_space((ui.available_width() - controls - search_width).max(4.0));
             Frame::none()
@@ -203,13 +203,17 @@ impl IDGApp {
             if chrome_button(ui, "Minimize", 0, height).clicked() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
             }
-            if chrome_button(
-                ui,
-                if maximized { "Restore" } else { "Maximize" },
-                if maximized { 3 } else { 1 },
-                height,
-            )
-            .clicked()
+            if ui
+                .add_enabled_ui(crate::settings_preview(), |ui| {
+                    chrome_button(
+                        ui,
+                        if maximized { "Restore" } else { "Maximize" },
+                        if maximized { 3 } else { 1 },
+                        height,
+                    )
+                })
+                .inner
+                .clicked()
             {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
             }
@@ -246,6 +250,9 @@ impl IDGApp {
             egui::Id::new("window-border"),
         ));
         painter.rect_stroke(rect.shrink(1.0), 12.0, Stroke::new(1.2_f32, BORDER));
+        if !crate::settings_preview() {
+            return;
+        }
         let Some(position) = ctx.pointer_hover_pos() else {
             return;
         };

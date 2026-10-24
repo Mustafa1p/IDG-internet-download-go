@@ -849,7 +849,13 @@ impl IDGApp {
                     enabled,
                     egui::Button::new("")
                         .min_size(Vec2::new(
-                            if roomy { 116.0 } else { 86.0 },
+                            if label == "Open folder" {
+                                if roomy { 156.0 } else { 116.0 }
+                            } else if roomy {
+                                116.0
+                            } else {
+                                86.0
+                            },
                             if roomy { 50.0 } else { 34.0 },
                         ))
                         .rounding(8.0),
@@ -1372,7 +1378,10 @@ impl IDGApp {
             let scale = ((rect.height() - 52.0) / 410.0).clamp(0.45, 1.0);
             let center = egui::pos2(
                 rect.center().x,
-                rect.top() + 42.0 + (rect.height() - 42.0) * 0.34,
+                rect.top()
+                    + 42.0
+                    + (rect.height() - 42.0 - 320.0 * scale).max(0.0) * 0.5
+                    + 85.0 * scale,
             );
             if query.is_empty() && rect.height() < 220.0 {
                 let body = egui::Rect::from_min_max(
@@ -1404,7 +1413,7 @@ impl IDGApp {
             } else if query.is_empty() {
                 draw_empty_folder(
                     ui.painter(),
-                    egui::Rect::from_center_size(center, Vec2::new(245.0, 170.0) * scale),
+                    egui::Rect::from_center_size(center, Vec2::new(210.0, 146.0) * scale),
                 );
                 ui.painter().text(
                     center + Vec2::new(0.0, 104.0) * scale,

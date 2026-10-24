@@ -142,7 +142,7 @@ async fn inspect_with_tools(url: &str, cookies: Option<&str>, tools: &Path) -> R
             "1",
             "--js-runtimes",
         ])
-        .arg(format!("deno:{}", tools.join("deno.exe").display()));
+        .arg(js_runtime(tools));
     if let Some(cookies) = cookies.as_deref() {
         command.arg("--cookies").arg(cookies);
     }
@@ -266,10 +266,20 @@ pub fn tools_available() -> bool {
     available_at(&tools_dir())
 }
 
+fn js_runtime(tools: &Path) -> String {
+    let name = if tools.join("deno.exe").is_file() {
+        "deno"
+    } else {
+        "node"
+    };
+    format!("{name}:{}", tools.join(format!("{name}.exe")).display())
+}
+
 fn available_at(dir: &Path) -> bool {
-    ["yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe"]
+    ["yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe"]
         .iter()
         .all(|file| dir.join(file).is_file())
+        && (dir.join("deno.exe").is_file() || dir.join("node.exe").is_file())
 }
 
 fn command(
@@ -302,9 +312,7 @@ fn command(
         "0.25",
     ]);
     command.arg("--ffmpeg-location").arg(tools);
-    command
-        .arg("--js-runtimes")
-        .arg(format!("deno:{}", tools.join("deno.exe").display()));
+    command.arg("--js-runtimes").arg(js_runtime(tools));
     command.args(format_args(options));
     command.arg("--concurrent-fragments").arg(
         if connections == 0 {

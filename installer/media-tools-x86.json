@@ -1,0 +1,36 @@
+{
+  "tools": [
+    {
+      "name": "yt-dlp",
+      "tag": "2026.10.10.233141",
+      "url": "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.10.10.233141/yt-dlp_x86.exe",
+      "sha256": "b0e81e90dd1dd2ed5750175ee6db600fcc6111cfb08fdedbf49b0071f0765aad",
+      "format": "exe",
+      "licenses": [
+        "https://raw.githubusercontent.com/yt-dlp/yt-dlp/897341241f2bfb2439fe0367f4c7c9ccd29a3828/LICENSE",
+        "https://raw.githubusercontent.com/yt-dlp/yt-dlp/897341241f2bfb2439fe0367f4c7c9ccd29a3828/THIRD_PARTY_LICENSES.txt"
+      ],
+      "source": "https://github.com/yt-dlp/yt-dlp/tree/897341241f2bfb2439fe0367f4c7c9ccd29a3828"
+    },
+    {
+      "name": "ffmpeg",
+      "tag": "autobuild-2026-10-18-17-17",
+      "url": "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2026-10-18-17-17/ffmpeg-N-127654-g7045cc9b80-win32-gpl-shared.zip",
+      "sha256": "305561bc06fc3dfabd38dd91ade1c54d66c962bee42a437f9ad19d5988114461",
+      "format": "zip-bin",
+      "licenses": [
+        "https://raw.githubusercontent.com/FFmpeg/FFmpeg/7045cc9b80/COPYING.GPLv3"
+      ]
+    },
+    {
+      "name": "node",
+      "tag": "v22.23.4",
+      "url": "https://nodejs.org/dist/v22.23.4/win-x86/node.exe",
+      "sha256": "aa39a7741f62832ea50daba0113c8f8b12ccde226abca931326832d5bc47d31f",
+      "format": "exe",
+      "licenses": [
+        "https://raw.githubusercontent.com/nodejs/node/v22.23.4/LICENSE"
+      ]
+    }
+  ]
+}

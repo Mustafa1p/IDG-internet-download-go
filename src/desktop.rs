@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 
 /// Initial client size and recovery size for invalid persisted geometry.
-pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(1280.0, 800.0);
+pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(1540.0, 930.0);
 /// Smallest supported desktop layout, in egui points.
 pub const MIN_WINDOW_SIZE: egui::Vec2 = egui::vec2(800.0, 500.0);
 
@@ -98,6 +98,13 @@ pub fn repair_window_builder(mut builder: egui::ViewportBuilder) -> egui::Viewpo
         // The framework has already clamped the invalid minimized position to a
         // screen corner. Let Windows choose a fresh position along with the size.
         builder.position = None;
+    }
+    if !crate::settings_preview() {
+        builder.inner_size = Some(DEFAULT_WINDOW_SIZE);
+        builder.resizable = Some(false);
+        builder.maximize_button = Some(false);
+        builder.maximized = Some(false);
+        builder.fullscreen = Some(false);
     }
     builder
 }
@@ -444,7 +451,7 @@ mod tests {
                 egui::ViewportBuilder::default().with_inner_size([1200.0, 800.0])
             )
             .inner_size,
-            Some(egui::vec2(1200.0, 800.0))
+            Some(DEFAULT_WINDOW_SIZE)
         );
     }
 

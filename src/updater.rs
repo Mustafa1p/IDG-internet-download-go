@@ -64,7 +64,11 @@ fn update_from_release(release: GhRelease, current: &str) -> Result<Option<Updat
         version.bytes().all(|c| c.is_ascii_digit() || c == b'.'),
         "Invalid release version"
     );
-    let name = format!("IDG-Setup-v{version}.exe");
+    let name = if cfg!(target_arch = "x86") {
+        format!("IDG-Setup-v{version}-x86.exe")
+    } else {
+        format!("IDG-Setup-v{version}.exe")
+    };
     let asset = release
         .assets
         .iter()
@@ -239,7 +243,7 @@ mod tests {
             "html_url": format!("https://github.com/Mustafa1p/IDG-internet-download-go/releases/tag/v{version}"),
             "body": "A new release\n\n- Fix the tiny window\n- Add update alerts",
             "assets": [{
-                "name": format!("IDG-Setup-v{version}.exe"),
+                "name": if cfg!(target_arch = "x86") { format!("IDG-Setup-v{version}-x86.exe") } else { format!("IDG-Setup-v{version}.exe") },
                 "browser_download_url": format!("https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v{version}/IDG-Setup-v{version}.exe"),
                 "digest": format!("sha256:{}", "a".repeat(64)),
                 "size": 42

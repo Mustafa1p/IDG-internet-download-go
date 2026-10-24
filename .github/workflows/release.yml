@@ -16,13 +16,25 @@ env:
 
 jobs:
   build:
-    name: Test and build Windows x64
+    name: Test and build Windows ${{ matrix.arch }}
     runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+            build_dir: target/release
+            cargo_args: ''
+          - arch: x86
+            target: i686-pc-windows-msvc
+            build_dir: target/i686-pc-windows-msvc/release
+            cargo_args: '--target i686-pc-windows-msvc'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: ${{ matrix.target }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -35,40 +47,40 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', 'Cargo.toml') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('Cargo.lock', 'Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-
       - name: Check formatting
         run: cargo fmt --check
       - name: Check warnings
-        run: cargo clippy --locked --all-targets -- -D warnings
+        run: cargo clippy --locked ${{ matrix.cargo_args }} --all-targets -- -D warnings
       - name: Rust regression tests
-        run: cargo test --locked --bins
+        run: cargo test --locked ${{ matrix.cargo_args }} --bins
       - name: Extension regression tests
         run: node --test tests/extension.test.cjs
       - name: Signing regression tests
         shell: pwsh
         run: ./tests/signing.test.ps1
       - name: Build release binaries
-        run: cargo build --locked --release --bins
+        run: cargo build --locked --release --bins ${{ matrix.cargo_args }}
       - name: Test update handover
-        run: python tests/update-smoke.py
+        run: python tests/update-smoke.py "${{ matrix.build_dir }}/IDG-native.exe"
       - name: Cache verified media tools
         uses: actions/cache@v4
         with:
           path: target/media-cache
-          key: media-tools-${{ hashFiles('installer/media-tools.json') }}
+          key: media-tools-${{ hashFiles('installer/media-tools*.json') }}
       - name: Fetch pinned YouTube tools
-        run: python installer/fetch-media-tools.py
+        run: python installer/fetch-media-tools.py ${{ matrix.arch }}
       - name: Package portable app and extension
-        run: python installer/package.py
+        run: python installer/package.py ${{ matrix.arch }}
       - name: Upload tested build
         uses: actions/upload-artifact@v4
         with:
-          name: IDG-windows-x64
+          name: IDG-windows-${{ matrix.arch }}
           path: |
-            target/release/IDG.exe
-            target/release/IDG-native.exe
-            target/release/tools/
+            ${{ matrix.build_dir }}/IDG.exe
+            ${{ matrix.build_dir }}/IDG-native.exe
+            ${{ matrix.build_dir }}/tools/
           if-no-files-found: error
 
   release:
@@ -119,15 +131,21 @@ jobs:
         with:
           name: IDG-windows-x64
           path: target/release
+      - uses: actions/download-artifact@v4
+        with:
+          name: IDG-windows-x86
+          path: target/i686-pc-windows-msvc/release
       - name: Sign and verify application and bundled tools
         if: env.IDG_SIGN_RELEASE == 'true'
         shell: pwsh
-        run: ./installer/sign-windows.ps1 -Path target/release/IDG.exe, target/release/IDG-native.exe, target/release/tools, installer/register-native-host.ps1
+        run: ./installer/sign-windows.ps1 -Path target/release/IDG.exe, target/release/IDG-native.exe, target/release/tools, target/i686-pc-windows-msvc/release/IDG.exe, target/i686-pc-windows-msvc/release/IDG-native.exe, target/i686-pc-windows-msvc/release/tools, installer/register-native-host.ps1
       - name: Validate release version and prepare assets
         shell: pwsh
         run: |
           python installer/package.py "${{ github.ref_name }}"
           if ($LASTEXITCODE -ne 0) { throw "Release version validation failed" }
+          python installer/package.py "${{ github.ref_name }}" x86
+          if ($LASTEXITCODE -ne 0) { throw "x86 packaging failed" }
       - name: Find Inno Setup
         shell: pwsh
         run: |
@@ -142,20 +160,21 @@ jobs:
       - name: Build Windows installer
         shell: pwsh
         run: |
-          if ($env:IDG_SIGN_RELEASE -eq 'true') {
-            $signer = Join-Path $env:GITHUB_WORKSPACE 'installer/sign-windows.ps1'
-            $signCommand = 'pwsh.exe -NoProfile -NonInteractive -File $q' + $signer + '$q -Path $f'
-            & $env:IDG_ISCC '/DIDG_SIGN_RELEASE' "/Sidg=$signCommand" installer/setup.iss
-          } else {
-            & $env:IDG_ISCC installer/setup.iss
+          foreach ($arch in 'x64', 'x86') {
+            $options = @()
+            if ($arch -eq 'x86') { $options += '/DPackageArch=x86', '/DPackageSuffix=-x86', '/DBuildDir=..\target\i686-pc-windows-msvc\release' }
+            if ($env:IDG_SIGN_RELEASE -eq 'true') {
+              $signer = Join-Path $env:GITHUB_WORKSPACE 'installer/sign-windows.ps1'
+              $signCommand = 'pwsh.exe -NoProfile -NonInteractive -File $q' + $signer + '$q -Path $f'
+              $options += '/DIDG_SIGN_RELEASE', "/Sidg=$signCommand"
+            }
+            & $env:IDG_ISCC @options installer/setup.iss
+            if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed for $arch" }
           }
-          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
-          $version = "${{ github.ref_name }}".TrimStart('v')
-          Move-Item -LiteralPath "dist/IDG-Setup-$version.exe" -Destination "dist/IDG-Setup-${{ github.ref_name }}.exe"
       - name: Verify final installer signature
         if: env.IDG_SIGN_RELEASE == 'true'
         shell: pwsh
-        run: ./installer/sign-windows.ps1 -VerifyOnly -Path "dist/IDG-Setup-${{ github.ref_name }}.exe"
+        run: ./installer/sign-windows.ps1 -VerifyOnly -Path "dist/IDG-Setup-${{ github.ref_name }}.exe", "dist/IDG-Setup-${{ github.ref_name }}-x86.exe"
       - name: Verify assets and create checksums
         run: python installer/checksums.py "${{ github.ref_name }}"
       - name: Prepare release notes
@@ -173,6 +192,8 @@ jobs:
           body_path: target/release-notes.md
           files: |
             dist/IDG-Setup-${{ github.ref_name }}.exe
+            dist/IDG-Setup-${{ github.ref_name }}-x86.exe
+            dist/IDG-portable-${{ github.ref_name }}-x86.zip
             dist/IDG-extension-${{ github.ref_name }}.zip
             dist/IDG-portable-${{ github.ref_name }}.zip
             dist/SHA256SUMS.txt

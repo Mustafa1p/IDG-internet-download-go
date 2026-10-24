@@ -144,3 +144,11 @@ Real OS 100/125/150/200% display-setting changes, cross-monitor DPI transitions,
 manual screen-reader testing, a live authenticated browser session and real
 YouTube downloads are not claimed. Existing fixture/protocol and native state
 coverage passed as described above. Release packages remain explicitly unsigned.
+
+## Locked-window and x86 package refresh (v1.4.3)
+
+The production window now overrides persisted sizes with the 1540×930 logical-pixel reference size, capped to the monitor. Native resize and maximize are disabled. Minimize, move, close/tray and normal restore remain available. Small/large render previews continue to exercise responsive fallback; native maximize tests run only in the isolated development self-test.
+
+The Open folder button reserves additional width. Empty-state artwork is smaller and the artwork/text/action group is centered in the table body. The title-bar search and controls reserve enough trailing space.
+
+Windows x86 is built with i686-pc-windows-msvc and includes 32-bit native bridge, yt-dlp, FFmpeg/FFprobe and Node.js v22.23.4. Every bundled EXE and DLL must match the selected PE machine type. Both update handover smoke tests and x86 tool version smoke checks pass on the Windows x64 test host; a physical 32-bit Windows installation is not available for testing.
