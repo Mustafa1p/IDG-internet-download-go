@@ -1,5 +1,6 @@
 IDG v1.4.3 refresh fixes the compact desktop, browser transfer visibility, update detection and installer closing.
 
+- Fix sidebar category labels overlapping count badges: reserve a separate label area, keep a clear gap and size badges for their counts.
 - Restore colored statistics icons, fit sidebar navigation without a scrollbar, and remove the empty-state Add download split button.
 - Add GitHub source code beside Developed by Mustafa Ali in Settings.
 - Reduce the locked desktop to 960 x 640 logical pixels, capped to the monitor work area, with a compact sidebar and table.

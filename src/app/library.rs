@@ -472,26 +472,51 @@ impl IDGApp {
                 draw_icon(
                     ui.painter(),
                     egui::Rect::from_center_size(
-                        egui::pos2(rect.left() + 24.0, rect.center().y),
-                        Vec2::splat(23.0),
+                        egui::pos2(
+                            rect.left() + if spacious { 24.0 } else { 18.0 },
+                            rect.center().y,
+                        ),
+                        Vec2::splat(if spacious { 23.0 } else { 20.0 }),
                     ),
                     nav_icon(category),
                     TEXT_DIM,
                 );
-                ui.painter().text(
+                let count = category.count(items).to_string();
+                let count_width = ui
+                    .painter()
+                    .layout_no_wrap(count.clone(), FontId::proportional(13.0), TEXT)
+                    .size()
+                    .x;
+                let badge_width = (count_width + 16.0).max(28.0);
+                let badge_height = rect.height().min(25.0);
+                let badge = egui::Rect::from_min_max(
                     egui::pos2(
-                        rect.left() + if spacious { 57.0 } else { 49.0 },
-                        rect.center().y,
+                        rect.right() - 8.0 - badge_width,
+                        rect.center().y - badge_height * 0.5,
                     ),
-                    egui::Align2::LEFT_CENTER,
-                    category.label(),
+                    egui::pos2(rect.right() - 8.0, rect.center().y + badge_height * 0.5),
+                );
+                let text_left = rect.left() + if spacious { 57.0 } else { 40.0 };
+                let label_rect = egui::Rect::from_min_max(
+                    egui::pos2(text_left, rect.top()),
+                    egui::pos2((badge.left() - 10.0).max(text_left), rect.bottom()),
+                );
+                let mut label = egui::text::LayoutJob::simple_singleline(
+                    category.label().to_owned(),
                     FontId::proportional(if spacious { 15.0 } else { 11.0 }),
                     if selected { TEXT } else { TEXT_DIM },
                 );
-                let badge = egui::Rect::from_center_size(
-                    egui::pos2(rect.right() - 21.0, rect.center().y),
-                    Vec2::new(28.0, 25.0),
-                );
+                label.wrap.max_width = label_rect.width();
+                label.wrap.max_rows = 1;
+                label.wrap.break_anywhere = true;
+                let galley = ui.painter().layout_job(label);
+                ui.painter()
+                    .with_clip_rect(label_rect.intersect(ui.clip_rect()))
+                    .galley(
+                        egui::pos2(text_left, rect.center().y - galley.size().y * 0.5),
+                        galley,
+                        if selected { TEXT } else { TEXT_DIM },
+                    );
                 ui.painter().rect_filled(
                     badge,
                     12.0,
@@ -504,10 +529,11 @@ impl IDGApp {
                 ui.painter().text(
                     badge.center(),
                     egui::Align2::CENTER_CENTER,
-                    category.count(items).to_string(),
+                    count,
                     FontId::proportional(13.0),
                     TEXT,
                 );
+                let response = response.on_hover_text(category.label());
                 qa_control(ui.ctx(), category.label(), response.rect);
                 response.widget_info(|| {
                     egui::WidgetInfo::labeled(egui::WidgetType::Button, true, category.label())
