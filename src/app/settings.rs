@@ -145,7 +145,12 @@ impl IDGApp {
             data.insert_temp(key, count);
             count
         });
-        if count == 5 {
+        let capture_frame = if std::env::args().any(|argument| argument == "--update-preview") {
+            30
+        } else {
+            5
+        };
+        if count == capture_frame {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot);
         }
         let screenshot = ctx.input(|input| {

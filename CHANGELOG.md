@@ -1,8 +1,8 @@
-## [Unreleased]
-
-- Publish unsigned Windows releases without Azure credentials by default; retain opt-in signing through `IDG_SIGN_RELEASE=true` and label unsigned downloads in release notes.
-
 ## 1.4.3 — 2026-10-24
+
+- Announce newer releases in a centered popup with release fixes, download progress, Update now, installation, and Later controls.
+- Check for updates at startup and hourly even while IDG is hidden in the tray; announce each new version once per session.
+- Publish unsigned Windows releases without Azure credentials by default; retain opt-in signing through `IDG_SIGN_RELEASE=true` and label unsigned downloads in release notes.
 
 - Keep the last usable window size and position when IDG is minimized or hidden in the tray, preventing tiny windows at the screen edge on restart.
 - Recover window settings already affected by minimized-window autosaves and preserve maximization when browser downloads or tray actions reopen IDG.

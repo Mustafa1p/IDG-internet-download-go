@@ -252,6 +252,8 @@ Automated tests exercise handoff success/failure, native framing, stable extensi
 
 ## Updates, YouTube choices, and Windows startup (v1.4.1)
 
+IDG checks for newer versions at startup and hourly, including while hidden in the tray. A **Please update** popup shows what changed and offers **Update now** or **Later**. After dismissing it, use **What’s new** in the update banner to reopen it. The refreshed v1.4.3 installer adds this popup; users of the earlier v1.4.3 package must reinstall it once because equal versions do not trigger an update.
+
 Open **Settings → Application updates** to check for a new release, automatically download and verify it, or enable automatic installation when all downloads are finished. **Install update and restart IDG** replaces the complete app in its current folder and reopens it. Finish or remove queued/paused transfers first. No browser download or manual installer search is needed after installing v1.4.1 once. Windows can still request elevation for a protected installation folder.
 
 The updater verifies the installer size and SHA-256 digest published by GitHub. An interrupted or altered download is rejected, with a retry option. Update checks run at launch and every six hours while the UI is active.

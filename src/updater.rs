@@ -12,6 +12,7 @@ const RELEASES_API: &str =
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {
     pub version: String,
+    pub release_notes: String,
     pub release_url: String,
     pub installer_url: String,
     pub sha256: String,
@@ -22,6 +23,8 @@ struct GhRelease {
     tag_name: String,
     html_url: String,
     assets: Vec<GhAsset>,
+    #[serde(default)]
+    body: Option<String>,
 }
 #[derive(Deserialize)]
 struct GhAsset {
@@ -43,11 +46,16 @@ pub async fn check_for_update(
     let release: GhRelease = client
         .get(RELEASES_API)
         .header("User-Agent", "IDG-update-checker")
+        .timeout(std::time::Duration::from_secs(20))
         .send()
         .await?
         .error_for_status()?
         .json()
         .await?;
+    update_from_release(release, current)
+}
+
+fn update_from_release(release: GhRelease, current: &str) -> Result<Option<UpdateInfo>> {
     let version = release.tag_name.trim_start_matches('v');
     if !is_newer(version, current) {
         return Ok(None);
@@ -81,11 +89,43 @@ pub async fn check_for_update(
     );
     Ok(Some(UpdateInfo {
         version: version.into(),
+        release_notes: release.body.unwrap_or_default(),
         release_url: release.html_url,
         installer_url: asset.browser_download_url.clone(),
         sha256: digest.to_ascii_lowercase(),
         size: asset.size,
     }))
+}
+
+/// Show the release's change list as plain text, with bounded fallback content.
+pub fn release_highlights(notes: &str) -> Vec<String> {
+    let clean = |line: &str| {
+        line.replace("**", "")
+            .replace('`', "")
+            .chars()
+            .take(500)
+            .collect::<String>()
+    };
+    let bullets: Vec<_> = notes
+        .lines()
+        .filter_map(|line| {
+            line.trim()
+                .strip_prefix("- ")
+                .or_else(|| line.trim().strip_prefix("* "))
+        })
+        .filter(|line| !line.trim().is_empty())
+        .take(12)
+        .map(clean)
+        .collect();
+    if !bullets.is_empty() {
+        return bullets;
+    }
+    let text: String = notes.trim().chars().take(2400).collect();
+    if text.is_empty() {
+        vec!["Improvements and fixes are available. Open the release notes for details.".into()]
+    } else {
+        vec![clean(&text)]
+    }
 }
 
 pub async fn prepare_update(
@@ -192,6 +232,60 @@ fn is_newer(candidate: &str, current: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn release_fixture(version: &str) -> GhRelease {
+        serde_json::from_value(serde_json::json!({
+            "tag_name": format!("v{version}"),
+            "html_url": format!("https://github.com/Mustafa1p/IDG-internet-download-go/releases/tag/v{version}"),
+            "body": "A new release\n\n- Fix the tiny window\n- Add update alerts",
+            "assets": [{
+                "name": format!("IDG-Setup-v{version}.exe"),
+                "browser_download_url": format!("https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v{version}/IDG-Setup-v{version}.exe"),
+                "digest": format!("sha256:{}", "a".repeat(64)),
+                "size": 42
+            }]
+        })).unwrap()
+    }
+
+    #[test]
+    fn update_alert_includes_release_fixes_and_ignores_installed_versions() {
+        let info = update_from_release(release_fixture("1.4.3"), "1.4.2")
+            .unwrap()
+            .unwrap();
+        assert_eq!(info.version, "1.4.3");
+        assert_eq!(
+            release_highlights(&info.release_notes),
+            ["Fix the tiny window", "Add update alerts"]
+        );
+        assert!(
+            update_from_release(release_fixture("1.4.3"), "1.4.3")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            update_from_release(release_fixture("1.4.2"), "1.4.3")
+                .unwrap()
+                .is_none()
+        );
+        let mut missing_notes = release_fixture("1.4.3");
+        missing_notes.body = None;
+        let info = update_from_release(missing_notes, "1.4.2")
+            .unwrap()
+            .unwrap();
+        assert!(!release_highlights(&info.release_notes)[0].is_empty());
+    }
+
+    #[test]
+    fn alert_content_is_bounded_and_does_not_bypass_installer_validation() {
+        let notes = format!("- **Fixed** `window`\n{}", "- Other fix\n".repeat(1000));
+        let highlights = release_highlights(&notes);
+        assert_eq!(highlights.len(), 12);
+        assert_eq!(highlights[0], "Fixed window");
+        assert!(release_highlights(&"🦀".repeat(5000))[0].chars().count() <= 500);
+        let mut release = release_fixture("1.4.3");
+        release.assets[0].digest = None;
+        assert!(update_from_release(release, "1.4.2").is_err());
+    }
     #[test]
     fn versions_are_compared_numerically() {
         assert!(is_newer("1.10.0", "1.9.9"));
@@ -213,6 +307,7 @@ mod tests {
         });
         let mut info = UpdateInfo {
             version: "1.3.0".into(),
+            release_notes: String::new(),
             release_url: String::new(),
             installer_url: format!("http://{address}/setup"),
             sha256: format!("{:x}", Sha256::digest(b"test installer")),

@@ -151,12 +151,14 @@ pub struct IDGApp {
     update_info: Option<UpdateInfo>,
     /// Receiver for update check results.
     update_rx: Option<tokio::sync::oneshot::Receiver<Result<Option<UpdateInfo>, String>>>,
+    background_update_rx: tokio::sync::mpsc::UnboundedReceiver<Result<Option<UpdateInfo>, String>>,
+    show_update_prompt: bool,
+    announced_update: Option<String>,
     update_download_rx: Option<tokio::sync::oneshot::Receiver<Result<PreparedUpdate, String>>>,
     update_progress: Option<tokio::sync::watch::Receiver<f32>>,
     prepared_update: Option<PreparedUpdate>,
     update_error: Option<String>,
     update_status: String,
-    last_update_check: std::time::Instant,
     auto_download_updates: bool,
     auto_install_updates: bool,
     auto_extension_updates: bool,
@@ -283,18 +285,41 @@ impl IDGApp {
             });
         }
         // ── Start update checker ─────────────────────────────────────────────
-        let (update_tx, update_rx) = tokio::sync::oneshot::channel();
+        let (update_tx, background_update_rx) = tokio::sync::mpsc::unbounded_channel();
         let update_client = client.clone();
+        let update_context = cc.egui_ctx.clone();
         if !crate::settings_preview() {
             rt.spawn(async move {
-                let info = check_for_update(&update_client, APP_VERSION)
-                    .await
-                    .map_err(|e| e.to_string());
-                let _ = update_tx.send(info);
+                let mut announced = None;
+                loop {
+                    let result = check_for_update(&update_client, APP_VERSION)
+                        .await
+                        .map_err(|e| e.to_string());
+                    let notify = if let Ok(Some(info)) = &result {
+                        let notify = announced.as_ref() != Some(&info.version);
+                        announced = Some(info.version.clone());
+                        notify
+                    } else {
+                        false
+                    };
+                    if update_tx.send(result).is_err() {
+                        break;
+                    }
+                    // Hidden Windows windows do not redraw: wake the native
+                    // window only for a newly discovered update, once per version.
+                    if notify {
+                        desktop::show_window(&update_context);
+                    }
+                    update_context.request_repaint();
+                    tokio::select! {
+                        _ = tokio::time::sleep(Duration::from_secs(60 * 60)) => {},
+                        _ = update_tx.closed() => break,
+                    }
+                }
             });
         }
 
-        IDGApp {
+        let mut app = IDGApp {
             window_geometry: desktop::WindowGeometry::load(cc.storage),
             tray,
             close_to_tray,
@@ -320,11 +345,10 @@ impl IDGApp {
             connection_settings,
             connection_settings_error,
             update_info: None,
-            update_rx: if crate::settings_preview() {
-                None
-            } else {
-                Some(update_rx)
-            },
+            update_rx: None,
+            background_update_rx,
+            show_update_prompt: false,
+            announced_update: None,
             update_download_rx: None,
             update_progress: None,
             prepared_update: None,
@@ -345,11 +369,26 @@ impl IDGApp {
                 "Checking for updates…"
             }
             .into(),
-            last_update_check: std::time::Instant::now(),
             auto_download_updates,
             auto_install_updates,
             auto_extension_updates,
+        };
+        if crate::settings_preview()
+            && std::env::args().any(|argument| argument == "--update-preview")
+        {
+            app.show_settings = false;
+            app.show_update_prompt = true;
+            app.update_status = "IDG 1.4.4 is available".into();
+            app.update_info = Some(UpdateInfo {
+                version: "1.4.4".into(),
+                release_notes: "- Restore download windows at their last usable size and position.\n- Show a clear update alert with release fixes.\n- Check for updates while IDG runs in the system tray.".into(),
+                release_url: "https://github.com/Mustafa1p/IDG-internet-download-go/releases".into(),
+                installer_url: String::new(),
+                sha256: String::new(),
+                size: 0,
+            });
         }
+        app
     }
 
     fn enqueue(
@@ -654,7 +693,6 @@ impl IDGApp {
     fn check_updates(&mut self, ctx: &egui::Context) {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.update_rx = Some(rx);
-        self.last_update_check = std::time::Instant::now();
         self.update_error = None;
         self.update_status = "Checking for updates…".into();
         let client = self.client.clone();
@@ -724,25 +762,14 @@ impl IDGApp {
     }
 
     fn poll_updates(&mut self, ctx: &egui::Context) {
+        while let Ok(result) = self.background_update_rx.try_recv() {
+            self.apply_update_check(result, ctx);
+        }
         if let Some(rx) = self.update_rx.as_mut()
             && let Ok(result) = rx.try_recv()
         {
             self.update_rx = None;
-            match result {
-                Ok(info) => {
-                    self.update_status = info
-                        .as_ref()
-                        .map(|info| format!("IDG {} is available", info.version))
-                        .unwrap_or_else(|| "IDG is up to date".into());
-                    self.update_info = info;
-                    // A failed installer leaves an error for the reopened app.
-                    // Require an explicit retry instead of an automatic restart loop.
-                    if self.auto_download_updates && self.update_error.is_none() {
-                        self.download_update(ctx);
-                    }
-                }
-                Err(error) => self.update_error = Some(format!("Update check failed: {error}")),
-            }
+            self.apply_update_check(result, ctx);
         }
         if let Some(rx) = self.update_download_rx.as_mut()
             && let Ok(result) = rx.try_recv()
@@ -767,12 +794,81 @@ impl IDGApp {
         {
             self.install_update(ctx);
         }
-        if self.last_update_check.elapsed() > Duration::from_secs(6 * 60 * 60)
-            && self.update_rx.is_none()
-            && self.update_info.is_none()
-        {
-            self.check_updates(ctx);
+    }
+
+    fn apply_update_check(
+        &mut self,
+        result: Result<Option<UpdateInfo>, String>,
+        ctx: &egui::Context,
+    ) {
+        match result {
+            Ok(info) => {
+                if let Some(info) = &info {
+                    if self.announced_update.as_ref() != Some(&info.version) {
+                        self.announced_update = Some(info.version.clone());
+                        self.show_update_prompt = true;
+                        desktop::show_window(ctx);
+                    }
+                    // Preserve download/ready status across repeated checks.
+                    if self.update_download_rx.is_none() && self.prepared_update.is_none() {
+                        self.update_status = format!("IDG {} is available", info.version);
+                    }
+                } else if self.update_info.is_none() {
+                    self.update_status = "IDG is up to date".into();
+                }
+                if info.is_some() {
+                    self.update_info = info;
+                }
+                // A failed installer requires an explicit retry.
+                if self.auto_download_updates && self.update_error.is_none() {
+                    self.download_update(ctx);
+                }
+            }
+            Err(error) => self.update_error = Some(format!("Update check failed: {error}")),
         }
+    }
+
+    fn update_prompt(&mut self, ctx: &egui::Context) {
+        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            self.show_update_prompt = false;
+            return;
+        }
+        let Some(info) = self.update_info.clone() else {
+            return;
+        };
+        let mut open = self.show_update_prompt;
+        let mut later = false;
+        egui::Window::new("A new IDG update is available")
+            .id(egui::Id::new("idg-update-prompt"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .order(egui::Order::Foreground)
+            .default_width(500.0)
+            .show(ctx, |ui| {
+                ui.heading(format!("Please update to IDG {}", info.version));
+                ui.label(format!("You are using IDG {APP_VERSION}."));
+                ui.add_space(10.0);
+                ui.label(RichText::new("What’s new").strong().color(ACCENT));
+                egui::ScrollArea::vertical()
+                    .id_salt("update-release-notes")
+                    .max_height((ctx.screen_rect().height() * 0.35).min(260.0))
+                    .show(ui, |ui| {
+                        for line in crate::updater::release_highlights(&info.release_notes) {
+                            ui.horizontal_top(|ui| {
+                                ui.label("•");
+                                ui.add(egui::Label::new(line).wrap());
+                            });
+                        }
+                    });
+                ui.add_space(10.0);
+                ui.separator();
+                self.update_controls(ui, ctx);
+                ui.add_space(6.0);
+                later = ui.button("Later").clicked();
+            });
+        self.show_update_prompt = open && !later;
     }
 
     fn update_controls(&mut self, ui: &mut Ui, ctx: &egui::Context) {
@@ -799,7 +895,7 @@ impl IDGApp {
                 ui.label("Finish or remove pending and paused downloads before restarting.");
             }
         } else if self.update_info.is_some() && self.update_download_rx.is_none() {
-            if ui.button("Update inside IDG").clicked() {
+            if ui.button("Update now").clicked() {
                 self.download_update(ctx);
             }
         } else if self.update_error.is_some() && ui.button("Retry update check").clicked() {
@@ -807,6 +903,9 @@ impl IDGApp {
         }
         if let Some(info) = &self.update_info {
             ui.hyperlink_to("Release notes", &info.release_url);
+            if !self.show_update_prompt && ui.button("What’s new").clicked() {
+                self.show_update_prompt = true;
+            }
         }
     }
 
@@ -1055,6 +1154,9 @@ impl eframe::App for IDGApp {
         // ── Dialogs ──────────────────────────────────────────────────────────
         if self.show_add {
             self.add_dialog(ctx);
+        }
+        if self.show_update_prompt {
+            self.update_prompt(ctx);
         }
 
         // Repaint while active
