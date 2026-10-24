@@ -36,4 +36,8 @@ with ZipFile(portable_zip, "w", ZIP_DEFLATED) as archive:
             archive.write(path, Path("tools") / path.relative_to(tools))
     for name in ("installer/register-native-host.ps1", "README.md"):
         archive.write(root / name, name)
+    # Keep README screenshots, route guides and QA report links usable offline.
+    for path in sorted((root / "docs").rglob("*")):
+        if path.is_file():
+            archive.write(path, path.relative_to(root))
 print(f"Created {portable_zip.name} and {extension_zip.name}")

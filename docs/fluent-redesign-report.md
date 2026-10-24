@@ -35,6 +35,7 @@ mapped in [ui-navigation.md](ui-navigation.md).
   interaction runners; existing extension, signing, updater and Rust tests remain.
 - `README.md`, `CHANGELOG.md`, `docs/release-notes.md`, screenshot PNGs and QA/route
   reports: updated product instructions, actual app captures and evidence.
+- `installer/package.py`, `installer/setup.iss`: bundle documentation and screenshot assets so README links also work in installed and portable packages.
 - `.github/workflows/release.yml`, `.gitignore`: Cargo feature-aware cache key and
   ignore generated distribution checksums.
 

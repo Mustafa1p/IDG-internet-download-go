@@ -55,6 +55,7 @@ Source: "..\target\release\IDG.exe";   DestDir: "{app}"; Flags: ignoreversion
 Source: "..\extension\*";              DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\target\release\tools\*"; DestDir: "{app}\tools"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md";                DestDir: "{app}"; Flags: ignoreversion
+Source: "..\docs\*";                  DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\IDG";              Filename: "{app}\{#AppExeName}"; AppUserModelID: "IDG.InternetDownloadGO"
