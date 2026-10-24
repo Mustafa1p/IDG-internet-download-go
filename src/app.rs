@@ -123,6 +123,7 @@ impl Drop for AddDialog {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 pub struct IDGApp {
+    window_geometry: desktop::WindowGeometry,
     rt: Handle,
     tray: Option<SystemTray>,
     close_to_tray: bool,
@@ -294,6 +295,7 @@ impl IDGApp {
         }
 
         IDGApp {
+            window_geometry: desktop::WindowGeometry::load(cc.storage),
             tray,
             close_to_tray,
             startup_enabled,
@@ -918,6 +920,7 @@ impl eframe::App for IDGApp {
         if crate::settings_preview() {
             return;
         }
+        self.window_geometry.save(storage);
         eframe::set_value(storage, "compact_layout_v1", &true);
         eframe::set_value(storage, "close_to_tray", &self.close_to_tray);
         eframe::set_value(storage, "default_save_dir", &self.default_save_dir);
@@ -935,6 +938,7 @@ impl eframe::App for IDGApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.window_geometry.remember(ctx);
         #[cfg(debug_assertions)]
         if crate::settings_preview() {
             self.capture_settings_preview(ctx);

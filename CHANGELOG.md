@@ -1,3 +1,8 @@
+## 1.4.3 — 2026-10-24
+
+- Keep the last usable window size and position when IDG is minimized or hidden in the tray, preventing tiny windows at the screen edge on restart.
+- Recover window settings already affected by minimized-window autosaves and preserve maximization when browser downloads or tray actions reopen IDG.
+
 ## 1.4.2 — 2026-10-22
 
 - Support authenticated Hostinger Mail exports from Inbox and Sent, preserving repeated message-selection parameters.

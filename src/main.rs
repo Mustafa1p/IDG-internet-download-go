@@ -115,6 +115,7 @@ fn main() -> eframe::Result {
     let icon = load_icon();
 
     let options = eframe::NativeOptions {
+        window_builder: Some(Box::new(desktop::repair_window_builder)),
         persist_window: !settings_preview(),
         persistence_path: settings_preview().then(|| {
             std::env::temp_dir().join(format!("idg-settings-preview-{}.ron", std::process::id()))
@@ -128,9 +129,9 @@ fn main() -> eframe::Result {
             .with_inner_size(if settings_preview() {
                 settings_preview_size()
             } else {
-                [960.0, 600.0]
+                desktop::DEFAULT_WINDOW_SIZE.into()
             })
-            .with_min_inner_size([800.0, 500.0])
+            .with_min_inner_size(desktop::MIN_WINDOW_SIZE)
             .with_clamp_size_to_monitor_size(!settings_preview())
             .with_icon(Arc::new(icon)),
         ..Default::default()
