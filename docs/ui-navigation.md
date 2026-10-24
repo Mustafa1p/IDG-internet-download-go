@@ -135,7 +135,7 @@ Automatic installation follows the same readiness check. Pending and paused down
 | Maximize / header double-click | Disabled in production to preserve the reference size |
 | Minimize | `ViewportCommand::Minimized(true)` |
 | Close | `ViewportCommand::Close`; `IDGApp::update` hides to tray when configured and available |
-| Window size | Fixed 1540×930 logical pixels, capped to monitor; resize/maximize disabled in production |
+| Window size | Fixed 1540Ã—930 logical pixels, capped to monitor; resize/maximize disabled in production |
 
 The **More options** menu connects:
 

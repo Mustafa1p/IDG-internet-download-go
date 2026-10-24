@@ -23,7 +23,7 @@ mapped in [ui-navigation.md](ui-navigation.md).
 - `src/app/library.rs`: navigation, statistics, speed history, bulk selection and
   actions, list/grid, table, vector illustration, details and status.
 - `src/app/shell.rs`: search/filter/menu, shortcuts, draggable title bar, native
-  minimize/maximize/restore/close and resize edges.
+  minimize/restore/close. The later locked-window refresh disables production resize/maximize, fixes the size to 1540 x 930 logical pixels (monitor capped), and adds x86 packages.
 - `src/app/settings.rs`: Fluent settings cards, inputs, toggles, save/reset controls
   and isolated real-app screenshot capture.
 - `src/app/preview_test.rs`: development-only actual-control interaction checks.

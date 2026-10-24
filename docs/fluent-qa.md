@@ -147,7 +147,7 @@ coverage passed as described above. Release packages remain explicitly unsigned.
 
 ## Locked-window and x86 package refresh (v1.4.3)
 
-The production window now overrides persisted sizes with the 1540×930 logical-pixel reference size, capped to the monitor. Native resize and maximize are disabled. Minimize, move, close/tray and normal restore remain available. Small/large render previews continue to exercise responsive fallback; native maximize tests run only in the isolated development self-test.
+The production window now overrides persisted sizes with the 1540Ã—930 logical-pixel reference size, capped to the monitor. Native resize and maximize are disabled. Minimize, move, close/tray and normal restore remain available. Small/large render previews continue to exercise responsive fallback; native maximize tests run only in the isolated development self-test.
 
 The Open folder button reserves additional width. Empty-state artwork is smaller and the artwork/text/action group is centered in the table body. The title-bar search and controls reserve enough trailing space.
 
