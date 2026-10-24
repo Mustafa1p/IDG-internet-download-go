@@ -10,7 +10,7 @@ windows-sys dependency, for Windows 11 corner preference. No new package was add
 
 The interface now contains the reference's blue sidebar and branding, real search
 and category filters, custom title bar with native window commands, four real
-statistic cards and measured speed history, bulk command toolbar, seven-column
+statistic cards and measured speed history, bulk command toolbar, eight-column
 checkbox table, list/grid views, sorting, a local vector folder empty state and
 footer. Settings, Add download/media choices, details, update notices and removal
 confirmation follow the same palette and typography. All visible actions are

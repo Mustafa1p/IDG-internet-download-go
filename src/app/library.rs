@@ -1196,7 +1196,7 @@ impl IDGApp {
                     return;
                 }
                 let data_width =
-                    (ui.available_width() - 30.0 - 6.0 * ui.spacing().item_spacing.x).max(450.0);
+                    (ui.available_width() - 64.0 - 7.0 * ui.spacing().item_spacing.x).max(416.0);
                 TableBuilder::new(ui)
                     .striped(false)
                     .sense(egui::Sense::click())
@@ -1208,6 +1208,7 @@ impl IDGApp {
                     .column(Column::exact(data_width * 0.13))
                     .column(Column::exact(data_width * 0.14))
                     .column(Column::exact(data_width * 0.12))
+                    .column(Column::exact(34.0))
                     .min_scrolled_height(table_height - 30.0)
                     .max_scroll_height(table_height - 30.0)
                     .header(if compact { 36.0 } else { 42.0 }, |mut header| {
@@ -1230,7 +1231,7 @@ impl IDGApp {
                                 }
                             }
                         });
-                        for label in ["Name", "Size", "Progress", "Speed", "Status", "Added"] {
+                        for label in ["Name", "Size", "Progress", "Speed", "Status", "Added", ""] {
                             header.col(|ui| {
                                 ui.label(
                                     RichText::new(label)
@@ -1369,9 +1370,6 @@ impl IDGApp {
                                             .truncate(),
                                         )
                                         .on_hover_text(item.error.as_deref().unwrap_or(label));
-                                        if icon_button(ui, Icon::Folder, "Open folder").clicked() {
-                                            action = Some((item.id.clone(), "OpenFolder"));
-                                        }
                                     });
                                 });
                                 row.col(|ui| {
@@ -1385,6 +1383,11 @@ impl IDGApp {
                                         .size(if compact { 10.0 } else { 12.0 })
                                         .color(TEXT_DIM),
                                     );
+                                });
+                                row.col(|ui| {
+                                    if icon_button(ui, Icon::Folder, "Open folder").clicked() {
+                                        action = Some((item.id.clone(), "OpenFolder"));
+                                    }
                                 });
                                 let response = row.response();
                                 if response.clicked() && clicked.is_none() && toggled.is_none() {

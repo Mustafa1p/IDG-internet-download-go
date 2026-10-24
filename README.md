@@ -293,7 +293,7 @@ The x86 package includes 32-bit IDG, native bridge, yt-dlp, FFmpeg/FFprobe and N
 
 The normal locked window is now 960 x 640 logical pixels, capped to the monitor work area. IDM's official main-window screenshots were used as a compact, table-first reference; IDM does not specify one fixed default window size.
 
-Browser handoffs switch out of Settings, clear category/search filters, select the new transfer and show IDG. A folder icon with an Open folder tooltip is available on each download row and in the compact details panel; the toolbar can also open the default folder without a selection.
+Browser handoffs switch out of Settings, clear category/search filters, select the new transfer and show IDG. A folder icon with an Open folder tooltip sits at the far right of each download row, after Added, and is also available in the compact details panel; the toolbar can open the default folder without a selection.
 
 Download history is saved under `%LOCALAPPDATA%/IDG/download-history.json`, including completed and failed entries. Cookies, authorization headers, and live download-worker state are excluded. Transfers interrupted by closing/restarting IDG remain listed with an explanation; restarting a transfer requires adding the link again. Existing files are preserved. Older builds did not save history, so this cannot reconstruct their previous session lists.
 

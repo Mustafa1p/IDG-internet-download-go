@@ -1,6 +1,6 @@
 IDG v1.4.3 refresh fixes the compact desktop, browser transfer visibility, update detection and installer closing.
 
-- Use folder icons instead of Open folder text buttons on download rows, in compact details and in the toolbar; keep tooltips and accessible labels.
+- Place each download's folder icon in a dedicated column at the far right, after Added, instead of underneath its status. Use folder icons in compact details and the toolbar, with Open folder tooltips and accessible labels.
 - Hide the sidebar download-folder path and its path tooltip; keep the Download folder action. Refresh the README screenshots and remove obsolete interface images.
 - Fix sidebar category labels overlapping count badges: reserve a separate label area, keep a clear gap and size badges for their counts.
 - Restore colored statistics icons, fit sidebar navigation without a scrollbar, and remove the empty-state Add download split button.
