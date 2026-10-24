@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) { throw "media tools download failed" }
 if ($SignRelease) {
     & "$PSScriptRoot/sign-windows.ps1" -Path "$root/target/release/IDG.exe", "$root/target/release/IDG-native.exe", "$root/target/release/tools", "$PSScriptRoot/register-native-host.ps1"
 } else {
-    Write-Warning 'Development installer: unsigned. Public releases require -SignRelease and a trusted signing identity; see docs/windows-signing.md.'
+    Write-Warning 'Unsigned Windows installer. Windows may display an unknown-publisher or SmartScreen warning. Use -SignRelease to enable trusted signing; see docs/windows-signing.md.'
 }
 
 # ── 2. Ensure Inno Setup 6 ───────────────────────────────────────────────────

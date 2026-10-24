@@ -80,7 +80,7 @@ For Azure, authenticate with `az login`, install .NET 8 and the official x64
 Artifact Signing client, and set `IDG_SIGNING_DLIB` to Azure.CodeSigning.Dlib.dll
 and `IDG_SIGNING_METADATA` to your account/profile metadata JSON. The same build
 command works. `IDG_SIGNTOOL` may override the SDK executable location. Without
-`-SignRelease`, the local build is explicitly an unsigned development installer.
+`-SignRelease`, the local build produces an unsigned installer.
 
 Verify a downloaded release in PowerShell:
 

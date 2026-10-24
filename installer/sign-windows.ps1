@@ -42,7 +42,7 @@ foreach ($file in $files) {
             if (-not $env:IDG_TIMESTAMP_URL) { throw 'Set IDG_TIMESTAMP_URL to your certificate provider RFC3161 timestamp service.' }
             $arguments += @('/tr', $env:IDG_TIMESTAMP_URL, '/sha1', $env:IDG_SIGNING_THUMBPRINT)
         } else {
-            throw 'No signing identity configured. See docs/windows-signing.md. Unsigned releases cannot be published.'
+            throw 'No signing identity configured. Configure signing or build without -SignRelease; see docs/windows-signing.md.'
         }
         & $signTool @arguments $file.FullName
         if ($LASTEXITCODE -ne 0) { throw "SignTool signing failed: $($file.FullName)" }
