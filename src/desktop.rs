@@ -4,9 +4,29 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 
 /// Initial client size and recovery size for invalid persisted geometry.
-pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(960.0, 600.0);
+pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(1280.0, 800.0);
 /// Smallest supported desktop layout, in egui points.
 pub const MIN_WINDOW_SIZE: egui::Vec2 = egui::vec2(800.0, 500.0);
+
+/// Honor the Windows accessibility preference for client-area animation.
+pub fn reduced_motion() -> bool {
+    #[cfg(windows)]
+    {
+        let mut enabled: i32 = 1;
+        // SAFETY: enabled points to a valid BOOL-sized output for this SPI query.
+        unsafe {
+            windows_sys::Win32::UI::WindowsAndMessaging::SystemParametersInfoW(
+                windows_sys::Win32::UI::WindowsAndMessaging::SPI_GETCLIENTAREAANIMATION,
+                0,
+                (&mut enabled as *mut i32).cast(),
+                0,
+            );
+        }
+        enabled == 0
+    }
+    #[cfg(not(windows))]
+    false
+}
 
 /// Matches eframe 0.29's persisted `window` record. Its built-in saver reads
 /// minimized HWNDs as 0x0 at (-32000, -32000), so retain usable geometry instead.
@@ -281,6 +301,17 @@ pub fn attach_window(cc: &eframe::CreationContext<'_>) {
         {
             cc.egui_ctx
                 .data_mut(|data| data.insert_temp(egui::Id::new("idg-window"), handle.hwnd.get()));
+            let rounded: u32 = 2; // DWMWCP_ROUND on Windows 11; ignored by Windows 10.
+            // SAFETY: this HWND belongs to the current app; rounded is a valid
+            // DWORD input for the duration of the synchronous DWM call.
+            unsafe {
+                windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute(
+                    handle.hwnd.get() as _,
+                    windows_sys::Win32::Graphics::Dwm::DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                    (&rounded as *const u32).cast(),
+                    std::mem::size_of::<u32>() as u32,
+                );
+            }
         }
     }
     #[cfg(not(windows))]

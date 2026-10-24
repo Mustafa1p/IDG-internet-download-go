@@ -20,53 +20,51 @@ pub(super) fn default_download_folder() -> String {
 }
 
 fn hint(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(text).size(12.5).color(TEXT_DIM));
+    ui.add(egui::Label::new(RichText::new(text).size(13.0).color(TEXT_DIM)).wrap());
 }
 
 fn section(ui: &mut Ui, icon: Icon, title: &str, body: impl FnOnce(&mut Ui)) {
     Frame::none()
         .fill(PANEL)
         .stroke(Stroke::new(1.0_f32, BORDER))
-        .rounding(10.0)
-        .inner_margin(Margin::same(16.0))
+        .rounding(12.0)
+        .inner_margin(Margin::same(18.0))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_top(|ui| {
-                let (rect, _) = ui.allocate_exact_size(Vec2::splat(26.0), egui::Sense::hover());
-                draw_icon(ui.painter(), rect, icon, TEXT);
-                ui.add_space(10.0);
+                let (rect, _) = ui.allocate_exact_size(Vec2::splat(38.0), egui::Sense::hover());
+                ui.painter().rect_filled(rect, 10.0, ROW_SEL);
+                draw_icon(ui.painter(), rect.shrink(9.0), icon, ACCENT);
+                ui.add_space(12.0);
                 ui.vertical(|ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
                         RichText::new(title)
                             .size(17.0)
+                            .color(TEXT)
                             .family(egui::FontFamily::Name("idg-heading".into())),
                     );
-                    ui.add_space(3.0);
+                    ui.add_space(7.0);
                     body(ui);
                 });
             });
         });
-    ui.add_space(9.0);
+    ui.add_space(12.0);
 }
 
 fn action(ui: &mut Ui, icon: Icon, text: &str, primary: bool) -> egui::Response {
     let response = ui.add(
-        egui::Button::new(RichText::new(format!("        {text}")).color(if primary {
-            BG
-        } else {
-            TEXT
-        }))
-        .min_size(Vec2::new(0.0, 36.0))
-        .fill(if primary { ACCENT } else { ROW_EVEN })
-        .stroke(Stroke::new(1.0_f32, if primary { ACCENT2 } else { BORDER }))
-        .rounding(7.0),
+        egui::Button::new(RichText::new(format!("        {text}")).color(TEXT))
+            .min_size(Vec2::new(0.0, 38.0))
+            .fill(if primary { ACCENT } else { ROW_EVEN })
+            .stroke(Stroke::new(1.0_f32, if primary { ACCENT2 } else { BORDER }))
+            .rounding(8.0),
     );
     let rect = egui::Rect::from_center_size(
         egui::pos2(response.rect.left() + 19.0, response.rect.center().y),
         Vec2::splat(18.0),
     );
-    draw_icon(ui.painter(), rect, icon, if primary { BG } else { TEXT });
+    draw_icon(ui.painter(), rect, icon, TEXT);
     response
 }
 
@@ -103,7 +101,11 @@ fn toggle(ui: &mut Ui, value: &mut bool, label: &str, description: &str) {
     ui.horizontal_top(|ui| {
         let (rect, mut response) =
             ui.allocate_exact_size(Vec2::new(44.0, 25.0), egui::Sense::click());
-        if response.clicked() {
+        if response.clicked()
+            || (ui.is_enabled()
+                && response.has_focus()
+                && ui.input(|input| input.key_pressed(egui::Key::Space)))
+        {
             *value = !*value;
             response.mark_changed();
         }
@@ -127,7 +129,8 @@ fn toggle(ui: &mut Ui, value: &mut bool, label: &str, description: &str) {
         );
         ui.add_space(6.0);
         ui.vertical(|ui| {
-            let label_response = ui.add(egui::Label::new(label).sense(egui::Sense::click()));
+            ui.set_width(ui.available_width());
+            let label_response = ui.add(egui::Label::new(label).wrap().sense(egui::Sense::click()));
             if label_response.clicked() && ui.is_enabled() {
                 *value = !*value;
             }
@@ -139,17 +142,16 @@ fn toggle(ui: &mut Ui, value: &mut bool, label: &str, description: &str) {
 impl IDGApp {
     #[cfg(debug_assertions)]
     pub(super) fn capture_settings_preview(&mut self, ctx: &egui::Context) {
+        if std::env::args().any(|argument| argument == "--ui-preview-hold") {
+            return;
+        }
         let key = egui::Id::new("settings-preview-frame");
         let count = ctx.data_mut(|data| {
             let count = data.get_temp::<usize>(key).unwrap_or(0) + 1;
             data.insert_temp(key, count);
             count
         });
-        let capture_frame = if std::env::args().any(|argument| argument == "--update-preview") {
-            30
-        } else {
-            5
-        };
+        let capture_frame = 40;
         if count == capture_frame {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot);
         }
@@ -184,6 +186,16 @@ impl IDGApp {
             ) {
                 eprintln!("Could not capture settings preview: {error}");
             }
+            let metadata = serde_json::json!({
+                "logical_width": ctx.screen_rect().width(), "logical_height": ctx.screen_rect().height(),
+                "pixels_per_point": ctx.pixels_per_point(), "native_pixels_per_point": ctx.native_pixels_per_point(),
+                "image_width": image.width(), "image_height": image.height(),
+                "version": APP_VERSION,
+            });
+            let _ = std::fs::write(
+                output.with_extension("json"),
+                serde_json::to_vec_pretty(&metadata).unwrap_or_default(),
+            );
             self.exiting = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
@@ -286,29 +298,22 @@ impl IDGApp {
             .insert(egui::TextStyle::Body, FontId::proportional(14.0));
         ui.style_mut()
             .text_styles
-            .insert(egui::TextStyle::Button, FontId::proportional(13.0));
+            .insert(egui::TextStyle::Button, FontId::proportional(14.0));
         ui.visuals_mut().selection.bg_fill = ACCENT2;
         ui.visuals_mut().widgets.inactive.bg_stroke = Stroke::new(1.0_f32, BORDER);
 
-        ui.horizontal(|ui| {
-            let (rect, _) = ui.allocate_exact_size(Vec2::splat(50.0), egui::Sense::hover());
-            ui.painter().circle_filled(rect.center(), 25.0, BORDER);
-            draw_icon(ui.painter(), rect.shrink(12.0), Icon::Settings, TEXT);
-            ui.add_space(12.0);
-            ui.vertical(|ui| {
-                ui.label(
-                    RichText::new("Settings")
-                        .size(28.0)
-                        .family(egui::FontFamily::Name("idg-heading".into())),
-                );
-                ui.label(
-                    RichText::new("Configure IDG GO to match your preferences")
-                        .size(14.0)
-                        .color(TEXT_DIM),
-                );
-            });
-        });
-        ui.add_space(14.0);
+        ui.label(
+            RichText::new("Settings")
+                .size(32.0)
+                .color(TEXT)
+                .family(egui::FontFamily::Name("idg-heading".into())),
+        );
+        ui.label(
+            RichText::new("Make IDG GO work your way.")
+                .size(16.0)
+                .color(TEXT_DIM),
+        );
+        ui.add_space(18.0);
 
         // Reserve the footer before laying out the scroll area, so Save is always reachable.
         let body_height = (ui.available_height() - 86.0).max(80.0);
@@ -397,7 +402,7 @@ impl IDGApp {
                 if let Some(connection) = connection.filter(|connection| connection.seen.elapsed() < Duration::from_secs(150)) {
                     ui.horizontal_wrapped(|ui| {
                         Frame::none().fill(ROW_SEL).stroke(Stroke::new(1.0_f32, ACCENT2)).rounding(6.0).inner_margin(Margin::symmetric(8.0, 4.0)).show(ui, |ui| {
-                            ui.label(RichText::new("Extension module connected").color(ACCENT).size(12.0));
+                            ui.label(RichText::new("Extension module connected").color(SUCCESS).size(12.0));
                         });
                         hint(ui, &format!("v{} ({})", connection.version, connection.install_type));
                     });
@@ -448,7 +453,7 @@ impl IDGApp {
             .or_else(|| {
                 self.settings_message
                     .as_ref()
-                    .map(|text| (text.as_str(), GREEN))
+                    .map(|text| (text.as_str(), SUCCESS))
             })
             .unwrap_or((
                 if dirty {

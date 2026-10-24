@@ -4,6 +4,7 @@
 # Distribution / installer output
 /dist/*.exe
 /dist/*.zip
+/dist/SHA256SUMS.txt
 
 # OS artifacts
 .DS_Store

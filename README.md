@@ -6,7 +6,7 @@
 
 # IDG — Internet Download GO
 
-**A fast, lightweight download manager for Windows.**  
+**A Rust download manager with a Windows 11 Fluent-style desktop interface.**
 Splits every file into multiple parallel connections — just like IDM, but free and open source.
 
 <br/>
@@ -40,7 +40,20 @@ Splits every file into multiple parallel connections — just like IDM, but free
 
 ## 📸 Screenshot
 
-![IDG Screenshot](docs/screenshot.png)
+![IDG Windows 11 Fluent desktop interface](docs/screenshot.png)
+
+The refreshed **v1.4.3** interface is implemented directly in Rust/egui: blue sidebar navigation, search and filters, four live statistics, list/grid views, selection checkboxes, and a consistent Settings and download-dialog design. The screenshot above is captured from the actual desktop application.
+
+| Desktop workflow | Where to find it |
+| --- | --- |
+| New transfer | **New download**, empty-state **Add download**, or **Ctrl+N** |
+| Search and filter | Header search (**Ctrl+F**), sliders menu, or any sidebar category |
+| Bulk actions | Select row checkboxes or the header checkbox; Resume, Pause, Remove, Open folder |
+| Views and sorting | List/grid controls and Newest first / Oldest first above the table |
+| Settings | Sidebar **Settings** or **Ctrl+,**; save folder, connections, browser integration, startup/tray and updates |
+| New versions | Update popup and banner with release fixes, progress, Update now, Install and Later |
+
+See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md). At smaller window sizes, statistics and details become compact while the same actions remain available. Existing window size, saved preferences and user files are preserved. This refresh still reports **1.4.3**; install the refreshed package once if you already have an earlier 1.4.3 build.
 
 ---
 
@@ -48,7 +61,7 @@ Splits every file into multiple parallel connections — just like IDM, but free
 
 **IDG (Internet Download GO)** is a free and open-source download manager for Windows.
 
-It works the same way as **IDM (Internet Download Manager)** — it splits every download into multiple parallel connections and downloads all parts at the same time. This makes downloads **3–10× faster** than a regular single-connection download.
+It works the same way as **IDM (Internet Download Manager)** — it splits every download into multiple parallel connections and downloads all parts at the same time. Parallel connections can improve throughput when the server supports byte ranges; actual speed depends on the source and connection.
 
 | Feature | IDG | Regular Browser |
 |---|---|---|
@@ -86,9 +99,9 @@ Double-click the downloaded file and follow the wizard:
 
 ### Step 3 — Start downloading
 
-- Click **⬇ Add URL** in the toolbar
-- Paste any direct download link
-- Click **OK** — IDG downloads it with multiple parallel connections
+- Click **New download** in the sidebar, or press **Ctrl+N**
+- Paste a direct download link and review the filename and save folder
+- Click **Start download** — IDG uses its existing connection policy
 
 ---
 
@@ -147,17 +160,31 @@ Transfer rates use **Mbps** (decimal megabits per second), with 8 bits per byte;
 ## 🎯 Features
 
 - **Automatic parallel downloads** — chooses up to 32 connections from file size and verified server support; manual counts are available in Settings
-- **Pause & Resume** — stop and continue any download at any time
+- **Pause & Resume** — pause supported HTTP transfers and continue them in the same running session; YouTube/media jobs do not support pause
 - **Auto filename** — automatically reads the correct filename from the server
 - **Browser extension** — intercepts downloads from Chrome and Edge
 - **Right-click menu** — right-click any link → "Download with IDG"
 - **Live speed & ETA** — see real-time download speed and estimated time
 - **Category filter** — view All / Downloading / Finished / Paused / Failed
-- **Dark compact UI** — clean, minimal interface
+- **Windows 11 Fluent-style UI** — blue surfaces, Segoe typography, native window commands, live cards and a scalable vector empty state
+- **List and grid views** — search, category filtering, date sorting and checkbox multi-selection
+- **Safe removal** — confirmation removes queue entries and stops their transfers; downloaded files stay on disk
 - **Portable or installed** — complete portable ZIP or installer, including the native bridge and media tools
 - **Free & open source** — MIT license
 
 ---
+
+## Desktop screenshots
+
+![Download library and real controls, rendered with QA fixture rows](docs/download-library.png)
+
+Populated preview rows above are explicitly labeled QA fixtures; production statistics use the real download engine. Settings and dialogs use the same design system.
+
+![Fluent Settings](docs/settings.png)
+
+## Existing persistence limits
+
+Downloads already written to disk remain intact. The current queue/history is session-only, and paused workers are not restored after the application exits. This redesign preserves that existing behavior and does not introduce a new history format. The Windows folder chooser remains the native OS dialog. Changing the default folder affects manual downloads immediately; the existing browser server takes a fresh default-folder snapshot after restarting IDG.
 
 ## YouTube downloads
 

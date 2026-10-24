@@ -22,7 +22,9 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Isolated UI review, available only in development builds.
 pub fn settings_preview() -> bool {
-    cfg!(debug_assertions) && std::env::args().any(|argument| argument == "--settings-preview")
+    cfg!(debug_assertions)
+        && std::env::args()
+            .any(|argument| argument == "--settings-preview" || argument == "--ui-preview")
 }
 
 fn settings_preview_size() -> [f32; 2] {
@@ -132,6 +134,7 @@ fn main() -> eframe::Result {
                 desktop::DEFAULT_WINDOW_SIZE.into()
             })
             .with_min_inner_size(desktop::MIN_WINDOW_SIZE)
+            .with_decorations(false)
             .with_clamp_size_to_monitor_size(!settings_preview())
             .with_icon(Arc::new(icon)),
         ..Default::default()

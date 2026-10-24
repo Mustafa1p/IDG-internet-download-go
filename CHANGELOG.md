@@ -1,5 +1,11 @@
 ## 1.4.3 — 2026-10-24
 
+- Rebuild the existing Rust/egui interface around the supplied Windows 11 Fluent reference: blue sidebar, integrated search/title bar, separate live statistic cards, table and vector folder empty state.
+- Add working list/grid views, date sorting, checkbox multi-selection, bulk transfer actions and remove-from-list confirmation that preserves files.
+- Refresh Settings, download/media dialogs, details and update prompts; retain all engine, browser/native-host, startup/tray and updater behavior.
+- Support custom native minimize/maximize/restore/close, draggable chrome and resize edges, with reduced-motion preference and responsive layouts.
+- Add real desktop render checks across five window sizes and four rendering scales, debug-only interaction checks, and controlled pause/resume integrity coverage.
+
 - Announce newer releases in a centered popup with release fixes, download progress, Update now, installation, and Later controls.
 - Check for updates at startup and hourly even while IDG is hidden in the tray; announce each new version once per session.
 - Publish unsigned Windows releases without Azure credentials by default; retain opt-in signing through `IDG_SIGN_RELEASE=true` and label unsigned downloads in release notes.

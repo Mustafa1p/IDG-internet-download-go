@@ -2,7 +2,10 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use egui::{Color32, FontId, Frame, Margin, RichText, Rounding, Stroke, Ui, Vec2};
 mod library;
+#[cfg(debug_assertions)]
+mod preview_test;
 mod settings;
+mod shell;
 use tokio::runtime::Handle;
 
 use crate::{
@@ -19,22 +22,30 @@ use crate::{
 };
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const BG: Color32 = Color32::from_rgb(11, 21, 29);
-const PANEL: Color32 = Color32::from_rgb(20, 33, 43);
-const SIDEBAR: Color32 = Color32::from_rgb(14, 26, 35);
-const ROW_EVEN: Color32 = Color32::from_rgb(22, 37, 48);
+const BG: Color32 = Color32::from_rgb(11, 22, 37);
+const PANEL: Color32 = Color32::from_rgb(23, 38, 58);
+const SIDEBAR: Color32 = Color32::from_rgb(17, 30, 48);
+const ROW_EVEN: Color32 = Color32::from_rgb(25, 42, 63);
 // Calm row selection; filename text itself is not selectable.
-const ROW_SEL: Color32 = Color32::from_rgb(20, 62, 62);
-const ACCENT: Color32 = Color32::from_rgb(20, 212, 180);
-const ACCENT2: Color32 = Color32::from_rgb(10, 139, 126);
-const GREEN: Color32 = Color32::from_rgb(72, 199, 142);
+const ROW_SEL: Color32 = Color32::from_rgb(25, 58, 105);
+const ACCENT: Color32 = Color32::from_rgb(22, 120, 242);
+const ACCENT2: Color32 = Color32::from_rgb(0, 112, 250);
+const SUCCESS: Color32 = Color32::from_rgb(32, 211, 162);
+const GREEN: Color32 = SUCCESS;
 const RED: Color32 = Color32::from_rgb(240, 80, 80);
 const ORANGE: Color32 = Color32::from_rgb(255, 165, 0);
 const GRAY: Color32 = Color32::from_rgb(110, 115, 135);
 const DIMGRAY: Color32 = Color32::from_rgb(140, 157, 167);
-const TEXT: Color32 = Color32::from_rgb(236, 243, 245);
-const TEXT_DIM: Color32 = Color32::from_rgb(172, 189, 197);
-const BORDER: Color32 = Color32::from_rgb(39, 61, 76);
+const TEXT: Color32 = Color32::from_rgb(245, 248, 255);
+const TEXT_DIM: Color32 = Color32::from_rgb(174, 191, 215);
+const BORDER: Color32 = Color32::from_rgb(43, 60, 83);
+
+fn qa_control(ctx: &egui::Context, label: &str, rect: egui::Rect) {
+    #[cfg(debug_assertions)]
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(format!("qa:{label}")), rect));
+    #[cfg(not(debug_assertions))]
+    let _ = (ctx, label, rect);
+}
 
 // ── Categories ────────────────────────────────────────────────────────────────
 #[derive(PartialEq, Clone, Copy)]
@@ -123,6 +134,8 @@ impl Drop for AddDialog {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 pub struct IDGApp {
+    #[cfg(debug_assertions)]
+    preview_test: preview_test::PreviewTest,
     window_geometry: desktop::WindowGeometry,
     rt: Handle,
     tray: Option<SystemTray>,
@@ -135,6 +148,7 @@ pub struct IDGApp {
     downloads: Downloads,
     category: Category,
     selected_id: Option<String>,
+    library_state: library::LibraryState,
     show_add: bool,
     pending_browser_id: Option<String>,
     search: String,
@@ -173,12 +187,21 @@ impl IDGApp {
     ) -> Self {
         setup_visuals(&cc.egui_ctx);
         if crate::settings_preview() {
+            let scale = std::env::args()
+                .find_map(|argument| {
+                    argument
+                        .strip_prefix("--preview-scale=")
+                        .and_then(|value| value.parse::<f32>().ok())
+                })
+                .unwrap_or(1.0)
+                .clamp(1.0, 2.0);
+            cc.egui_ctx.set_pixels_per_point(scale);
             cc.egui_ctx
                 .send_viewport_cmd(egui::ViewportCommand::InnerSize(
                     crate::settings_preview_size().into(),
                 ));
         }
-        // Apply the smaller layout once on upgrade, then respect later resizing.
+        // Initialize older installations once; respect subsequent user resizing.
         if !crate::settings_preview()
             && !cc
                 .storage
@@ -186,7 +209,9 @@ impl IDGApp {
                 .unwrap_or(false)
         {
             cc.egui_ctx
-                .send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(960.0, 600.0)));
+                .send_viewport_cmd(egui::ViewportCommand::InnerSize(
+                    desktop::DEFAULT_WINDOW_SIZE,
+                ));
         }
         desktop::attach_window(cc);
         let (tray, mut desktop_error) = match SystemTray::new(&cc.egui_ctx) {
@@ -320,6 +345,8 @@ impl IDGApp {
         }
 
         let mut app = IDGApp {
+            #[cfg(debug_assertions)]
+            preview_test: preview_test::PreviewTest::default(),
             window_geometry: desktop::WindowGeometry::load(cc.storage),
             tray,
             close_to_tray,
@@ -332,6 +359,7 @@ impl IDGApp {
             downloads,
             category: Category::All,
             selected_id: None,
+            library_state: library::LibraryState::default(),
             show_add: false,
             pending_browser_id: None,
             search: String::new(),
@@ -373,6 +401,59 @@ impl IDGApp {
             auto_install_updates,
             auto_extension_updates,
         };
+        if crate::settings_preview() {
+            app.close_to_tray = false;
+            if std::env::args().any(|argument| argument == "--preview-populated") {
+                let mut items = app.downloads.lock().unwrap();
+                for (index, (name, status, bytes)) in [
+                    ("ubuntu-desktop.iso", Status::Downloading, 8_400_000),
+                    ("Quarterly report.pdf", Status::Completed, 3_200_000),
+                    ("Design assets.zip", Status::Paused, 5_100_000),
+                    ("City walk.mp4", Status::Queued, 0),
+                    ("Project notes.txt", Status::Failed, 600),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let mut item = DownloadItem::new(
+                        format!("https://example.com/{name}"),
+                        PathBuf::from(&app.default_save_dir).join(name),
+                        4,
+                    );
+                    item.status = status;
+                    item.total_bytes = Some(if index == 1 { bytes } else { 20_000_000 });
+                    item.downloaded_bytes = bytes;
+                    item.speed_bps = if index == 0 { 3_200_000.0 } else { 0.0 };
+                    item.added_at =
+                        chrono::Utc::now() - chrono::Duration::minutes(index as i64 * 7);
+                    if index == 4 {
+                        item.error = Some(
+                            "The server connection was interrupted. Retry the download.".into(),
+                        );
+                    }
+                    if std::env::args().any(|argument| argument == "--preview-selected")
+                        && index == 2
+                    {
+                        app.selected_id = Some(item.id.clone());
+                        app.library_state.selected_ids.insert(item.id.clone());
+                    }
+                    items.push(item);
+                }
+            }
+            app.library_state.grid = std::env::args().any(|argument| argument == "--preview-grid");
+            app.library_state.confirm_remove =
+                std::env::args().any(|argument| argument == "--preview-remove");
+
+            if std::env::args().any(|argument| argument == "--ui-preview") {
+                app.show_settings = false;
+            }
+            if std::env::args().any(|argument| argument == "--preview-add") {
+                app.show_settings = false;
+                app.dialog.url = "https://example.com/download.zip".into();
+                app.dialog.filename = "download.zip".into();
+                app.show_add = true;
+            }
+        }
         if crate::settings_preview()
             && std::env::args().any(|argument| argument == "--update-preview")
         {
@@ -398,6 +479,9 @@ impl IDGApp {
         preserve_filename: bool,
         options: MediaOptions,
     ) {
+        if crate::settings_preview() {
+            return;
+        }
         let segments = self.connection_settings.lock().unwrap().requested_count();
         let mut item = DownloadItem::new(url, save_path, segments);
         item.preserve_filename = preserve_filename;
@@ -422,7 +506,8 @@ impl IDGApp {
         }
 
         // Auto-paste clipboard URL when the dialog first opens.
-        if self.dialog.url.is_empty()
+        if !crate::settings_preview()
+            && self.dialog.url.is_empty()
             && let Ok(mut cb) = arboard::Clipboard::new()
             && let Ok(text) = cb.get_text()
         {
@@ -465,26 +550,35 @@ impl IDGApp {
             }
         }
 
-        let mut should_close = false;
+        let mut should_close =
+            ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        let mut dialog_open = true;
 
         egui::Window::new("New download")
+            .open(&mut dialog_open)
+            .default_height(0.0)
+            .min_height(0.0)
+            .vscroll(media::video_url(&self.dialog.url).is_some())
+            .max_height((ctx.screen_rect().height() - 90.0).max(300.0))
             .resizable(false)
             .collapsible(false)
-            .default_width(480.0)
+            .default_width(540.0)
             .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
             .show(ctx, |ui| {
-                ui.style_mut().spacing.item_spacing = Vec2::new(8.0, 8.0);
+                ui.style_mut().spacing.item_spacing = Vec2::new(10.0, 12.0);
+                ui.label(RichText::new("Save a file from a link or your browser.").color(TEXT_DIM));
+                ui.add_space(4.0);
 
                 // Address row
                 ui.horizontal(|ui| {
                     ui.add_sized(
                         [62.0, 22.0],
-                        egui::Label::new(RichText::new("Address").size(12.0).color(TEXT_DIM)),
+                        egui::Label::new(RichText::new("Address").size(14.0).color(TEXT_DIM)),
                     );
                     let r = ui.add(
                         egui::TextEdit::singleline(&mut self.dialog.url)
                             .desired_width(300.0)
-                            .font(FontId::proportional(12.0))
+                            .font(FontId::proportional(14.0))
                             .hint_text("https://example.com/file.zip"),
                     );
                     if r.changed() {
@@ -562,12 +656,12 @@ impl IDGApp {
                 ui.horizontal(|ui| {
                     ui.add_sized(
                         [62.0, 22.0],
-                        egui::Label::new(RichText::new("Save to").size(12.0).color(TEXT_DIM)),
+                        egui::Label::new(RichText::new("Save to").size(14.0).color(TEXT_DIM)),
                     );
                     ui.add(
                         egui::TextEdit::singleline(&mut self.dialog.save_dir)
                             .desired_width(250.0)
-                            .font(FontId::proportional(12.0)),
+                            .font(FontId::proportional(14.0)),
                     );
                     if ui.small_button("Browse…").clicked()
                         && let Some(p) = rfd::FileDialog::new()
@@ -652,6 +746,7 @@ impl IDGApp {
                 });
             });
 
+        should_close |= !dialog_open;
         // Close AFTER the window borrow is released.
         if should_close {
             if let Some(id) = self.pending_browser_id.take() {
@@ -665,6 +760,9 @@ impl IDGApp {
     }
 
     fn inspect_media(&mut self, ctx: &egui::Context) {
+        if crate::settings_preview() {
+            return;
+        }
         if let Some(task) = self.dialog.media_task.take() {
             task.abort();
         }
@@ -972,49 +1070,14 @@ impl IDGApp {
             }
         }
     }
-
-    fn resume_selected(&self) {
-        if let Some(ref id) = self.selected_id.clone() {
-            let mut lock = self.downloads.lock().unwrap();
-            if let Some(i) = lock.iter_mut().find(|i| &i.id == id) {
-                i.pause_flag
-                    .store(false, std::sync::atomic::Ordering::Relaxed);
-                if matches!(i.status, Status::Paused) {
-                    i.status = Status::Downloading;
-                }
-            }
-        }
-    }
-
-    fn pause_selected(&self) {
-        if let Some(ref id) = self.selected_id.clone() {
-            let mut lock = self.downloads.lock().unwrap();
-            if let Some(i) = lock
-                .iter_mut()
-                .find(|i| &i.id == id && i.status.is_active() && i.supports_pause())
-            {
-                i.pause_flag
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                i.status = Status::Paused;
-                i.speed_bps = 0.0;
-            }
-        }
-    }
-
-    fn delete_selected(&mut self) {
-        if let Some(id) = self.selected_id.take() {
-            use std::sync::atomic::Ordering::Relaxed;
-            let lock = self.downloads.lock().unwrap();
-            if let Some(i) = lock.iter().find(|i| i.id == id) {
-                i.cancel_flag.store(true, Relaxed);
-            }
-            drop(lock);
-            self.downloads.lock().unwrap().retain(|i| i.id != id);
-        }
-    }
 }
 
 impl eframe::App for IDGApp {
+    #[cfg(debug_assertions)]
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        self.preview_test.inject(ctx, raw_input);
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         if crate::settings_preview() {
             return;
@@ -1042,6 +1105,31 @@ impl eframe::App for IDGApp {
         if crate::settings_preview() {
             self.capture_settings_preview(ctx);
         }
+        if crate::settings_preview() {
+            let key = egui::Id::new("preview-scale-applied");
+            let phase = ctx.data(|data| data.get_temp::<u8>(key).unwrap_or(0));
+            if phase == 0 {
+                let scale = std::env::args()
+                    .find_map(|argument| {
+                        argument
+                            .strip_prefix("--preview-scale=")
+                            .and_then(|value| value.parse::<f32>().ok())
+                    })
+                    .unwrap_or(1.0)
+                    .clamp(1.0, 2.0);
+                ctx.set_pixels_per_point(scale);
+                ctx.data_mut(|data| data.insert_temp(key, 1u8));
+            } else if phase == 1 {
+                // Zoom is applied at the next frame boundary, before resizing.
+                ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(
+                    desktop::MIN_WINDOW_SIZE,
+                ));
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(
+                    crate::settings_preview_size().into(),
+                ));
+                ctx.data_mut(|data| data.insert_temp(key, 2u8));
+            }
+        }
         if self.start_hidden {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             self.start_hidden = false;
@@ -1066,6 +1154,15 @@ impl eframe::App for IDGApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         }
 
+        // Windows can briefly report a zero-sized client area during minimize.
+        // Keep servicing native/tray actions, but do not lay out columns in it.
+        if ctx.input(|input| input.viewport().minimized == Some(true))
+            || ctx.screen_rect().width() < desktop::MIN_WINDOW_SIZE.x * 0.5
+            || ctx.screen_rect().height() < 180.0
+        {
+            ctx.request_repaint_after(Duration::from_millis(250));
+            return;
+        }
         let items: Vec<DownloadItem> = self.downloads.lock().unwrap().clone();
         if !self.show_add
             && let Some(item) = items.iter().find(|item| item.awaiting_confirmation)
@@ -1103,46 +1200,69 @@ impl eframe::App for IDGApp {
             });
         }
 
-        // ── Status bar ───────────────────────────────────────────────────────
-        egui::TopBottomPanel::bottom("statusbar")
-            .min_height(22.0)
-            .max_height(22.0)
+        self.shell_shortcuts(ctx);
+        let wide = ctx.screen_rect().width() >= 1100.0;
+        let sidebar_width = if ctx.screen_rect().width() >= 1400.0 {
+            320.0
+        } else if wide {
+            260.0
+        } else {
+            190.0
+        };
+
+        // The sidebar spans the full window, matching the reference's vertical rail.
+        egui::SidePanel::left("sidebar")
+            .exact_width(sidebar_width)
+            .resizable(false)
+            .frame(Frame::none().fill(SIDEBAR).inner_margin(Margin::symmetric(
+                if wide { 18.0 } else { 10.0 },
+                if ctx.screen_rect().height() < 600.0 {
+                    6.0
+                } else {
+                    14.0
+                },
+            )))
+            .show(ctx, |ui| {
+                shell::surface(
+                    ui.painter(),
+                    ui.max_rect().expand(18.0),
+                    Color32::from_rgb(25, 39, 56),
+                    SIDEBAR,
+                );
+                ui.spacing_mut().item_spacing.y = 3.0;
+                egui::ScrollArea::vertical()
+                    .id_salt("navigation-scroll")
+                    .show(ui, |ui| self.sidebar(ui, &items));
+            });
+        egui::TopBottomPanel::top("window-header")
+            .exact_height(if wide { 72.0 } else { 58.0 })
             .frame(
                 Frame::none()
-                    .fill(Color32::from_rgb(16, 17, 26))
+                    .fill(PANEL)
                     .inner_margin(Margin::symmetric(8.0, 3.0)),
             )
-            .show(ctx, |ui| {
-                self.status_bar(ui, &items);
-            });
-
-        // ── Sidebar ──────────────────────────────────────────────────────────
-        egui::SidePanel::left("sidebar")
-            .exact_width(
-                if self.show_settings && ctx.screen_rect().width() >= 1100.0 {
-                    250.0
-                } else {
-                    174.0
-                },
-            )
-            .resizable(false)
+            .show(ctx, |ui| self.shell_header(ui, ctx));
+        egui::TopBottomPanel::bottom("statusbar")
+            .exact_height(if wide { 42.0 } else { 30.0 })
             .frame(
                 Frame::none()
-                    .fill(SIDEBAR)
-                    .inner_margin(Margin::same(10.0))
-                    .stroke(Stroke::new(1.0_f32, BORDER)),
+                    .fill(Color32::from_rgb(12, 24, 39))
+                    .inner_margin(Margin::symmetric(if wide { 24.0 } else { 12.0 }, 6.0)),
             )
-            .show(ctx, |ui| {
-                ui.style_mut().spacing.item_spacing.y = 1.0;
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.sidebar(ui, &items);
-                });
-            });
-
-        // ── Main area ────────────────────────────────────────────────────────
+            .show(ctx, |ui| self.status_bar(ui, &items));
         egui::CentralPanel::default()
-            .frame(Frame::none().fill(BG).inner_margin(Margin::same(14.0)))
+            .frame(Frame::none().fill(BG).inner_margin(Margin::same(if wide {
+                24.0
+            } else {
+                14.0
+            })))
             .show(ctx, |ui| {
+                shell::surface(
+                    ui.painter(),
+                    ui.max_rect().expand(24.0),
+                    Color32::from_rgb(13, 29, 48),
+                    BG,
+                );
                 if self.show_settings {
                     self.settings_page(ui, ctx, frame);
                 } else {
@@ -1150,6 +1270,7 @@ impl eframe::App for IDGApp {
                     self.download_table(ui, &items);
                 }
             });
+        self.resize_edges(ctx);
 
         // ── Dialogs ──────────────────────────────────────────────────────────
         if self.show_add {
@@ -1159,6 +1280,27 @@ impl eframe::App for IDGApp {
             self.update_prompt(ctx);
         }
 
+        #[cfg(debug_assertions)]
+        self.preview_test.observe(
+            ctx,
+            preview_test::Snapshot {
+                category: self.category.label().into(),
+                show_settings: self.show_settings,
+                show_add: self.show_add,
+                grid: self.library_state.grid,
+                selection_count: self.library_state.selected_ids.len(),
+                search: self.search.clone(),
+                statuses: self
+                    .downloads
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .map(|item| (item.filename.clone(), format!("{:?}", item.status)))
+                    .collect(),
+                confirm_remove: self.library_state.confirm_remove,
+                newest_first: self.newest_first,
+            },
+        );
         // Repaint while active
         let active = items.iter().any(|i| i.status.is_active());
         ctx.request_repaint_after(if active {
@@ -1177,7 +1319,11 @@ fn setup_visuals(ctx: &egui::Context) {
         .map(PathBuf::from)
         .map(|path| path.join("Fonts"));
     if let Some(root) = font_root {
-        for (name, file) in [("idg-ui", "segoeui.ttf"), ("idg-semibold", "seguisb.ttf")] {
+        for (name, file) in [
+            ("idg-ui", "segoeui.ttf"),
+            ("idg-semibold", "seguisb.ttf"),
+            ("idg-ui", "SegUIVar.ttf"),
+        ] {
             if let Ok(bytes) = std::fs::read(root.join(file)) {
                 fonts
                     .font_data
@@ -1206,12 +1352,18 @@ fn setup_visuals(ctx: &egui::Context) {
     v.widgets.inactive.weak_bg_fill = ROW_EVEN;
     v.widgets.hovered.weak_bg_fill = ROW_SEL;
     v.window_fill = PANEL;
+    v.widgets.open.weak_bg_fill = PANEL;
+    v.widgets.open.bg_fill = PANEL;
     v.override_text_color = Some(TEXT);
+    v.widgets.inactive.rounding = Rounding::same(7.0);
+    v.widgets.hovered.rounding = Rounding::same(7.0);
+    v.widgets.active.rounding = Rounding::same(7.0);
+    v.widgets.hovered.bg_fill = Color32::from_rgb(39, 62, 91);
     v.selection.bg_fill = ROW_SEL;
     v.selection.stroke = Stroke::new(1.0_f32, TEXT);
     v.hyperlink_color = ACCENT;
     v.window_stroke = Stroke::new(1.0_f32, BORDER);
-    v.window_rounding = Rounding::same(6.0);
+    v.window_rounding = Rounding::same(12.0);
     v.widgets.noninteractive.bg_fill = ROW_EVEN;
     v.widgets.inactive.bg_fill = ROW_EVEN;
     v.widgets.hovered.bg_fill = ROW_SEL;
@@ -1221,21 +1373,25 @@ fn setup_visuals(ctx: &egui::Context) {
 
     let mut s = (*ctx.style()).clone();
     s.text_styles.insert(
+        egui::TextStyle::Heading,
+        FontId::new(26.0, egui::FontFamily::Name("idg-heading".into())),
+    );
+    s.text_styles.insert(
         egui::TextStyle::Body,
-        FontId::new(12.5, egui::FontFamily::Proportional),
+        FontId::new(14.0, egui::FontFamily::Proportional),
     );
     s.text_styles.insert(
         egui::TextStyle::Button,
-        FontId::new(12.0, egui::FontFamily::Proportional),
+        FontId::new(14.0, egui::FontFamily::Proportional),
     );
     s.text_styles.insert(
         egui::TextStyle::Small,
-        FontId::new(10.5, egui::FontFamily::Proportional),
+        FontId::new(12.0, egui::FontFamily::Proportional),
     );
     s.spacing.item_spacing = Vec2::new(6.0, 4.0);
-    s.spacing.window_margin = Margin::same(8.0);
+    s.spacing.window_margin = Margin::same(18.0);
     s.spacing.button_padding = Vec2::new(10.0, 6.0);
-    s.animation_time = 0.15;
+    s.animation_time = if desktop::reduced_motion() { 0.0 } else { 0.12 };
     ctx.set_style(s);
 }
 

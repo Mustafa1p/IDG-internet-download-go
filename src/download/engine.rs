@@ -266,3 +266,158 @@ fn build_segments(count: usize, total: Option<u64>) -> Vec<(u64, u64)> {
         }
     }
 }
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+    use axum::{
+        Router,
+        body::Body,
+        http::{HeaderMap, Method, StatusCode},
+        response::{IntoResponse, Response},
+        routing::get,
+    };
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    const SIZE: usize = 256 * 1024 + 19;
+
+    // A slow, local byte-range source gives the worker a real socket and file
+    // while keeping pause/resume assertions independent of internet services.
+    async fn range_file(method: Method, headers: HeaderMap) -> Response {
+        let mut result = HeaderMap::new();
+        result.insert("accept-ranges", "bytes".parse().unwrap());
+        result.insert("content-length", SIZE.to_string().parse().unwrap());
+        if method == Method::HEAD {
+            return (result, Body::empty()).into_response();
+        }
+        let (start, end) = headers["range"]
+            .to_str()
+            .unwrap()
+            .strip_prefix("bytes=")
+            .unwrap()
+            .split_once('-')
+            .unwrap();
+        let (start, end): (usize, usize) = (start.parse().unwrap(), end.parse().unwrap());
+        result.insert(
+            "content-length",
+            (end - start + 1).to_string().parse().unwrap(),
+        );
+        result.insert(
+            "content-range",
+            format!("bytes {start}-{end}/{SIZE}").parse().unwrap(),
+        );
+        let stream = futures::stream::unfold(start, move |offset| async move {
+            if offset > end {
+                return None;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+            let next = (offset + 4096).min(end + 1);
+            let bytes: Vec<u8> = (offset..next).map(|n| (n % 251) as u8).collect();
+            Some((Ok::<_, std::io::Error>(bytes), next))
+        });
+        (
+            StatusCode::PARTIAL_CONTENT,
+            result,
+            Body::from_stream(stream),
+        )
+            .into_response()
+    }
+
+    async fn source() -> (String, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/file", listener.local_addr().unwrap());
+        let task = tokio::spawn(async move {
+            axum::serve(listener, Router::new().route("/file", get(range_file)))
+                .await
+                .unwrap();
+        });
+        (url, task)
+    }
+
+    #[tokio::test]
+    async fn range_download_pauses_resumes_and_preserves_exact_bytes() {
+        let (url, source) = source().await;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("pause-resume.bin");
+        let item = crate::download::types::DownloadItem::new(url, path.clone(), 1);
+        let id = item.id.clone();
+        let pause = item.pause_flag.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        let worker = tokio::spawn(start_download(
+            Arc::new(reqwest::Client::new()),
+            downloads.clone(),
+            id,
+        ));
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if downloads.lock().unwrap()[0].downloaded_bytes > 0 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+        })
+        .await
+        .expect("download did not begin");
+        pause.store(true, Ordering::Relaxed);
+        // Let an already-writing chunk settle before measuring paused bytes.
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        let paused_bytes = downloads.lock().unwrap()[0].downloaded_bytes;
+        assert!(paused_bytes > 0 && paused_bytes < SIZE as u64);
+        tokio::time::sleep(Duration::from_millis(220)).await;
+        assert_eq!(downloads.lock().unwrap()[0].downloaded_bytes, paused_bytes);
+        assert!(!worker.is_finished(), "paused worker must remain resumable");
+        pause.store(false, Ordering::Relaxed);
+        tokio::time::timeout(Duration::from_secs(5), worker)
+            .await
+            .expect("resumed download did not finish")
+            .unwrap()
+            .unwrap();
+        let item = downloads.lock().unwrap()[0].clone();
+        assert_eq!(item.status, Status::Completed);
+        assert_eq!(item.downloaded_bytes, SIZE as u64);
+        assert!(item.completed_at.is_some());
+        let expected: Vec<u8> = (0..SIZE).map(|n| (n % 251) as u8).collect();
+        assert_eq!(tokio::fs::read(path).await.unwrap(), expected);
+        source.abort();
+    }
+
+    #[tokio::test]
+    async fn cancel_while_paused_exits_without_reporting_completion_or_deleting_file() {
+        let (url, source) = source().await;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("cancelled.bin");
+        let item = crate::download::types::DownloadItem::new(url, path.clone(), 1);
+        item.pause_flag.store(true, Ordering::Relaxed);
+        let cancel = item.cancel_flag.clone();
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        let worker = tokio::spawn(start_download(
+            Arc::new(reqwest::Client::new()),
+            downloads.clone(),
+            id,
+        ));
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if downloads.lock().unwrap()[0].status == Status::Paused {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("worker did not enter paused state");
+        cancel.store(true, Ordering::Relaxed);
+        tokio::time::timeout(Duration::from_secs(5), worker)
+            .await
+            .expect("cancelling a paused worker must not hang")
+            .unwrap()
+            .unwrap();
+        let item = downloads.lock().unwrap()[0].clone();
+        assert_eq!(item.status, Status::Cancelled);
+        assert_eq!(item.downloaded_bytes, 0);
+        assert!(item.completed_at.is_none());
+        assert!(path.exists(), "cancelling must not delete downloaded files");
+        source.abort();
+    }
+}

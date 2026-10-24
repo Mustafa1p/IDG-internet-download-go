@@ -1,0 +1,230 @@
+[
+  {
+    "name": "empty-800x500",
+    "logical_size": [
+      800,
+      500
+    ],
+    "scale": 1.0,
+    "raster": [
+      800,
+      500
+    ]
+  },
+  {
+    "name": "empty-1280x720",
+    "logical_size": [
+      1280,
+      720
+    ],
+    "scale": 1.0,
+    "raster": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "empty-1366x768",
+    "logical_size": [
+      1366,
+      768
+    ],
+    "scale": 1.0,
+    "raster": [
+      1366,
+      768
+    ]
+  },
+  {
+    "name": "empty-1600x900",
+    "logical_size": [
+      1600,
+      900
+    ],
+    "scale": 1.0,
+    "raster": [
+      1600,
+      900
+    ]
+  },
+  {
+    "name": "empty-1920x1080",
+    "logical_size": [
+      1920,
+      1080
+    ],
+    "scale": 1.0,
+    "raster": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "name": "scale-1.25",
+    "logical_size": [
+      800,
+      500
+    ],
+    "scale": 1.25,
+    "raster": [
+      1000,
+      625
+    ]
+  },
+  {
+    "name": "scale-1.5",
+    "logical_size": [
+      800,
+      500
+    ],
+    "scale": 1.5,
+    "raster": [
+      1200,
+      750
+    ]
+  },
+  {
+    "name": "scale-2.0",
+    "logical_size": [
+      800,
+      500
+    ],
+    "scale": 2.0,
+    "raster": [
+      1600,
+      1000
+    ]
+  },
+  {
+    "name": "reference",
+    "logical_size": [
+      1540,
+      930
+    ],
+    "scale": 1.0,
+    "raster": [
+      1540,
+      930
+    ]
+  },
+  {
+    "name": "list",
+    "logical_size": [
+      1280,
+      800
+    ],
+    "scale": 1.0,
+    "raster": [
+      1280,
+      800
+    ]
+  },
+  {
+    "name": "selected",
+    "logical_size": [
+      1280,
+      800
+    ],
+    "scale": 1.0,
+    "raster": [
+      1280,
+      800
+    ]
+  },
+  {
+    "name": "grid",
+    "logical_size": [
+      1280,
+      800
+    ],
+    "scale": 1.0,
+    "raster": [
+      1280,
+      800
+    ]
+  },
+  {
+    "name": "list-minimum",
+    "logical_size": [
+      800,
+      500
+    ],
+    "scale": 1.0,
+    "raster": [
+      800,
+      500
+    ]
+  },
+  {
+    "name": "settings",
+    "logical_size": [
+      1440,
+      1000
+    ],
+    "scale": 1.0,
+    "raster": [
+      1440,
+      1000
+    ]
+  },
+  {
+    "name": "settings-minimum",
+    "logical_size": [
+      800,
+      500
+    ],
+    "scale": 1.0,
+    "raster": [
+      800,
+      500
+    ]
+  },
+  {
+    "name": "add",
+    "logical_size": [
+      1280,
+      800
+    ],
+    "scale": 1.0,
+    "raster": [
+      1280,
+      800
+    ]
+  },
+  {
+    "name": "add-minimum",
+    "logical_size": [
+      800,
+      500
+    ],
+    "scale": 1.0,
+    "raster": [
+      800,
+      500
+    ]
+  },
+  {
+    "name": "update",
+    "logical_size": [
+      1280,
+      800
+    ],
+    "scale": 1.0,
+    "raster": [
+      1280,
+      800
+    ]
+  },
+  {
+    "name": "remove",
+    "logical_size": [
+      1280,
+      800
+    ],
+    "scale": 1.0,
+    "raster": [
+      1280,
+      800
+    ]
+  }
+]

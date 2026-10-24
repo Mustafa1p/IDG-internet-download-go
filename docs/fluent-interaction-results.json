@@ -1,0 +1,1163 @@
+{
+  "checks": [
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "All downloads",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "Downloading",
+      "check": "Downloading",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "Completed",
+      "check": "Completed",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "Paused",
+      "check": "Paused",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "Failed",
+      "check": "Failed",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "Videos & audio",
+      "check": "Videos & audio",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "Documents",
+      "check": "Documents",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "Archives",
+      "check": "Archives",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "Other",
+      "check": "Other",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "All downloads",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": true,
+      "category": "All downloads",
+      "check": "New download shortcut",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Close add dialog",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Settings shortcut",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": true,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Leave settings",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Grid view",
+      "confirm_remove": false,
+      "grid": true,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "List view",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Select all downloads",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 5,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Pause selected downloads",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 5,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Paused"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Paused"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Resume selected downloads",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 5,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Confirm remove",
+      "confirm_remove": true,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 5,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Cancel remove",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 5,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Clear selection",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Open sort menu",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Oldest first",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": false,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Reopen sort menu",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": false,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Newest first",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "None",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Focus search",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Search report",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "report",
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 6, prefer_next_row: true }, secondary: CCursor { index: 6, prefer_next_row: true } })",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Select search text",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "report",
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 6, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: false } })",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Clear search",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Maximize",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Restore",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    },
+    {
+      "add_dialog": false,
+      "category": "All downloads",
+      "check": "Minimize and restore",
+      "confirm_remove": false,
+      "grid": false,
+      "newest_first": true,
+      "passed": true,
+      "search": "",
+      "search_cursor": "Some(CCursorRange { primary: CCursor { index: 0, prefer_next_row: true }, secondary: CCursor { index: 0, prefer_next_row: true } })",
+      "selection_count": 0,
+      "settings": false,
+      "statuses": [
+        [
+          "ubuntu-desktop.iso",
+          "Downloading"
+        ],
+        [
+          "Quarterly report.pdf",
+          "Completed"
+        ],
+        [
+          "Design assets.zip",
+          "Downloading"
+        ],
+        [
+          "City walk.mp4",
+          "Queued"
+        ],
+        [
+          "Project notes.txt",
+          "Failed"
+        ]
+      ]
+    }
+  ],
+  "error": null,
+  "in_progress": false,
+  "method": "Debug preview: synthetic egui input against actual rendered controls; native viewport state assertions",
+  "passed": true
+}
