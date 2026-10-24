@@ -414,7 +414,7 @@ impl IDGApp {
         let height = if spacious {
             44.0
         } else if ui.ctx().screen_rect().height() < 550.0 {
-            24.0
+            22.0
         } else {
             30.0
         };
@@ -479,10 +479,13 @@ impl IDGApp {
                     TEXT_DIM,
                 );
                 ui.painter().text(
-                    egui::pos2(rect.left() + 57.0, rect.center().y),
+                    egui::pos2(
+                        rect.left() + if spacious { 57.0 } else { 49.0 },
+                        rect.center().y,
+                    ),
                     egui::Align2::LEFT_CENTER,
                     category.label(),
-                    FontId::proportional(if spacious { 15.0 } else { 12.0 }),
+                    FontId::proportional(if spacious { 15.0 } else { 11.0 }),
                     if selected { TEXT } else { TEXT_DIM },
                 );
                 let badge = egui::Rect::from_center_size(
@@ -517,7 +520,7 @@ impl IDGApp {
             }
         }
         ui.add_space(
-            (ui.available_height() - if short { 96.0 } else { 126.0 }).max(if short {
+            (ui.available_height() - if short { 112.0 } else { 126.0 }).max(if short {
                 4.0
             } else {
                 10.0
@@ -554,10 +557,10 @@ impl IDGApp {
             TEXT_DIM,
         );
         ui.painter().text(
-            egui::pos2(r.left() + 57.0, r.center().y),
+            egui::pos2(r.left() + if spacious { 57.0 } else { 49.0 }, r.center().y),
             egui::Align2::LEFT_CENTER,
             "Settings",
-            FontId::proportional(if spacious { 15.0 } else { 12.0 }),
+            FontId::proportional(if spacious { 15.0 } else { 11.0 }),
             TEXT,
         );
         settings
@@ -591,24 +594,36 @@ impl IDGApp {
             TEXT_DIM,
         );
         ui.painter().text(
-            egui::pos2(r.left() + 57.0, r.top() + 14.0),
+            egui::pos2(
+                r.left() + if spacious { 57.0 } else { 49.0 },
+                r.top() + 14.0,
+            ),
             egui::Align2::LEFT_CENTER,
             "Download folder",
-            FontId::proportional(if spacious { 14.0 } else { 12.0 }),
+            FontId::proportional(if spacious { 14.0 } else { 11.0 }),
             TEXT,
         );
-        let path = ui.painter().layout(
+        let path = ui.painter().layout_no_wrap(
             self.default_save_dir.clone(),
             FontId::proportional(if spacious { 12.0 } else { 10.0 }),
             TEXT_DIM,
-            (r.width() - 67.0).max(60.0),
         );
         ui.painter()
             .with_clip_rect(egui::Rect::from_min_max(
-                egui::pos2(r.left() + 57.0, r.top() + 27.0),
+                egui::pos2(
+                    r.left() + if spacious { 57.0 } else { 49.0 },
+                    r.top() + 27.0,
+                ),
                 r.right_bottom(),
             ))
-            .galley(egui::pos2(r.left() + 57.0, r.top() + 27.0), path, TEXT_DIM);
+            .galley(
+                egui::pos2(
+                    r.left() + if spacious { 57.0 } else { 49.0 },
+                    r.top() + 27.0,
+                ),
+                path,
+                TEXT_DIM,
+            );
         folder.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Open download folder")
         });
@@ -667,25 +682,57 @@ impl IDGApp {
             ),
         ];
         if ui.ctx().screen_rect().height() < 700.0 {
-            card()
-                .inner_margin(Margin::symmetric(10.0, 8.0))
-                .show(ui, |ui| {
-                    ui.columns(4, |columns| {
-                        for (column, (_, value, label)) in columns.iter_mut().zip(&values) {
-                            let caption = match *label {
-                                "Current speed" => "",
-                                "Active downloads" => " active",
-                                "Completed" => " completed",
-                                _ => " queued",
-                            };
-                            column.label(
-                                RichText::new(format!("{value}{caption}"))
-                                    .size(13.0)
-                                    .color(TEXT),
-                            );
-                        }
-                    });
-                });
+            let gap = 8.0;
+            let width = (ui.available_width() - gap * 3.0) / 4.0;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                for (index, (icon, value, label)) in values.iter().enumerate() {
+                    let (rect, _) =
+                        ui.allocate_exact_size(Vec2::new(width, 56.0), egui::Sense::hover());
+                    ui.painter().add(gradient_panel(
+                        rect,
+                        10.0,
+                        PANEL,
+                        Color32::from_rgb(20, 33, 51),
+                    ));
+                    ui.painter()
+                        .rect_stroke(rect, 10.0, Stroke::new(1.0_f32, BORDER));
+                    let color = match index {
+                        0 => ACCENT,
+                        3 => Color32::from_rgb(145, 183, 255),
+                        _ => SUCCESS,
+                    };
+                    let icon_rect = egui::Rect::from_center_size(
+                        egui::pos2(rect.left() + 23.0, rect.center().y),
+                        Vec2::splat(30.0),
+                    );
+                    ui.painter()
+                        .rect_filled(icon_rect, 8.0, color.gamma_multiply(0.10));
+                    draw_icon(ui.painter(), icon_rect.shrink(5.0), *icon, color);
+                    if index == 2 {
+                        ui.painter().circle_stroke(
+                            icon_rect.center(),
+                            11.0,
+                            Stroke::new(1.8_f32, color),
+                        );
+                    }
+                    let text_x = rect.left() + 45.0;
+                    ui.painter().text(
+                        egui::pos2(text_x, rect.center().y - 8.0),
+                        egui::Align2::LEFT_CENTER,
+                        value,
+                        FontId::proportional(13.0),
+                        TEXT,
+                    );
+                    ui.painter().text(
+                        egui::pos2(text_x, rect.center().y + 12.0),
+                        egui::Align2::LEFT_CENTER,
+                        label,
+                        FontId::proportional(10.0),
+                        TEXT_DIM,
+                    );
+                }
+            });
             ui.add_space(10.0);
             self.toolbar(ui);
             ui.add_space(8.0);
@@ -1391,8 +1438,8 @@ impl IDGApp {
                 rect.center().x,
                 rect.top()
                     + 42.0
-                    + (rect.height() - 42.0 - 320.0 * scale).max(0.0) * 0.5
-                    + 85.0 * scale,
+                    + (rect.height() - 42.0 - 236.0 * scale).max(0.0) * 0.5
+                    + 73.0 * scale,
             );
             if query.is_empty() && rect.height() < 220.0 {
                 let body = egui::Rect::from_min_max(
@@ -1406,21 +1453,6 @@ impl IDGApp {
                     FontId::new(15.0, egui::FontFamily::Name("idg-heading".into())),
                     TEXT,
                 );
-                let button = egui::Rect::from_center_size(
-                    egui::pos2(body.right() - 91.0, body.center().y),
-                    Vec2::new(180.0, 32.0),
-                );
-                ui.allocate_new_ui(egui::UiBuilder::new().max_rect(button), |ui| {
-                    if ui
-                        .add_sized(
-                            button.size(),
-                            egui::Button::new("+ Add download").fill(ACCENT),
-                        )
-                        .clicked()
-                    {
-                        self.open_add();
-                    }
-                });
             } else if query.is_empty() {
                 draw_empty_folder(
                     ui.painter(),
@@ -1450,53 +1482,6 @@ impl IDGApp {
                     FontId::proportional(16.0 * scale.max(0.65)),
                     TEXT_DIM,
                 );
-                let button = egui::Rect::from_center_size(
-                    center + Vec2::new(0.0, 211.0) * scale,
-                    Vec2::new(270.0, 48.0),
-                );
-                ui.allocate_new_ui(egui::UiBuilder::new().max_rect(button), |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        if ui
-                            .add_sized(
-                                [230.0, 48.0],
-                                egui::Button::new(
-                                    RichText::new("+  Add download").size(17.0).color(TEXT),
-                                )
-                                .fill(ACCENT)
-                                .rounding(8.0),
-                            )
-                            .clicked()
-                        {
-                            self.open_add();
-                        }
-                        ui.scope(|ui| {
-                            ui.spacing_mut().button_padding = Vec2::new(10.0, 14.0);
-                            ui.visuals_mut().widgets.inactive.weak_bg_fill = ACCENT2;
-                            ui.visuals_mut().widgets.inactive.bg_fill = ACCENT2;
-                            let options = ui.menu_button("   ", |ui| {
-                                if ui.button("New download     Ctrl+N").clicked() {
-                                    self.open_add();
-                                    ui.close_menu();
-                                }
-                                if ui.button("Download folder settings").clicked() {
-                                    self.open_settings();
-                                    ui.close_menu();
-                                }
-                            });
-                            let center = options.response.rect.center();
-                            ui.painter().add(egui::Shape::line(
-                                vec![
-                                    center + Vec2::new(-4.0, -2.0),
-                                    center + Vec2::new(0.0, 2.0),
-                                    center + Vec2::new(4.0, -2.0),
-                                ],
-                                Stroke::new(1.4_f32, TEXT),
-                            ));
-                            options.response.on_hover_text("Add download options");
-                        });
-                    });
-                });
             } else {
                 ui.painter().text(
                     center,

@@ -1325,9 +1325,7 @@ impl eframe::App for IDGApp {
                     SIDEBAR,
                 );
                 ui.spacing_mut().item_spacing.y = 3.0;
-                egui::ScrollArea::vertical()
-                    .id_salt("navigation-scroll")
-                    .show(ui, |ui| self.sidebar(ui, &items));
+                self.sidebar(ui, &items);
             });
         egui::TopBottomPanel::top("window-header")
             .exact_height(if wide { 72.0 } else { 58.0 })

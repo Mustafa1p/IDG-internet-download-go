@@ -164,3 +164,7 @@ The isolated installer close smoke test compiles a WinForms fixture that hides/c
 Same-version update regressions cover a newer build, the currently installed build, an older build, an older version, and a missing installer. `build.rs` watches Git HEAD/refs and embeds the source revision and commit timestamp; release publication writes the matching `IDG-BUILD` marker. An older binary without this logic requires one manual update.
 
 The current renderer matrix has 21 cases, including the 960 x 640 list and same-version update prompt. Both Rust targets pass 32 non-network tests; 4 live/publication tests are intentionally opt-in. The extension suite passes 23 checks, signing mocks pass 10 scenarios, and the interaction harness passes 35 checks. Package creation rejects an executable that lacks the current Git source identity.
+
+## Statistics icons and sidebar polish (v1.4.3 refresh)
+
+The compact layout now shows four 56-point cards with colored speed/download/completed/clock icons. The sidebar uses the bounded panel height directly instead of a scroll container; its navigation and footer fit at the supported preview sizes without a navigation scrollbar. Folder paths stay on one clipped line with the full path available on hover. The empty-state Add download button/dropdown and minimal-height fallback action are removed; sidebar/header/keyboard download actions remain. Settings shows the repository hyperlink beside Developed by Mustafa Ali. The 21-case renderer matrix and 35 interaction checks pass.

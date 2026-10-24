@@ -1,5 +1,7 @@
 IDG v1.4.3 refresh fixes the compact desktop, browser transfer visibility, update detection and installer closing.
 
+- Restore colored statistics icons, fit sidebar navigation without a scrollbar, and remove the empty-state Add download split button.
+- Add GitHub source code beside Developed by Mustafa Ali in Settings.
 - Reduce the locked desktop to 960 x 640 logical pixels, capped to the monitor work area, with a compact sidebar and table.
 - Detect later builds of the same version using the published source identity and timestamp. Show an update popup with release fixes; avoid repeated offers of the installed build or downgrades.
 - Browser handoffs leave Settings, clear search/category filters, select the incoming transfer and show IDG, including when confirmation is disabled.

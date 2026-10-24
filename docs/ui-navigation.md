@@ -68,7 +68,7 @@ Toolbar Resume/Pause are enabled from applicable selection state. The table cont
 
 ## New download and browser confirmation
 
-All entry points reach `IDGApp::add_dialog`: sidebar New download, empty-state Add download, header More → New download, **Ctrl+N**, and browser requests awaiting confirmation.
+All entry points reach `IDGApp::add_dialog`: sidebar New download, header More → New download, **Ctrl+N**, and browser requests awaiting confirmation.
 
 | Control | Handler and effect |
 | --- | --- |
@@ -176,3 +176,5 @@ The status bar's browser-ready indicator reports bridge/API errors when present.
 
 
 Build-aware updates are parsed in `src/updater.rs` from the generated release-notes marker; `build.rs` embeds the local source revision/timestamp. Browser handoffs place `idg-reveal-download` in the egui event context, which `IDGApp::reveal_download` consumes to select the visible transfer. Persistent history lives in `src/download/history.rs` and excludes credentials/live worker state.
+
+The sidebar uses its bounded panel height directly, without a navigation scroll container. New downloads use the sidebar button, header menu or Ctrl+N; the empty-state split action has been removed. Settings includes the repository link and developer credit in its header.

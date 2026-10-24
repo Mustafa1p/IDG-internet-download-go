@@ -48,7 +48,7 @@ The refreshed **v1.4.3** interface is implemented directly in Rust/egui: blue si
 
 | Desktop workflow | Where to find it |
 | --- | --- |
-| New transfer | **New download**, empty-state **Add download**, or **Ctrl+N** |
+| New transfer | **New download** or **Ctrl+N** |
 | Search and filter | Header search (**Ctrl+F**), sliders menu, or any sidebar category |
 | Bulk actions | Select row checkboxes or the header checkbox; Resume, Pause, Remove, Open folder |
 | Views and sorting | List/grid controls and Newest first / Oldest first above the table |
@@ -347,3 +347,5 @@ Browser handoffs switch out of Settings, clear category/search filters, select t
 Download history is saved under `%LOCALAPPDATA%/IDG/download-history.json`, including completed and failed entries. Cookies, authorization headers, and live download-worker state are excluded. Transfers interrupted by closing/restarting IDG remain listed with an explanation; restarting a transfer requires adding the link again. Existing files are preserved. Older builds did not save history, so this cannot reconstruct their previous session lists.
 
 Updates compare both the version and the published source build. A later 1.4.3 build triggers an alert with its fixes; the installed build is not repeatedly offered, and older releases are ignored. Release notes include a generated `IDG-BUILD` marker. Existing binaries without this logic need a one-time manual installation of this refresh. Windows Setup now uses Restart Manager's force-close fallback and disables automatic app restarting, so close-to-tray cannot leave installation waiting indefinitely. Setup's close-applications confirmation stops running transfers.
+
+The compact statistics use four colored icon cards. The sidebar fits without scrolling, and the empty-state Add download split button has been removed. Settings includes a GitHub source link next to **Developed by Mustafa Ali**.

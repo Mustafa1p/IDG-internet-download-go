@@ -313,7 +313,15 @@ impl IDGApp {
                 .size(16.0)
                 .color(TEXT_DIM),
         );
-        ui.add_space(18.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.hyperlink_to(
+                "GitHub source code",
+                "https://github.com/Mustafa1p/IDG-internet-download-go",
+            );
+            ui.separator();
+            ui.label(RichText::new("Developed by Mustafa Ali").color(TEXT_DIM));
+        });
+        ui.add_space(12.0);
 
         // Reserve the footer before laying out the scroll area, so Save is always reachable.
         let body_height = (ui.available_height() - 86.0).max(80.0);
