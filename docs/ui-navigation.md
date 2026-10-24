@@ -45,7 +45,7 @@ Other sidebar actions:
 - **Current speed / Active downloads / Completed / Queued:** `library_header` displays live queue statistics. The cards report state; category navigation is provided by the sidebar and filter menu.
 - **Newest first / Oldest first:** `toolbar` updates `self.newest_first`; `download_table` sorts by `DownloadItem::added_at` and reverses for newest first.
 - **List view / Grid view:** `toolbar` changes `library_state.grid`; `download_table` renders the same filtered download collection in rows or cards.
-- **Empty state Add download:** opens the same working New download dialog through `open_add`. Its split menu also opens New download or Download folder settings. An empty search result displays a search-specific message.
+- **Empty state:** folder artwork and guidance text only; the Add download button and split menu were removed. Use the sidebar New download action, header menu or Ctrl+N. Empty search results retain their search-specific message.
 
 ## Selection, toolbar, context menus and details
 
