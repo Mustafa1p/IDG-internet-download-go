@@ -53,7 +53,7 @@ The refreshed **v1.4.3** interface is implemented directly in Rust/egui: blue si
 | Settings | Sidebar **Settings** or **Ctrl+,**; save folder, connections, browser integration, startup/tray and updates |
 | New versions | Update popup and banner with release fixes, progress, Update now, Install and Later |
 
-See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md). At smaller window sizes, statistics and details become compact while the same actions remain available. Existing window size, saved preferences and user files are preserved. This refresh still reports **1.4.3**; install the refreshed package once if you already have an earlier 1.4.3 build.
+See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md) and [implementation comparison](docs/fluent-redesign-report.md). At smaller window sizes, statistics and details become compact while the same actions remain available. Existing window size, saved preferences and user files are preserved. This refresh still reports **1.4.3**; install the refreshed package once if you already have an earlier 1.4.3 build.
 
 ---
 
