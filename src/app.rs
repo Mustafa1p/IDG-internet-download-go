@@ -1235,6 +1235,9 @@ impl eframe::App for IDGApp {
             ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("idg-reveal-download")))
         {
             self.reveal_download(&id);
+            // A browser can enqueue before the first background frame hides the window.
+            // Apply show again on the UI thread after start_hidden has been handled.
+            desktop::show_window(ctx);
         }
         let items: Vec<DownloadItem> = self.downloads.lock().unwrap().clone();
         #[cfg(debug_assertions)]
