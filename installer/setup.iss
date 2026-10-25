@@ -1,9 +1,9 @@
 ; IDG – Internet Download GO  –  Inno Setup 6 script
 ; Build: ISCC installer\setup.iss
-; Produces: IDG-Setup-1.4.8.exe
+; Produces: IDG-Setup-1.5.0.exe
 
 #define AppName      "IDG – Internet Download GO"
-#define AppVersion   "1.4.8"
+#define AppVersion   "1.5.0"
 #define AppPublisher "IDG Project"
 #define AppURL       "https://github.com/Mustafa1p/IDG-internet-download-go"
 #define AppExeName   "IDG.exe"
@@ -68,6 +68,10 @@ Name: "startupicon"; Description: "Start IDG when Windows starts"; GroupDescript
 Source: "{#BuildDir}\IDG-native.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\IDG.exe";   DestDir: "{app}"; Flags: ignoreversion
 Source: "..\extension\*";              DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\music\*.py"; DestDir: "{app}\music"; Flags: ignoreversion
+Source: "..\music\*.txt"; DestDir: "{app}\music"; Flags: ignoreversion
+Source: "..\music\*.json"; DestDir: "{app}\music"; Flags: ignoreversion
+Source: "..\music\COPYING"; DestDir: "{app}\music"; Flags: ignoreversion
 Source: "{#BuildDir}\tools\*"; DestDir: "{app}\tools"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md";                DestDir: "{app}"; Flags: ignoreversion
 Source: "..\docs\*";                  DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs

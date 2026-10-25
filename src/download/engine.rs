@@ -75,6 +75,9 @@ pub async fn start_download(
         )
     };
 
+    if super::music::source(&url).is_some() {
+        return super::music::download(downloads, id).await;
+    }
     if let Some(reason) = super::media::unsupported_reason(&url) {
         anyhow::bail!("{reason}");
     }

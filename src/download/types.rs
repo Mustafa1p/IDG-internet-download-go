@@ -107,7 +107,10 @@ pub struct DownloadItem {
 impl DownloadItem {
     /// Create a new download item in the [`Status::Queued`] state.
     pub fn new(url: String, mut save_path: PathBuf, num_segments: usize) -> Self {
-        if let Some(name) = super::media::default_filename(&url) {
+        if let Some(name) = super::music::source(&url)
+            .map(|s| s.filename)
+            .or_else(|| super::media::default_filename(&url))
+        {
             let current = save_path
                 .file_name()
                 .and_then(|name| name.to_str())
@@ -150,7 +153,7 @@ impl DownloadItem {
     }
 
     pub fn supports_pause(&self) -> bool {
-        super::media::video_url(&self.url).is_none()
+        super::media::video_url(&self.url).is_none() && super::music::source(&self.url).is_none()
     }
 
     /// Download progress as a value in `[0.0, 1.0]`.

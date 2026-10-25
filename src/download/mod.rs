@@ -11,6 +11,7 @@ pub mod connections;
 pub mod engine;
 pub mod history;
 pub mod media;
+pub mod music;
 pub mod probe;
 pub mod segment;
 pub mod types;

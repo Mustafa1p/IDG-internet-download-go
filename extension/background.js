@@ -222,17 +222,41 @@ function socialVideoUrl(value) {
 function spotifyPage(value) {
   try { return ["open.spotify.com", "play.spotify.com", "spotify.com", "www.spotify.com"].includes(new URL(value).hostname); } catch { return false; }
 }
+function musicPageUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+    const path = url.pathname.replace(/\/$/, "");
+    const host = url.hostname;
+    const supported =
+      (host === "open.spotify.com" && /^\/(?:intl-[A-Za-z]+\/)?(?:track|album|playlist|episode|show)\/[A-Za-z0-9]{22}$/.test(path)) ||
+      (/^[a-z0-9-]+\.bandcamp\.com$/.test(host) && /^\/(track|album)\/[A-Za-z0-9_.-]+$/.test(path)) ||
+      (["deezer.com", "www.deezer.com"].includes(host) && /^\/(?:[a-z]{2}\/)?(?:track|album|playlist)\/[0-9]+$/.test(path)) ||
+      (["tidal.com", "www.tidal.com", "listen.tidal.com"].includes(host) && /^\/(?:browse\/)?(?:track|album|playlist)\/[A-Za-z0-9_-]+$/.test(path)) ||
+      (host === "music.apple.com" && /^\/[a-z]{2}\/(album|playlist)\/(?:[^/]+\/)?[A-Za-z0-9_.-]+$/.test(path)) ||
+      (["qobuz.com", "www.qobuz.com", "play.qobuz.com", "open.qobuz.com"].includes(host) && /\/(track|album|playlist)\//.test(path));
+    if (!supported) return null;
+    const track = host === "music.apple.com" ? url.searchParams.get("i") : null;
+    url.protocol = "https:"; url.hash = ""; url.search = "";
+    if (host === "deezer.com") url.hostname = "www.deezer.com";
+    if (track) { if (!/^[0-9]+$/.test(track)) return null; url.searchParams.set("i", track); }
+    return url.href;
+  } catch { return null; }
+}
 async function sendDownloadRequest(url, filename, referrer, userAgent, postData) {
   if (!validUrl(url)) return { ok: false, error: "Only HTTP and HTTPS links can be sent to IDG." };
-  if (spotifyPage(url)) return { ok: false, error: "Spotify tracks are DRM-protected. Use Spotify's Download feature for offline listening in Spotify." };
+  const music = musicPageUrl(url);
+  if (spotifyPage(url) && !music) return { ok: false, error: "Use a Spotify track, album or playlist link." };
   const youtube = youtubeVideoUrl(url);
   const x = xVideoUrl(url);
   const social = socialVideoUrl(url);
   if (youtube || x || social) url = youtube || x || social;
+  if (music) url = music;
   let cookies = null, media_cookies = null;
   try {
     const cookieUrl = social && new URL(url).hostname.endsWith("tiktok.com") ? "https://www.tiktok.com/" : url;
-    const jar = await chrome.cookies.getAll({ url: cookieUrl });
+    // Music accounts belong to the encrypted music profile, not browser cookies.
+    const jar = music ? [] : await chrome.cookies.getAll({ url: cookieUrl });
     if (jar.length) {
       cookies = jar.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
       if (youtube || x || social) {
@@ -258,6 +282,10 @@ async function sendDownloadRequest(url, filename, referrer, userAgent, postData)
   // Never retry a POST using another transport: a lost response could duplicate it.
   const online = await pingServer();
   try {
+    if (music) {
+      const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
+      if (!capability?.capabilities?.music) return { ok: false, error: "Open IDG Settings > Music to install the original-service backend and connect your account. Update IDG if Music settings are missing." };
+    }
     if (download.post_data !== undefined) {
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
       if (!capability?.capabilities?.post_downloads) return { ok: false, error: "POST downloads require IDG 1.4.4 or newer." };
@@ -340,8 +368,8 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  const url = youtubeVideoUrl(info.linkUrl) || xVideoUrl(info.linkUrl) || socialVideoUrl(info.linkUrl) ||
-    (info.menuItemId === "idg-download-video" ? youtubeVideoUrl(tab?.url) || xVideoUrl(tab?.url) || socialVideoUrl(tab?.url) : null) || info.linkUrl || info.srcUrl;
+  const url = musicPageUrl(info.linkUrl) || youtubeVideoUrl(info.linkUrl) || xVideoUrl(info.linkUrl) || socialVideoUrl(info.linkUrl) ||
+    (info.menuItemId === "idg-download-video" ? musicPageUrl(tab?.url) || youtubeVideoUrl(tab?.url) || xVideoUrl(tab?.url) || socialVideoUrl(tab?.url) : null) || info.linkUrl || info.srcUrl;
   if (!url) return;
   const result = await sendDownloadToIDG(url, null, info.pageUrl || tab?.url || null, navigator.userAgent);
   if (!result.ok) {

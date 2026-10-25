@@ -61,6 +61,15 @@ const assert = require('node:assert/strict');
       assert.equal(requests[0][0], `https://${host}${post}`);
       await socialPage.close();
     }
+    await context.route('https://open.spotify.com/**', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><div><audio style="width:320px;height:80px"></audio></div>' }));
+    await worker.evaluate(() => { globalThis.fixtureRequests = []; });
+    const musicPage = await context.newPage();
+    const musicUrl = 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY';
+    await musicPage.goto(musicUrl);
+    await musicPage.getByRole('button', { name: 'Download this media with IDG' }).click();
+    await musicPage.getByText('Opened in IDG', { exact: true }).waitFor();
+    assert.equal((await worker.evaluate(() => globalThis.fixtureRequests))[0][0], musicUrl);
+    await musicPage.close();
     for (const disabled of [false, true]) {
       await worker.evaluate(disabled => {
         globalThis.fixtureRequests = [];

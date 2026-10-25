@@ -1,0 +1,13 @@
+{
+  "onthespot": {
+    "repository": "ots-downloader/onthespot",
+    "revision": "7f7e04d883dc2d12499e6a0f9a80a09116cf69f7",
+    "license": "GPL-2.0",
+    "archive_sha256": "90c2032db08838861ce47a977d3b18d38686c95e826ccb651d023cef0286850d"
+  },
+  "librespot": {
+    "repository": "justin025/librespot-python",
+    "revision": "a4229a5c9dcaa0e13baa7484d34be83e5046cfa7",
+    "archive_sha256": "70baf486bb70a5ea39d610b2a6cb18e0c9ea0658e85ea083a65d8d699df00f72"
+  }
+}

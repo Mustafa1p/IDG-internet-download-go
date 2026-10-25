@@ -24,7 +24,7 @@ fn hint(ui: &mut Ui, text: &str) {
     ui.add(egui::Label::new(RichText::new(text).size(12.0).color(TEXT_DIM)).wrap());
 }
 
-fn section(ui: &mut Ui, icon: Icon, title: &str, body: impl FnOnce(&mut Ui)) {
+pub(super) fn section(ui: &mut Ui, icon: Icon, title: &str, body: impl FnOnce(&mut Ui)) {
     let response = Frame::none()
         .fill(PANEL)
         .stroke(Stroke::new(1.0_f32, BORDER))
@@ -348,7 +348,7 @@ impl IDGApp {
                 }
             });
         ui.horizontal(|ui| {
-            for (index, label) in ["Downloads", "App", "Updates", "Browser"]
+            for (index, label) in ["Downloads", "App", "Updates", "Browser", "Music"]
                 .iter()
                 .enumerate()
             {
@@ -359,6 +359,9 @@ impl IDGApp {
         ctx.data_mut(|data| data.insert_temp(tab_id, tab));
         ui.add_space(6.0);
         match tab {
+            4 => {
+                self.draw_music_settings(ui, ctx);
+            }
             0 => section(ui, Icon::Folder, "Downloads & bandwidth", |ui| {
                 ui.label("Save directory");
                 ui.horizontal(|ui| {
@@ -535,6 +538,10 @@ impl IDGApp {
                 }
             }),
         };
+        if tab == 4 {
+            self.settings_draft = Some(draft);
+            return;
+        }
         if draft != initial_draft {
             self.settings_error = None;
             self.settings_message = None;

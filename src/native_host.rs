@@ -77,8 +77,18 @@ async fn dispatch(client: &reqwest::Client, message: Value) -> anyhow::Result<Va
             .iter()
             .all(|name| tools.join(name).is_file())
             && (tools.join("deno.exe").is_file() || tools.join("node.exe").is_file());
+        let music = client.get(format!("{base}/health")).send().await.ok();
+        let music = if let Some(response) = music {
+            response
+                .json::<Value>()
+                .await
+                .ok()
+                .is_some_and(|v| v["capabilities"]["music"] == true)
+        } else {
+            false
+        };
         return Ok(
-            json!({"ok": true, "installed": true, "serverOnline": online, "version": env!("CARGO_PKG_VERSION"), "capabilities": {"youtube": youtube, "x": youtube, "social_media": youtube, "post_downloads": true}}),
+            json!({"ok": true, "installed": true, "serverOnline": online, "version": env!("CARGO_PKG_VERSION"), "capabilities": {"youtube": youtube, "x": youtube, "social_media": youtube, "music": music, "post_downloads": true}}),
         );
     }
     let response = if kind == "list" {

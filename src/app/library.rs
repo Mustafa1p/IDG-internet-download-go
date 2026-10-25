@@ -268,7 +268,11 @@ fn nav_icon(category: Category) -> Icon {
     }
 }
 fn file_icon(item: &DownloadItem) -> (Icon, Color32) {
-    match file_category(&item.filename) {
+    match if crate::download::music::source(&item.url).is_some() {
+        Category::Videos
+    } else {
+        file_category(&item.filename)
+    } {
         Category::Videos => (Icon::Video, Color32::from_rgb(161, 119, 244)),
         Category::Archives => (Icon::Archive, Color32::from_rgb(245, 188, 77)),
         Category::Documents => (Icon::File, Color32::from_rgb(91, 175, 240)),

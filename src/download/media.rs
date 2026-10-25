@@ -386,9 +386,17 @@ pub fn default_filename(url: &str) -> Option<String> {
 }
 
 pub fn unsupported_reason(value: &str) -> Option<&'static str> {
+    if super::music::source(value).is_some() {
+        return (!super::music::ready()).then_some("Install the optional original-service music backend in Settings > Music, then connect the service account.");
+    }
     let url = reqwest::Url::parse(value).ok()?;
-    matches!(url.host_str()?, "open.spotify.com" | "play.spotify.com" | "spotify.com" | "www.spotify.com")
-        .then_some("Spotify tracks are DRM-protected and cannot be downloaded as audio files by IDG. Use Spotify's Download feature for offline listening in Spotify.")
+    matches!(
+        url.host_str()?,
+        "open.spotify.com" | "play.spotify.com" | "spotify.com" | "www.spotify.com"
+    )
+    .then_some(
+        "Use a Spotify track, album or playlist URL, then connect the account in Settings > Music.",
+    )
 }
 
 fn tools_dir() -> PathBuf {
@@ -706,9 +714,8 @@ mod tests {
             format_args(&MediaOptions::default())
         );
         assert!(
-            unsupported_reason("https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY")
-                .unwrap()
-                .contains("DRM")
+            super::super::music::source("https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY")
+                .is_some()
         );
         assert!(unsupported_reason("https://open.spotify.com.evil.test/file.mp3").is_none());
         let info = info_from_json(

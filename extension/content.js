@@ -48,7 +48,14 @@
       return (location.pathname === "/watch" && /^[A-Za-z0-9_-]{11}$/.test(new URL(location.href).searchParams.get("v") || "")) || /^\/(shorts|live|embed)\/[A-Za-z0-9_-]{11}/.test(location.pathname);
     } catch { return false; }
   }
+  function musicPage() {
+    const host = location.hostname, path = location.pathname;
+    return ((host === "open.spotify.com" && /^\/(?:intl-[A-Za-z]+\/)?(track|album|playlist|episode|show)\/[A-Za-z0-9]{22}/.test(path)) ||
+      (/^[a-z0-9-]+\.bandcamp\.com$/.test(host) && /^\/(track|album)\//.test(path)) ||
+      (["deezer.com", "www.deezer.com", "tidal.com", "www.tidal.com", "listen.tidal.com", "music.apple.com", "qobuz.com", "www.qobuz.com", "play.qobuz.com", "open.qobuz.com"].includes(host) && /\/(track|album|playlist)\//.test(path))) ? location.href : null;
+  }
   function mediaKey(media) {
+    if (musicPage()) return "music:" + musicPage();
     const social = socialPage(media);
     if (social) return social;
     const x = xPage(media);
@@ -166,9 +173,17 @@
     button.addEventListener("click", async event => {
       if (!event.isTrusted || button.disabled) return;
       event.preventDefault(); event.stopPropagation();
-      if (["open.spotify.com", "play.spotify.com"].includes(location.hostname)) {
-        button.textContent = "Spotify offline only";
-        button.title = "Spotify tracks are DRM-protected. Use Spotify's Download feature for offline listening in Spotify.";
+      if (musicPage()) {
+        button.disabled = true;
+        try {
+          const response = await chrome.runtime.sendMessage({ type: "download", url: musicPage(), filename: null });
+          if (buttons.get(media) !== state) return;
+          button.textContent = response?.ok ? "Opened in IDG" : "Set up music in IDG";
+          button.title = response?.error || "Connect this service in IDG Settings > Music.";
+        } catch {
+          button.textContent = "IDG · reconnect";
+          button.title = "Open IDG or reload this page to reconnect.";
+        } finally { if (buttons.get(media) === state) button.disabled = false; }
         return;
       }
       const youtube = youtubePage();

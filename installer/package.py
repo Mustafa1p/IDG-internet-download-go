@@ -25,6 +25,9 @@ suffix = "-x86" if arch == "x86" else ""
 for binary in ("IDG.exe", "IDG-native.exe"):
     if not (build / binary).is_file():
         raise SystemExit("Run cargo build --release --bins first.")
+for name in ("bridge.py", "setup.py", "upstream.json", "requirements-lock.txt", "COPYING"):
+    if not (root / "music" / name).is_file():
+        raise SystemExit(f"Missing music backend source or license: {name}")
 tools = build / "tools"
 for name in ("yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "node.exe" if arch == "x86" else "deno.exe", "licenses/upstream-sources.json"):
     if not (tools / name).is_file():
@@ -62,6 +65,9 @@ with ZipFile(portable_zip, "w", ZIP_DEFLATED) as archive:
     for path in sorted(tools.rglob("*")):
         if path.is_file():
             archive.write(path, Path("tools") / path.relative_to(tools))
+    for path in sorted((root / "music").iterdir()):
+        if path.is_file() and (path.suffix in (".py", ".txt", ".json") or path.name == "COPYING"):
+            archive.write(path, Path("music") / path.name)
     for name in ("installer/register-native-host.ps1", "README.md"):
         archive.write(root / name, name)
     # Keep README screenshots, route guides and QA report links usable offline.

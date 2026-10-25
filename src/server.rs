@@ -83,7 +83,7 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
         build: env!("IDG_BUILD_ID"),
-        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "x": crate::download::media::tools_available(), "social_media": crate::download::media::tools_available(), "post_downloads": true}),
+        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "x": crate::download::media::tools_available(), "social_media": crate::download::media::tools_available(), "music": crate::download::music::ready(), "post_downloads": true}),
     })
 }
 
@@ -561,22 +561,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn spotify_is_rejected_before_creating_a_queue_item_or_file() {
+    async fn spotify_requests_require_the_optional_backend_before_queueing() {
         let directory = tempfile::tempdir().unwrap();
         let state = state(directory.path());
         let downloads = state.downloads.clone();
         let (address, server) = serve(build_router(state)).await;
         let response = reqwest::Client::new().post(format!("{address}/downloads"))
-            .json(&serde_json::json!({"url":"https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY?si=test"}))
+            .json(&serde_json::json!({"url":"https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY?si=test", "show_dialog":true}))
             .send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert!(
-            response.json::<serde_json::Value>().await.unwrap()["error"]
-                .as_str()
-                .unwrap()
-                .contains("DRM")
-        );
-        assert!(downloads.lock().unwrap().is_empty());
+        if crate::download::music::ready() {
+            assert_eq!(response.status(), StatusCode::CREATED);
+            assert_eq!(downloads.lock().unwrap().len(), 1);
+            assert!(downloads.lock().unwrap()[0].awaiting_confirmation);
+        } else {
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            assert!(
+                response.json::<serde_json::Value>().await.unwrap()["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("Settings > Music")
+            );
+            assert!(downloads.lock().unwrap().is_empty());
+        }
         assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
         server.abort();
     }

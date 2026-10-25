@@ -59,6 +59,8 @@ jobs:
         run: node --test tests/extension.test.cjs
       - name: Release version regression tests
         run: python tests/package-version.test.py
+      - name: Music profile and completion regressions
+        run: python tests/music-bridge.test.py
       - name: Real Edge download-form integration tests
         if: matrix.arch == 'x64'
         shell: pwsh
@@ -92,6 +94,8 @@ jobs:
           key: media-tools-${{ hashFiles('installer/media-tools*.json') }}
       - name: Fetch pinned YouTube tools
         run: python installer/fetch-media-tools.py ${{ matrix.arch }}
+      - name: Verify music output protocol and cancellation
+        run: cargo test --locked ${{ matrix.cargo_args }} --bin IDG worker_protocol_requires_verified_audio_and_honors_cancel -- --ignored
       - name: Package portable app and extension
         run: python installer/package.py ${{ matrix.arch }}
       - name: Upload tested build
@@ -209,6 +213,13 @@ jobs:
           $builtAt = git show -s --format=%ct HEAD
           $notes += "`n`n<!-- IDG-BUILD:${revision}:${builtAt} -->`n"
           Set-Content -LiteralPath target/release-notes.md -Value $notes -Encoding utf8
+      - name: Read release channel
+        shell: pwsh
+        run: |
+          $channel = python -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb')).get('package',{}).get('metadata',{}).get('idg',{}).get('release_channel','stable'))"
+          if ($LASTEXITCODE -ne 0) { throw "Cannot read release channel" }
+          $preview = ($channel -eq 'preview').ToString().ToLowerInvariant()
+          "IDG_RELEASE_PRERELEASE=$preview" >> $env:GITHUB_ENV
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -222,5 +233,5 @@ jobs:
             dist/IDG-portable-${{ github.ref_name }}.zip
             dist/SHA256SUMS.txt
           draft: false
-          prerelease: false
+          prerelease: ${{ env.IDG_RELEASE_PRERELEASE == 'true' }}
           fail_on_unmatched_files: true

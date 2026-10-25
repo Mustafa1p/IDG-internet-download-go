@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, reload = false, diskVersion = "1.3.1", items = [], postDownloads = true } = {}) {
+function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, music = false, reload = false, diskVersion = "1.3.1", items = [], postDownloads = true } = {}) {
   const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
@@ -14,7 +14,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
       sendNativeMessage(name, message, callback) {
         calls.push(['native', message]);
         if (!native) this.lastError = { message: 'Native host missing' };
-        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, x, social_media: social, post_downloads: postDownloads } } : undefined);
+        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, x, social_media: social, music, post_downloads: postDownloads } } : undefined);
         delete this.lastError;
       },
     },
@@ -43,7 +43,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     if (url.startsWith('chrome-extension://')) return { ok: true, json: async () => ({ version: diskVersion }) };
     if (url.endsWith('/health')) {
       if (!online) throw new Error('Offline');
-      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, x, social_media: social, post_downloads: postDownloads } }) };
+      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, x, social_media: social, music, post_downloads: postDownloads } }) };
     }
     calls.push(['post', JSON.parse(options.body)]);
     return { ok: accepts, status: accepts ? 201 : 500 };
@@ -608,15 +608,45 @@ test('Instagram and TikTok blob overlays send their page or containing feed post
   }
 });
 
-test('Spotify returns a DRM explanation without posting an HTML download or copying cookies', async () => {
+test('Spotify requires the original-service backend and sends no browser credentials', async () => {
+  for (const online of [true, false]) {
+    const { message, calls } = worker({ online, music: true });
+    assert.equal((await message({ type: 'download', url: 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY?si=test' })).ok, true);
+    const request = online ? calls.find(c => c[0] === 'post')[1] : calls.find(c => c[0] === 'native' && c[1].type === 'download')[1].download;
+    assert.equal(request.url, 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY');
+    assert.equal(request.cookies, null);
+    assert.equal(request.media_cookies, null);
+  }
   const { message, calls } = worker();
-  const response = await message({ type: 'download', url: 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY?si=test' });
+  const response = await message({ type: 'download', url: 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY' });
   assert.equal(response.ok, false);
-  assert.match(response.error, /DRM/);
-  assert.equal(calls.length, 0);
-  const page = await overlayPage();
-  Object.assign(page.location, { hostname: 'open.spotify.com', href: 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY' });
+  assert.match(response.error, /Settings > Music/);
+  assert.equal(calls.some(c => c[0] === 'post'), false);
+  const page = await overlayPage(async () => ({ ok: false, error: 'Install in Settings > Music' }));
+  Object.assign(page.location, { hostname: 'open.spotify.com', pathname: '/track/3uCdelPvIjIA0q0V6KRWFY', href: 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY' });
   await page.overlay.children[0].handlers.click(page.event());
-  assert.equal(page.sent.length, 0);
-  assert.equal(page.overlay.children[0].textContent, 'Spotify offline only');
+  assert.equal(page.sent[0].url, page.location.href);
+  assert.equal(page.overlay.children[0].textContent, 'Set up music in IDG');
+});
+
+test('original music services preserve the requested source and reject spoofed hosts', async () => {
+  const { message, calls, context } = worker({ music: true });
+  for (const url of [
+    'https://benprunty.bandcamp.com/track/lanius-battle',
+    'https://www.deezer.com/en/track/123',
+    'https://listen.tidal.com/track/123',
+    'https://music.apple.com/us/album/example/123?i=456',
+    'https://play.qobuz.com/track/123',
+  ]) {
+    assert.equal((await message({ type: 'download', url })).ok, true);
+    const request = calls.filter(c => c[0] === 'post').at(-1)[1];
+    assert.equal(new URL(request.url).hostname, new URL(url).hostname);
+    assert.equal(request.cookies, null);
+    assert.equal(request.media_cookies, null);
+    if (url.includes('apple.com')) assert.equal(new URL(request.url).searchParams.get('i'), '456');
+  }
+  for (const value of ['https://open.spotify.com.evil.test/track/3uCdelPvIjIA0q0V6KRWFY', 'https://artist.bandcamp.com.evil.test/track/song', 'https://user:password@listen.tidal.com/track/123', 'ftp://listen.tidal.com/track/123']) {
+    context.value = value;
+    assert.equal(vm.runInContext('musicPageUrl(value)', context), null);
+  }
 });

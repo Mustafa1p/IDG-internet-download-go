@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use egui::{Color32, FontId, Frame, Margin, RichText, Rounding, Stroke, Ui, Vec2};
 mod library;
+mod music_settings;
 #[cfg(debug_assertions)]
 mod preview_test;
 mod settings;
@@ -85,7 +86,12 @@ impl Category {
             Self::Paused => matches!(i.status, Status::Paused),
             Self::Failed => matches!(i.status, Status::Failed | Status::Cancelled),
             Self::Videos | Self::Documents | Self::Archives | Self::Other => {
-                library::file_category(&i.filename) == self
+                let category = if crate::download::music::source(&i.url).is_some() {
+                    Self::Videos
+                } else {
+                    library::file_category(&i.filename)
+                };
+                category == self
             }
         }
     }
@@ -158,6 +164,7 @@ pub struct IDGApp {
     settings_draft: Option<settings::SettingsDraft>,
     settings_message: Option<String>,
     settings_error: Option<String>,
+    music_state: Arc<std::sync::Mutex<music_settings::MusicState>>,
     default_save_dir: String,
     connection_settings: SharedConnectionSettings,
     connection_settings_error: Option<String>,
@@ -410,6 +417,7 @@ impl IDGApp {
             settings_draft: None,
             settings_message: None,
             settings_error: None,
+            music_state: music_settings::initial_state(),
             default_save_dir,
             connection_settings,
             connection_settings_error,
@@ -648,6 +656,22 @@ impl IDGApp {
                     }
                 });
 
+                if let Some(source) = crate::download::music::source(&self.dialog.url) {
+                    let old_format = self.dialog.media_options.format;
+                    ui.separator();
+                    ui.label(RichText::new(format!("{} · original-service audio", source.label())).strong());
+                    if !self.dialog.media_options.format.audio() { self.dialog.media_options.format = MediaFormat::Mp3; }
+                    ui.horizontal(|ui| {
+                        ui.label("Output format");
+                        egui::ComboBox::from_id_salt("music-format")
+                            .selected_text(self.dialog.media_options.format.label())
+                            .show_ui(ui, |ui| { for format in MediaFormat::ALL.into_iter().filter(|f| f.audio()) { ui.selectable_value(&mut self.dialog.media_options.format, format, format.label()); } });
+                    });
+                    ui.label(if source.collection { "This album or playlist saves into a new folder. Connect its account in Settings > Music." } else { "Connect this service in Settings > Music. Output quality depends on the original source." });
+                    if !source.collection && old_format != self.dialog.media_options.format {
+                        self.dialog.filename = PathBuf::from(&self.dialog.filename).with_extension(self.dialog.media_options.format.extension()).file_name().unwrap_or_default().to_string_lossy().into_owned();
+                    }
+                }
                 if media::video_url(&self.dialog.url).is_some() {
                     ui.separator();
                     ui.label(RichText::new("Video · choose what to save").strong());
@@ -1535,7 +1559,9 @@ fn fmt_eta(secs: f64) -> String {
 }
 
 fn filename_from_url(url: &str) -> String {
-    crate::download::probe::filename_from_url(url)
+    crate::download::music::source(url)
+        .map(|s| s.filename)
+        .unwrap_or_else(|| crate::download::probe::filename_from_url(url))
 }
 
 fn status_info(s: &Status) -> (&'static str, Color32) {
