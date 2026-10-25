@@ -204,17 +204,38 @@ function xVideoUrl(value) {
     return `https://x.com${url.pathname.replace(/\/$/, "")}`;
   } catch { return null; }
 }
+function socialVideoUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    const path = url.pathname.replace(/^\/|\/$/g, "");
+    if (["instagram.com", "www.instagram.com", "m.instagram.com"].includes(url.hostname)) {
+      const post = path.match(/^(?:[A-Za-z0-9_.]+\/)?(p|reel|reels|tv)\/([A-Za-z0-9_-]+)$/);
+      if (post) return `https://www.instagram.com/${post[1]}/${post[2]}/`;
+    }
+    if (["tiktok.com", "www.tiktok.com", "m.tiktok.com"].includes(url.hostname) && /^@[^/]+\/video\/[0-9]+$/.test(path)) return `https://www.tiktok.com/${path}`;
+    if (["vm.tiktok.com", "vt.tiktok.com"].includes(url.hostname) && /^[A-Za-z0-9_-]+$/.test(path)) return `https://${url.hostname}/${path}/`;
+    if (["tiktok.com", "www.tiktok.com", "m.tiktok.com"].includes(url.hostname) && /^t\/[A-Za-z0-9_-]+$/.test(path)) return `https://www.tiktok.com/${path}/`;
+  } catch {}
+  return null;
+}
+function spotifyPage(value) {
+  try { return ["open.spotify.com", "play.spotify.com", "spotify.com", "www.spotify.com"].includes(new URL(value).hostname); } catch { return false; }
+}
 async function sendDownloadRequest(url, filename, referrer, userAgent, postData) {
   if (!validUrl(url)) return { ok: false, error: "Only HTTP and HTTPS links can be sent to IDG." };
+  if (spotifyPage(url)) return { ok: false, error: "Spotify tracks are DRM-protected. Use Spotify's Download feature for offline listening in Spotify." };
   const youtube = youtubeVideoUrl(url);
   const x = xVideoUrl(url);
-  if (youtube || x) url = youtube || x;
+  const social = socialVideoUrl(url);
+  if (youtube || x || social) url = youtube || x || social;
   let cookies = null, media_cookies = null;
   try {
-    const jar = await chrome.cookies.getAll({ url });
+    const cookieUrl = social && new URL(url).hostname.endsWith("tiktok.com") ? "https://www.tiktok.com/" : url;
+    const jar = await chrome.cookies.getAll({ url: cookieUrl });
     if (jar.length) {
       cookies = jar.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
-      if (youtube || x) {
+      if (youtube || x || social) {
         const field = value => String(value ?? "").replace(/[\t\r\n]/g, "");
         media_cookies = "# Netscape HTTP Cookie File\n" + jar.map(cookie => [
           (cookie.httpOnly ? "#HttpOnly_" : "") + field(cookie.domain),
@@ -241,8 +262,9 @@ async function sendDownloadRequest(url, filename, referrer, userAgent, postData)
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
       if (!capability?.capabilities?.post_downloads) return { ok: false, error: "POST downloads require IDG 1.4.4 or newer." };
     }
-    if (youtube || x) {
+    if (youtube || x || social) {
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
+      if (social && !capability?.capabilities?.social_media) return { ok: false, error: "Instagram and TikTok require the complete IDG v1.4.8 package or newer. Update IDG and reopen it." };
       if (x && !capability?.capabilities?.x) {
         return { ok: false, error: "X videos require the complete IDG v1.4.7 package or newer. Quit IDG in the tray, install the update, then reopen IDG." };
       }
@@ -318,8 +340,8 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  const url = youtubeVideoUrl(info.linkUrl) || xVideoUrl(info.linkUrl) ||
-    (info.menuItemId === "idg-download-video" ? youtubeVideoUrl(tab?.url) || xVideoUrl(tab?.url) : null) || info.linkUrl || info.srcUrl;
+  const url = youtubeVideoUrl(info.linkUrl) || xVideoUrl(info.linkUrl) || socialVideoUrl(info.linkUrl) ||
+    (info.menuItemId === "idg-download-video" ? youtubeVideoUrl(tab?.url) || xVideoUrl(tab?.url) || socialVideoUrl(tab?.url) : null) || info.linkUrl || info.srcUrl;
   if (!url) return;
   const result = await sendDownloadToIDG(url, null, info.pageUrl || tab?.url || null, navigator.userAgent);
   if (!result.ok) {

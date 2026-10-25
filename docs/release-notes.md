@@ -1,14 +1,16 @@
-IDG v1.4.7 fixes X/Twitter video downloads.
+IDG v1.4.8 adds Instagram and TikTok video downloads.
 
-- Recognize X and Twitter status links in the desktop app and extension, including /video/1 selection and links with sharing parameters.
-- Resolve blob video players to their X post, including posts on a timeline, instead of reporting No direct link.
-- Route X posts through the bundled yt-dlp/FFmpeg tools with the video format and quality dialog; preserve available browser session cookies for the handoff.
-- Check X support before forwarding to older desktop versions and show an update instruction when needed.
-- Correct native-host media readiness on x86 installations that bundle Node instead of Deno.
-- Keep ordinary context-menu links pointing to the clicked file even when the current page contains a supported video.
+- Paste Instagram Reel/video-post URLs or TikTok video/share URLs into New download, or use the Download with IDG button and browser context menu.
+- Resolve supported blob players to their media post, including Instagram and TikTok feed items. Preserve available browser cookies for authenticated handoffs.
+- Exclude TikTok source variants marked as watermarked. If no matching source remains, the download fails instead of choosing a marked watermarked fallback. Availability depends on the source post and region; embedded creator logos are preserved.
+- Handle the first video in Instagram carousel posts and show its available formats.
+- Explain that Spotify music tracks are DRM-protected and must use Spotify's own offline-listening feature. Prevent saving Spotify pages as fake audio downloads. Spotify music export is not supported.
+- Preserve existing YouTube and X video routing and ordinary file downloads.
 
-Validation: Rust regression tests, extension regression tests, a real Edge MV3 timeline/blob-player handoff, and a complete download of the supplied X post. FFprobe confirmed both audio and video in the 84,782,568-byte MP4.
+Verification: complete public Instagram and TikTok downloads; FFprobe verified the Instagram source's silent video and TikTok audio/video; selected TikTok source was not marked watermarked, and three sampled frames had no TikTok overlay. A watermarked-only fixture was rejected. Rust/extension regressions, real Edge blob-player/feed handoff checks, and Spotify rejection without queue entries or files are covered.
 
-Install the matching IDG-Setup-v1.4.7.exe (x64) or IDG-Setup-v1.4.7-x86.exe (x86), update the extension using IDG-extension-v1.4.7.zip, and reload existing X tabs. You can also paste an X post URL into New download. Access to private or unavailable posts still depends on the source website and your browser session.
+Tested public examples:
+- Instagram: https://www.instagram.com/reel/Chunk8-jurw/
+- TikTok: https://www.tiktok.com/@patroxofficial/video/6742501081818877190
 
-IDG is free and has no license-key activation system. A reported recurring license prompt has not been identified and is not claimed as fixed by this release.
+Install the matching IDG-Setup-v1.4.8.exe (x64) or IDG-Setup-v1.4.8-x86.exe (x86), update the extension with IDG-extension-v1.4.8.zip, and reload existing website tabs. Website restrictions, authentication and regional availability still apply.

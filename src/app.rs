@@ -728,6 +728,9 @@ impl IDGApp {
                 );
 
                 ui.add_space(4.0);
+                if let Some(reason) = media::unsupported_reason(self.dialog.url.trim()) {
+                    ui.colored_label(Color32::from_rgb(200, 80, 60), reason);
+                }
                 ui.separator();
                 ui.add_space(2.0);
 
@@ -737,7 +740,8 @@ impl IDGApp {
                             should_close = true;
                         }
                         let can = reqwest::Url::parse(self.dialog.url.trim())
-                            .is_ok_and(|u| matches!(u.scheme(), "http" | "https"));
+                            .is_ok_and(|u| matches!(u.scheme(), "http" | "https"))
+                            && media::unsupported_reason(self.dialog.url.trim()).is_none();
                         ui.add_enabled_ui(can, |ui| {
                             if ui
                                 .add(

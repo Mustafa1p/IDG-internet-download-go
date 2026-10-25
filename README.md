@@ -12,7 +12,7 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 <br/>
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Mustafa1p/IDG-internet-download-go/release.yml?branch=main&style=for-the-badge&logo=github&label=Build)](https://github.com/Mustafa1p/IDG-internet-download-go/actions)
-[![Release](https://img.shields.io/badge/Latest_Release-v1.4.7-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
+[![Release](https://img.shields.io/badge/Latest_Release-v1.4.8-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078d4?style=for-the-badge&logo=windows)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 
@@ -20,11 +20,11 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 
 ## ⬇️ Download
 
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.4.7.exe">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.4.8.exe">
   <img src="https://img.shields.io/badge/Download%20Installer-Windows%20x64-1976d2?style=for-the-badge&logo=windows&logoColor=white" height="42"/>
 </a>
 &nbsp;&nbsp;
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.7.zip">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.8.zip">
   <img src="https://img.shields.io/badge/Download%20Extension-Chrome%20%2F%20Edge-F4B400?style=for-the-badge&logo=googlechrome&logoColor=white" height="42"/>
 </a>
 
@@ -40,11 +40,11 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 
 ## Current desktop
 
-Windows setup: [**x64 (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.7/IDG-Setup-v1.4.7.exe) | [**x86 (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.7/IDG-Setup-v1.4.7-x86.exe).
+Windows setup: [**x64 (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.8/IDG-Setup-v1.4.8.exe) | [**x86 (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.8/IDG-Setup-v1.4.8-x86.exe).
 
 ![IDG Windows 11 Fluent desktop interface](docs/screenshot.png)
 
-The refreshed **v1.4.7** interface is implemented directly in Rust/egui: blue sidebar navigation, search and filters, four live statistics, list/grid views, selection checkboxes, and a consistent Settings and download-dialog design. The screenshot above is captured from the current desktop application.
+The refreshed **v1.4.8** interface is implemented directly in Rust/egui: blue sidebar navigation, search and filters, four live statistics, list/grid views, selection checkboxes, and a consistent Settings and download-dialog design. The screenshot above is captured from the current desktop application.
 
 | Desktop workflow | Where to find it |
 | --- | --- |
@@ -55,7 +55,7 @@ The refreshed **v1.4.7** interface is implemented directly in Rust/egui: blue si
 | Settings | Sidebar **Settings** or **Ctrl+,**; save folder, connections, browser integration, startup/tray and updates |
 | New versions | Update popup and banner with release fixes, progress, Update now, Install and Later |
 
-See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md) and [implementation comparison](docs/fluent-redesign-report.md). At smaller window sizes, statistics and details become compact while the same actions remain available. The normal window starts at 960 x 640 logical points, respects Windows display scaling, and supports resizing and maximize; saved preferences and user files are preserved. Version **1.4.7** adds compact Settings tabs, an optional per-download speed limit (Unlimited by default), bounded speed sampling and batched file writes. It also detects PHP download endpoints when the browser resolves their filename or MIME type later, preserves token-bearing POST downloads from Adsume/SafeFileHosting and equivalent hidden download forms on other sites, and supports direct links on dynamically inserted `button_dm` download buttons. Token downloads stream once without parallel token replays. Chrome/Edge 111 or newer is required. Update the extension and reload existing website tabs after installation.
+See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md) and [implementation comparison](docs/fluent-redesign-report.md). At smaller window sizes, statistics and details become compact while the same actions remain available. The normal window starts at 960 x 640 logical points, respects Windows display scaling, and supports resizing and maximize; saved preferences and user files are preserved. Version **1.4.8** adds compact Settings tabs, an optional per-download speed limit (Unlimited by default), bounded speed sampling and batched file writes. It also detects PHP download endpoints when the browser resolves their filename or MIME type later, preserves token-bearing POST downloads from Adsume/SafeFileHosting and equivalent hidden download forms on other sites, and supports direct links on dynamically inserted `button_dm` download buttons. Token downloads stream once without parallel token replays. Chrome/Edge 111 or newer is required. Update the extension and reload existing website tabs after installation.
 
 ---
 
@@ -79,11 +79,11 @@ It works the same way as **IDM (Internet Download Manager)** — it splits every
 
 ### Step 1 — Download the installer
 
-Choose [**x64 setup (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.7/IDG-Setup-v1.4.7.exe) or [**x86 setup (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.7/IDG-Setup-v1.4.7-x86.exe).
+Choose [**x64 setup (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.8/IDG-Setup-v1.4.8.exe) or [**x86 setup (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.4.8/IDG-Setup-v1.4.8-x86.exe).
 
 ### Step 2 — Run the installer
 
-**Windows publisher warning:** The v1.4.7 downloads are unsigned and may
+**Windows publisher warning:** The v1.4.8 downloads are unsigned and may
 trigger “Windows protected your PC” (SmartScreen) or a Smart App Control block.
 Trusted signing requires a verified publisher identity. Release signing support
 is implemented, but a signed release has not yet been published. See
@@ -120,7 +120,7 @@ start a fresh export from Mail.
 
 ### Step 1 — Download the extension
 
-👉 **[Download IDG-extension-v1.4.7.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.7.zip)**
+👉 **[Download IDG-extension-v1.4.8.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.4.8.zip)**
 
 ### Step 2 — Extract the ZIP
 
@@ -140,7 +140,7 @@ Use the updated installer, then remove the old extension and load the new `exten
 
 Open the extension popup to see **IDG is connected**, **IDG is ready**, or **IDG is not connected**. The popup only reports connection status. Browser downloads are forwarded automatically; use the page's YouTube download overlay or the browser context menu for media links. Confirm filenames, formats, and save locations in the desktop app.
 
-If IDG cannot accept a request, the original browser download resumes. YouTube watch pages, Shorts, and X/Twitter status videos are sent to the bundled video downloader, including players that use blob URLs. On X, click Download with IDG on the video or paste the post URL into New download; /video/1 selection is preserved. Install both the v1.4.7 desktop app and extension, then reload existing X tabs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
+If IDG cannot accept a request, the original browser download resumes. YouTube watch pages, Shorts, X/Twitter status videos, Instagram Reels/video posts and TikTok videos are sent to the bundled video downloader, including players that use blob URLs. Paste a post URL into New download or use its Download with IDG button. TikTok formats marked as watermarked are excluded; availability varies by post and region, and embedded creator logos are preserved. Instagram carousels download the first video. Sign in to the source website and use the extension for posts that require your session. Spotify music tracks are DRM-protected and are not exported by IDG; use Spotify for supported offline listening. On X, click Download with IDG on the video or paste the post URL into New download; /video/1 selection is preserved. Install both the v1.4.8 desktop app and extension, then reload existing X tabs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
 
 For source builds or portable integration, keep `IDG.exe` and `IDG-native.exe` together and run:
 
@@ -188,7 +188,7 @@ Downloads already written to disk remain intact. Download history now persists a
 
 ## YouTube downloads
 
-Install the **complete v1.4.7 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
+Install the **complete v1.4.8 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
 
 Open a YouTube video and click **Download with IDG** over the player, use its browser context menu, or paste a watch/Shorts/youtu.be link into IDG. Choose the video format and quality or an audio format in the desktop chooser. Radio and playlist parameters are removed so the selected video is downloaded once. IDG uses bundled yt-dlp and FFmpeg/FFprobe, plus Deno on x64 or Node.js on x86. Cancel through **Remove**; pause/resume is available for regular direct-file downloads.
 
@@ -229,7 +229,7 @@ cargo build --release
 ```powershell
 python installer/fetch-media-tools.py
 python installer/package.py
-# dist/IDG-portable-v1.4.7.zip and dist/IDG-extension-v1.4.7.zip
+# dist/IDG-portable-v1.4.8.zip and dist/IDG-extension-v1.4.8.zip
 ```
 
 Extract the portable ZIP, run `installer/register-native-host.ps1` from PowerShell, and load its `extension` folder in Chrome or Edge. Keep `IDG.exe` and `IDG-native.exe` together.
@@ -238,7 +238,7 @@ Extract the portable ZIP, run `installer/register-native-host.ps1` from PowerShe
 
 ```powershell
 .\installer\build-installer.ps1
-# → dist\IDG-Setup-v1.4.7.exe
+# → dist\IDG-Setup-v1.4.8.exe
 # (downloads Inno Setup automatically if not installed)
 ```
 
@@ -283,7 +283,7 @@ Automated tests exercise handoff success/failure, native framing, stable extensi
 rustup target add i686-pc-windows-msvc
 cargo build --locked --release --bins --target i686-pc-windows-msvc
 python installer/fetch-media-tools.py x86
-python installer/package.py v1.4.7 x86
+python installer/package.py v1.4.8 x86
 ./installer/build-installer.ps1 -Architecture x86
 ```
 
@@ -297,6 +297,6 @@ Browser handoffs switch out of Settings, clear category/search filters, select t
 
 Download history is saved under `%LOCALAPPDATA%/IDG/download-history.json`, including completed and failed entries. Cookies, authorization headers, and live download-worker state are excluded. Transfers interrupted by closing/restarting IDG remain listed with an explanation; restarting a transfer requires adding the link again. Existing files are preserved. Older builds did not save history, so this cannot reconstruct their previous session lists.
 
-Updates compare both the version and the published source build. A later 1.4.7 build triggers an alert with its fixes; the installed build is not repeatedly offered, and older releases are ignored. Release notes include a generated `IDG-BUILD` marker. Existing binaries without this logic need a one-time manual installation of this refresh. Windows Setup now uses Restart Manager's force-close fallback and disables automatic app restarting, so close-to-tray cannot leave installation waiting indefinitely. Setup's close-applications confirmation stops running transfers.
+Updates compare both the version and the published source build. A later 1.4.8 build triggers an alert with its fixes; the installed build is not repeatedly offered, and older releases are ignored. Release notes include a generated `IDG-BUILD` marker. Existing binaries without this logic need a one-time manual installation of this refresh. Windows Setup now uses Restart Manager's force-close fallback and disables automatic app restarting, so close-to-tray cannot leave installation waiting indefinitely. Setup's close-applications confirmation stops running transfers.
 
 The compact statistics use four colored icon cards. The sidebar shows only **Download folder**, with its path hidden in both the row and tooltip. Click it to open the configured folder; change that folder in Settings. The sidebar fits without scrolling, with clear separation between category labels and count badges, and the empty-state Add download split button has been removed. Settings has compact Downloads, App, Updates and Browser tabs with a visible Save/Reset footer. Downloads includes the optional per-download speed limit, with **Unlimited** selected by default. The header links to GitHub, and the App tab credits **Mustafa Ali**. See the [display and speed verification report](docs/display-and-speed-qa.md).

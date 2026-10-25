@@ -75,6 +75,9 @@ pub async fn start_download(
         )
     };
 
+    if let Some(reason) = super::media::unsupported_reason(&url) {
+        anyhow::bail!("{reason}");
+    }
     if super::media::video_url(&url).is_some() {
         return super::media::download(downloads, id).await;
     }

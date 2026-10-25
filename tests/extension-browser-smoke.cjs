@@ -46,6 +46,21 @@ const assert = require('node:assert/strict');
     assert.equal(xRequests.length, 1);
     assert.equal(xRequests[0][0], 'https://x.com/Talal1/status/2113571139595510128');
     await xPage.close();
+    for (const [host, post] of [
+      ['www.instagram.com', '/reel/Chunk8-jurw/'],
+      ['www.tiktok.com', '/@patroxofficial/video/6742501081818877190'],
+    ]) {
+      await context.route(`https://${host}/**`, route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><article><a href="${post}">Post</a><div><video style="width:320px;height:180px"></video></div></article><script>document.querySelector('video').src=URL.createObjectURL(new Blob(['fixture'],{type:'video/mp4'}));</script>` }));
+      await worker.evaluate(() => { globalThis.fixtureRequests = []; });
+      const socialPage = await context.newPage();
+      await socialPage.goto(`https://${host}/`);
+      await socialPage.getByRole('button', { name: 'Download this media with IDG' }).click();
+      await socialPage.getByText('Opened in IDG', { exact: true }).waitFor();
+      const requests = await worker.evaluate(() => globalThis.fixtureRequests);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0][0], `https://${host}${post}`);
+      await socialPage.close();
+    }
     for (const disabled of [false, true]) {
       await worker.evaluate(disabled => {
         globalThis.fixtureRequests = [];
@@ -62,6 +77,6 @@ const assert = require('node:assert/strict');
       assert.equal(fallbackRequests.length, disabled ? 0 : 1);
       await fallbackPage.close();
     }
-    console.log('Real Edge MV3 tests passed: X timeline blob-player post handoff, MAIN/isolated-world token handoff, cross-site requestSubmit and repeated fields, duplicate suppression, rejected handoff fallback, and disabled-interception fallback.');
+    console.log('Real Edge MV3 tests passed: Instagram/TikTok feed blob-player handoff, X timeline blob-player post handoff, MAIN/isolated-world token handoff, cross-site requestSubmit and repeated fields, duplicate suppression, rejected handoff fallback, and disabled-interception fallback.');
   } finally { await context.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

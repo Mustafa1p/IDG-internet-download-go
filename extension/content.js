@@ -49,6 +49,8 @@
     } catch { return false; }
   }
   function mediaKey(media) {
+    const social = socialPage(media);
+    if (social) return social;
     const x = xPage(media);
     if (x) return x;
     if (youtubePage()) {
@@ -76,6 +78,28 @@
       return permalink ? postUrl(permalink.href) : null;
     }
     return postUrl(location.href);
+  }
+  function socialPage(media) {
+    const instagram = ["instagram.com", "www.instagram.com", "m.instagram.com"].includes(location.hostname);
+    const tiktok = ["tiktok.com", "www.tiktok.com", "m.tiktok.com"].includes(location.hostname);
+    if (!instagram && !tiktok) return null;
+    const canonical = value => {
+      try {
+        const url = new URL(value, location.href);
+        if (url.origin !== new URL(location.href).origin) return null;
+        if (instagram && /^\/(?:[A-Za-z0-9_.]+\/)?(p|reel|reels|tv)\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) return url.origin + url.pathname;
+        if (tiktok && /^\/@[^/]+\/video\/[0-9]+\/?$/.test(url.pathname)) return url.origin + url.pathname;
+      } catch {}
+      return null;
+    };
+    const container = media.closest?.('article, [data-e2e="recommend-list-item-container"], [data-e2e="browse-video"]');
+    if (container) {
+      for (const link of container.querySelectorAll('a[href]')) {
+        const url = canonical(link.href);
+        if (url) return url;
+      }
+    }
+    return canonical(location.href);
   }
   function attach(media) {
     if (!media.parentElement) return;
@@ -142,11 +166,16 @@
     button.addEventListener("click", async event => {
       if (!event.isTrusted || button.disabled) return;
       event.preventDefault(); event.stopPropagation();
+      if (["open.spotify.com", "play.spotify.com"].includes(location.hostname)) {
+        button.textContent = "Spotify offline only";
+        button.title = "Spotify tracks are DRM-protected. Use Spotify's Download feature for offline listening in Spotify.";
+        return;
+      }
       const youtube = youtubePage();
-      const url = xPage(media) || (youtube ? location.href : media.currentSrc || media.src || media.querySelector("source[src]")?.src);
+      const url = socialPage(media) || xPage(media) || (youtube ? location.href : media.currentSrc || media.src || media.querySelector("source[src]")?.src);
       if (!url || !/^https?:/.test(url)) {
         button.textContent = "No direct link";
-        button.title = "Open the X post containing this video, or use an HTTP/HTTPS media link.";
+        button.title = "Open the X, Instagram or TikTok post containing this video, or use an HTTP/HTTPS media link.";
         return;
       }
       const requestKey = mediaKey(media);

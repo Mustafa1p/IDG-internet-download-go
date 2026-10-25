@@ -83,7 +83,7 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
         build: env!("IDG_BUILD_ID"),
-        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "x": crate::download::media::tools_available(), "post_downloads": true}),
+        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "x": crate::download::media::tools_available(), "social_media": crate::download::media::tools_available(), "post_downloads": true}),
     })
 }
 
@@ -91,6 +91,12 @@ async fn add_download(
     State(state): State<ServerState>,
     Json(req): Json<AddDownloadRequest>,
 ) -> impl IntoResponse {
+    if let Some(reason) = crate::download::media::unsupported_reason(&req.url) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": reason})),
+        );
+    }
     if !reqwest::Url::parse(&req.url).is_ok_and(|url| matches!(url.scheme(), "http" | "https")) {
         return (
             StatusCode::BAD_REQUEST,
@@ -552,6 +558,27 @@ mod tests {
             egui_ctx: egui::Context::default(),
             connection_settings: Arc::new(Mutex::new(ConnectionSettings::default())),
         }
+    }
+
+    #[tokio::test]
+    async fn spotify_is_rejected_before_creating_a_queue_item_or_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = state(directory.path());
+        let downloads = state.downloads.clone();
+        let (address, server) = serve(build_router(state)).await;
+        let response = reqwest::Client::new().post(format!("{address}/downloads"))
+            .json(&serde_json::json!({"url":"https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY?si=test"}))
+            .send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(
+            response.json::<serde_json::Value>().await.unwrap()["error"]
+                .as_str()
+                .unwrap()
+                .contains("DRM")
+        );
+        assert!(downloads.lock().unwrap().is_empty());
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
+        server.abort();
     }
 
     #[tokio::test]

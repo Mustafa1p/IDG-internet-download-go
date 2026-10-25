@@ -79,6 +79,10 @@ pub struct MediaInfo {
     pub heights: Vec<u32>,
 }
 fn info_from_json(value: &Value) -> MediaInfo {
+    let value = value["entries"]
+        .as_array()
+        .and_then(|entries| entries.first())
+        .unwrap_or(value);
     let mut heights: Vec<u32> = value["formats"]
         .as_array()
         .into_iter()
@@ -134,6 +138,8 @@ async fn inspect_with_tools(url: &str, cookies: Option<&str>, tools: &Path) -> R
             "--ignore-config",
             "--no-cache-dir",
             "--no-playlist",
+            "--playlist-items",
+            "1",
             "--dump-single-json",
             "--skip-download",
             "--socket-timeout",
@@ -207,13 +213,80 @@ fn format_args(options: &MediaOptions) -> Vec<String> {
     ]
 }
 
-/// Strip playlists/radio/tracking parameters. Only supported video pages route to yt-dlp.
+fn source_format_args(url: &str, options: &MediaOptions) -> Vec<String> {
+    let mut args = format_args(options);
+    if reqwest::Url::parse(url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+        .is_some_and(|host| host == "tiktok.com" || host.ends_with(".tiktok.com"))
+    {
+        // Missing metadata is allowed; explicitly watermarked source variants are not.
+        args[1] = args[1]
+            .split('/')
+            .map(|alternative| {
+                alternative
+                    .split('+')
+                    .map(|selector| format!("{selector}[format_note!*=?watermarked]"))
+                    .collect::<Vec<_>>()
+                    .join("+")
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+    }
+    args
+}
+
+/// Strip tracking parameters. Only supported media pages route to yt-dlp.
 pub fn video_url(value: &str) -> Option<String> {
     let url = reqwest::Url::parse(value).ok()?;
     if !matches!(url.scheme(), "https" | "http") {
         return None;
     }
     let host = url.host_str()?;
+    let path = url.path().trim_matches('/');
+    let parts: Vec<_> = path.split('/').collect();
+    let safe_id = |id: &str| {
+        !id.is_empty()
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+    };
+    if matches!(
+        host,
+        "instagram.com" | "www.instagram.com" | "m.instagram.com"
+    ) {
+        if let [owner, kind @ ("p" | "reel" | "reels" | "tv"), id] = parts.as_slice()
+            && !owner.is_empty()
+            && owner
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.'))
+            && safe_id(id)
+        {
+            return Some(format!("https://www.instagram.com/{kind}/{id}/"));
+        }
+        if let [kind @ ("p" | "reel" | "reels" | "tv"), id] = parts.as_slice()
+            && safe_id(id)
+        {
+            return Some(format!("https://www.instagram.com/{kind}/{id}/"));
+        }
+        return None;
+    }
+    if matches!(host, "vm.tiktok.com" | "vt.tiktok.com") {
+        return (parts.len() == 1 && safe_id(parts[0])).then(|| format!("https://{host}/{path}/"));
+    }
+    if matches!(host, "tiktok.com" | "www.tiktok.com" | "m.tiktok.com") {
+        match parts.as_slice() {
+            [owner, "video", id]
+                if owner.starts_with('@')
+                    && !id.is_empty()
+                    && id.bytes().all(|b| b.is_ascii_digit()) =>
+            {
+                return Some(format!("https://www.tiktok.com/{owner}/video/{id}"));
+            }
+            ["t", id] if safe_id(id) => return Some(format!("https://www.tiktok.com/t/{id}/")),
+            _ => return None,
+        }
+    }
     if matches!(
         host,
         "x.com"
@@ -293,11 +366,29 @@ pub fn video_url(value: &str) -> Option<String> {
 
 pub fn default_filename(url: &str) -> Option<String> {
     let canonical = video_url(url)?;
+    let parsed = reqwest::Url::parse(&canonical).ok()?;
+    if parsed.host_str()?.ends_with("instagram.com") || parsed.host_str()?.ends_with("tiktok.com") {
+        let site = if parsed.host_str()?.ends_with("instagram.com") {
+            "Instagram"
+        } else {
+            "TikTok"
+        };
+        return Some(format!(
+            "{site}-{}.mp4",
+            parsed.path().trim_end_matches('/').rsplit('/').next()?
+        ));
+    }
     if canonical.starts_with("https://x.com/") {
         let id = canonical.split("/status/").nth(1)?.replace('/', "-");
         return Some(format!("X-{id}.mp4"));
     }
     Some(format!("YouTube-{}.mp4", canonical.rsplit('=').next()?))
+}
+
+pub fn unsupported_reason(value: &str) -> Option<&'static str> {
+    let url = reqwest::Url::parse(value).ok()?;
+    matches!(url.host_str()?, "open.spotify.com" | "play.spotify.com" | "spotify.com" | "www.spotify.com")
+        .then_some("Spotify tracks are DRM-protected and cannot be downloaded as audio files by IDG. Use Spotify's Download feature for offline listening in Spotify.")
 }
 
 fn tools_dir() -> PathBuf {
@@ -344,6 +435,8 @@ fn command(
         "--ignore-config",
         "--no-cache-dir",
         "--no-playlist",
+        "--playlist-items",
+        "1",
         "--no-colors",
         "--newline",
         "--progress",
@@ -360,7 +453,7 @@ fn command(
     ]);
     command.arg("--ffmpeg-location").arg(tools);
     command.arg("--js-runtimes").arg(js_runtime(tools));
-    command.args(format_args(options));
+    command.args(source_format_args(url, options));
     command.arg("--concurrent-fragments").arg(
         if speed_limit_bps > 0 {
             1
@@ -555,6 +648,194 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn social_urls_and_watermark_selection_stay_scoped_to_supported_sources() {
+        for (input, expected) in [
+            (
+                "https://instagram.com/reel/Chunk8-jurw/?igsh=abc",
+                "https://www.instagram.com/reel/Chunk8-jurw/",
+            ),
+            (
+                "https://www.instagram.com/p/BQ0eAlwhDrw/",
+                "https://www.instagram.com/p/BQ0eAlwhDrw/",
+            ),
+            (
+                "https://m.tiktok.com/@patroxofficial/video/6742501081818877190?lang=en",
+                "https://www.tiktok.com/@patroxofficial/video/6742501081818877190",
+            ),
+            (
+                "https://vm.tiktok.com/ZMabc123/?share=1",
+                "https://vm.tiktok.com/ZMabc123/",
+            ),
+            (
+                "https://www.tiktok.com/t/ZMabc123/",
+                "https://www.tiktok.com/t/ZMabc123/",
+            ),
+        ] {
+            assert_eq!(video_url(input).as_deref(), Some(expected));
+        }
+        for url in [
+            "https://instagram.com.evil.test/reel/abc",
+            "https://www.instagram.com/accounts/login/",
+            "https://www.tiktok.com/@user",
+            "https://www.tiktok.com/@user/video/bad",
+            "ftp://vm.tiktok.com/abc",
+        ] {
+            assert!(video_url(url).is_none(), "{url}");
+        }
+        for format in MediaFormat::ALL {
+            let args = source_format_args(
+                "https://www.tiktok.com/@user/video/123",
+                &MediaOptions {
+                    format,
+                    ..Default::default()
+                },
+            );
+            assert!(
+                args[1]
+                    .split('/')
+                    .flat_map(|a| a.split('+'))
+                    .all(|s| s.ends_with("[format_note!*=?watermarked]"))
+            );
+        }
+        assert_eq!(
+            source_format_args(
+                "https://www.youtube.com/watch?v=5TBlPQrcweQ",
+                &MediaOptions::default()
+            ),
+            format_args(&MediaOptions::default())
+        );
+        assert!(
+            unsupported_reason("https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY")
+                .unwrap()
+                .contains("DRM")
+        );
+        assert!(unsupported_reason("https://open.spotify.com.evil.test/file.mp3").is_none());
+        let info = info_from_json(
+            &serde_json::json!({"entries":[{"title":"First video","formats":[{"height":720,"vcodec":"avc1"}]}]}),
+        );
+        assert_eq!(info.title, "First video");
+        assert_eq!(info.heights, vec![720]);
+    }
+
+    #[tokio::test]
+    #[ignore = "Live Instagram/TikTok extraction, source-selection, download and audio/video probe"]
+    async fn public_social_videos_preserve_source_streams() {
+        let tools = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/tools");
+        let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target/social-smoke")
+            .join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir_all(&directory).unwrap();
+        for (site, url) in [
+            ("instagram", "https://www.instagram.com/reel/Chunk8-jurw/"),
+            (
+                "tiktok",
+                "https://www.tiktok.com/@patroxofficial/video/6742501081818877190",
+            ),
+        ] {
+            let info = inspect_with_tools(url, None, &tools).await.unwrap();
+            assert!(!info.heights.is_empty());
+            if site == "tiktok" {
+                let mut inspect = Command::new(tools.join("yt-dlp.exe"));
+                #[cfg(windows)]
+                inspect.creation_flags(0x08000000);
+                let selector = source_format_args(url, &MediaOptions::default());
+                let fixture = directory.join("watermarked-only.json");
+                std::fs::write(&fixture, serde_json::to_vec(&serde_json::json!({
+                    "id":"fixture", "title":"Watermarked only", "extractor":"TikTok",
+                    "formats":[{"format_id":"download", "format_note":"watermarked", "url":"https://example.test/unused.mp4", "ext":"mp4", "height":720, "vcodec":"h264", "acodec":"aac"}]
+                })).unwrap()).unwrap();
+                let rejected = Command::new(tools.join("yt-dlp.exe"))
+                    .args([
+                        "--ignore-config",
+                        "--simulate",
+                        "--no-check-formats",
+                        "--format",
+                        &selector[1],
+                        "--load-info-json",
+                    ])
+                    .arg(fixture)
+                    .output()
+                    .await
+                    .unwrap();
+                assert!(!rejected.status.success());
+                assert!(
+                    String::from_utf8_lossy(&rejected.stderr)
+                        .contains("Requested format is not available")
+                );
+                let result = inspect
+                    .args([
+                        "--ignore-config",
+                        "--no-cache-dir",
+                        "--dump-single-json",
+                        "--skip-download",
+                        "--socket-timeout",
+                        "15",
+                        "--retries",
+                        "0",
+                        "--format",
+                        &selector[1],
+                        "--",
+                        url,
+                    ])
+                    .output()
+                    .await
+                    .unwrap();
+                assert!(
+                    result.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&result.stderr)
+                );
+                let selected: Value = serde_json::from_slice(&result.stdout).unwrap();
+                assert!(
+                    !selected["format_note"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("watermarked")
+                );
+                assert_ne!(selected["format_id"], "download");
+                println!("TikTok selected source format: {}", selected["format_id"]);
+            }
+            let output = directory.join(format!("{site}.mp4"));
+            let item = super::super::types::DownloadItem::new(url.into(), output.clone(), 0);
+            let id = item.id.clone();
+            let downloads = Arc::new(Mutex::new(vec![item]));
+            download_with_tools(downloads.clone(), id, tools.clone())
+                .await
+                .unwrap();
+            assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+            let mut probe = Command::new(tools.join("ffprobe.exe"));
+            #[cfg(windows)]
+            probe.creation_flags(0x08000000);
+            let result = probe
+                .args([
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "stream=codec_type,width,height",
+                    "-of",
+                    "json",
+                ])
+                .arg(&output)
+                .output()
+                .await
+                .unwrap();
+            assert!(result.status.success());
+            let value: Value = serde_json::from_slice(&result.stdout).unwrap();
+            let streams = value["streams"].as_array().unwrap();
+            assert!(streams.iter().any(|s| s["codec_type"] == "video"));
+            if site == "tiktok" {
+                assert!(streams.iter().any(|s| s["codec_type"] == "audio"));
+            } // The Instagram fixture is silent in the source (all source acodecs are none).
+            println!(
+                "Verified {}: {} bytes, streams={}, {}",
+                site,
+                std::fs::metadata(&output).unwrap().len(),
+                value,
+                output.display()
+            );
+        }
+    }
     #[test]
     fn x_posts_keep_video_selection_and_reject_unsupported_urls() {
         for host in [

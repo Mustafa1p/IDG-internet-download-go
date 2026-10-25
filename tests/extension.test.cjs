@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, reload = false, diskVersion = "1.3.1", items = [], postDownloads = true } = {}) {
+function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, reload = false, diskVersion = "1.3.1", items = [], postDownloads = true } = {}) {
   const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
@@ -14,7 +14,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
       sendNativeMessage(name, message, callback) {
         calls.push(['native', message]);
         if (!native) this.lastError = { message: 'Native host missing' };
-        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, x, post_downloads: postDownloads } } : undefined);
+        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, x, social_media: social, post_downloads: postDownloads } } : undefined);
         delete this.lastError;
       },
     },
@@ -43,7 +43,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     if (url.startsWith('chrome-extension://')) return { ok: true, json: async () => ({ version: diskVersion }) };
     if (url.endsWith('/health')) {
       if (!online) throw new Error('Offline');
-      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, x, post_downloads: postDownloads } }) };
+      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, x, social_media: social, post_downloads: postDownloads } }) };
     }
     calls.push(['post', JSON.parse(options.body)]);
     return { ok: accepts, status: accepts ? 201 : 500 };
@@ -560,4 +560,63 @@ test('context menu handles X video pages while ordinary links keep their own des
   assert.equal(calls.find(c => c[0] === 'post')[1].url, tab.url);
   await events.context({ menuItemId: 'idg-download-link', linkUrl: 'https://example.org/file.zip' }, tab);
   assert.equal(calls.filter(c => c[0] === 'post')[1][1].url, 'https://example.org/file.zip');
+});
+
+test('Instagram and TikTok canonicalize media links and preserve session cookies online and offline', async () => {
+  for (const online of [true, false]) for (const [url, canonical] of [
+    ['https://instagram.com/reel/Chunk8-jurw/?igsh=test', 'https://www.instagram.com/reel/Chunk8-jurw/'],
+    ['https://www.instagram.com/instagram/reel/Chunk8-jurw/', 'https://www.instagram.com/reel/Chunk8-jurw/'],
+    ['https://m.tiktok.com/@patroxofficial/video/6742501081818877190?lang=en', 'https://www.tiktok.com/@patroxofficial/video/6742501081818877190'],
+    ['https://vm.tiktok.com/ZMabc123/?share=1', 'https://vm.tiktok.com/ZMabc123/'],
+  ]) {
+    const { message, calls } = worker({ online });
+    assert.equal((await message({ type: 'download', url })).ok, true);
+    const request = online ? calls.find(c => c[0] === 'post')[1] : calls.find(c => c[0] === 'native' && c[1].type === 'download')[1].download;
+    assert.equal(request.url, canonical);
+    assert.ok(request.media_cookies.startsWith('# Netscape HTTP Cookie File'));
+  }
+  const old = worker({ social: false });
+  assert.equal((await old.message({ type: 'download', url: 'https://www.instagram.com/reel/Chunk8-jurw/' })).ok, false);
+  assert.equal(old.calls.some(c => c[0] === 'post'), false);
+});
+
+test('social detection rejects lookalikes, profiles, login pages and malformed videos', () => {
+  const { context } = worker();
+  for (const value of ['https://instagram.com.evil.test/reel/abc', 'https://www.instagram.com/accounts/login/', 'https://www.tiktok.com/@user', 'https://www.tiktok.com/@user/video/no', 'ftp://vm.tiktok.com/abc']) {
+    context.value = value;
+    assert.equal(vm.runInContext('socialVideoUrl(value)', context), null);
+  }
+});
+
+test('Instagram and TikTok blob overlays send their page or containing feed post', async () => {
+  for (const [host, url] of [
+    ['www.instagram.com', 'https://www.instagram.com/reel/Chunk8-jurw/'],
+    ['www.tiktok.com', 'https://www.tiktok.com/@patroxofficial/video/6742501081818877190'],
+  ]) {
+    const page = await overlayPage();
+    Object.assign(page.location, { hostname: host, pathname: new URL(url).pathname, href: url });
+    page.media.currentSrc = `blob:https://${host}/player`;
+    await page.overlay.children[0].handlers.click(page.event());
+    assert.equal(page.sent[0].url, url);
+    page.location.href = `https://${host}/`;
+    page.media.closest = () => ({ querySelectorAll: () => [{ href: url }] });
+    await page.overlay.children[0].handlers.click(page.event());
+    assert.equal(page.sent[1].url, url);
+    page.media.closest = () => ({ querySelectorAll: () => [{ href: 'https://evil.test/reel/abc/' }] });
+    await page.overlay.children[0].handlers.click(page.event());
+    assert.equal(page.sent.length, 2);
+  }
+});
+
+test('Spotify returns a DRM explanation without posting an HTML download or copying cookies', async () => {
+  const { message, calls } = worker();
+  const response = await message({ type: 'download', url: 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY?si=test' });
+  assert.equal(response.ok, false);
+  assert.match(response.error, /DRM/);
+  assert.equal(calls.length, 0);
+  const page = await overlayPage();
+  Object.assign(page.location, { hostname: 'open.spotify.com', href: 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY' });
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.sent.length, 0);
+  assert.equal(page.overlay.children[0].textContent, 'Spotify offline only');
 });
