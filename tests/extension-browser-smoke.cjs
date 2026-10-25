@@ -36,6 +36,16 @@ const assert = require('node:assert/strict');
     assert.equal(genericRequests[0][0], 'https://files.example.org/api/resource');
     assert.deepEqual(new URLSearchParams(genericRequests[0][4]).getAll('part'), ['one', 'two']);
     await genericPage.close();
+    await context.route('https://x.com/**', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><article><a href="/Talal1/status/2113571139595510128"><time>Today</time></a><div><video style="width:320px;height:180px"></video></div></article><script>document.querySelector('video').src=URL.createObjectURL(new Blob(['fixture'],{type:'video/mp4'}));</script>` }));
+    await worker.evaluate(() => { globalThis.fixtureRequests = []; });
+    const xPage = await context.newPage();
+    await xPage.goto('https://x.com/home');
+    await xPage.getByRole('button', { name: 'Download this media with IDG' }).click();
+    await xPage.getByText('Opened in IDG', { exact: true }).waitFor();
+    const xRequests = await worker.evaluate(() => globalThis.fixtureRequests);
+    assert.equal(xRequests.length, 1);
+    assert.equal(xRequests[0][0], 'https://x.com/Talal1/status/2113571139595510128');
+    await xPage.close();
     for (const disabled of [false, true]) {
       await worker.evaluate(disabled => {
         globalThis.fixtureRequests = [];
@@ -52,6 +62,6 @@ const assert = require('node:assert/strict');
       assert.equal(fallbackRequests.length, disabled ? 0 : 1);
       await fallbackPage.close();
     }
-    console.log('Real Edge MV3 tests passed: MAIN/isolated-world token handoff, cross-site requestSubmit and repeated fields, duplicate suppression, rejected handoff fallback, and disabled-interception fallback.');
+    console.log('Real Edge MV3 tests passed: X timeline blob-player post handoff, MAIN/isolated-world token handoff, cross-site requestSubmit and repeated fields, duplicate suppression, rejected handoff fallback, and disabled-interception fallback.');
   } finally { await context.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

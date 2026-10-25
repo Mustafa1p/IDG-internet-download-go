@@ -49,11 +49,33 @@
     } catch { return false; }
   }
   function mediaKey(media) {
+    const x = xPage(media);
+    if (x) return x;
     if (youtubePage()) {
       const url = new URL(location.href);
       return "youtube:" + (url.searchParams.get("v") || url.pathname);
     }
     return media.currentSrc || media.src || media.querySelector("source[src]")?.src || location.href;
+  }
+  function xPage(media) {
+    if (!["x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com", "m.twitter.com"].includes(location.hostname)) return null;
+    const postUrl = value => {
+      try {
+        const url = new URL(value, location.href);
+        if (url.origin !== new URL(location.href).origin || !/^\/(?:[A-Za-z0-9_]+|i\/web)\/status\/[0-9]+(?:\/video\/[1-9][0-9]*)?\/?$/.test(url.pathname)) return null;
+        return url.origin + url.pathname;
+      } catch { return null; }
+    };
+    // Timelines contain many posts: resolve inside this player's article first.
+    const article = media.closest?.('article');
+    if (article) {
+      const links = [...article.querySelectorAll('a[href]')];
+      const video = links.find(link => /\/video\/[1-9][0-9]*\/?$/.test(link.pathname || "") && postUrl(link.href));
+      if (video) return postUrl(video.href);
+      const permalink = links.find(link => link.querySelector?.('time') && postUrl(link.href));
+      return permalink ? postUrl(permalink.href) : null;
+    }
+    return postUrl(location.href);
   }
   function attach(media) {
     if (!media.parentElement) return;
@@ -121,10 +143,10 @@
       if (!event.isTrusted || button.disabled) return;
       event.preventDefault(); event.stopPropagation();
       const youtube = youtubePage();
-      const url = youtube ? location.href : media.currentSrc || media.src || media.querySelector("source[src]")?.src;
+      const url = xPage(media) || (youtube ? location.href : media.currentSrc || media.src || media.querySelector("source[src]")?.src);
       if (!url || !/^https?:/.test(url)) {
         button.textContent = "No direct link";
-        button.title = "Use an HTTP/HTTPS media link. YouTube watch pages are supported separately.";
+        button.title = "Open the X post containing this video, or use an HTTP/HTTPS media link.";
         return;
       }
       const requestKey = mediaKey(media);

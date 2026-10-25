@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, reload = false, diskVersion = "1.3.1", items = [], postDownloads = true } = {}) {
+function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, reload = false, diskVersion = "1.3.1", items = [], postDownloads = true } = {}) {
   const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
@@ -14,7 +14,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
       sendNativeMessage(name, message, callback) {
         calls.push(['native', message]);
         if (!native) this.lastError = { message: 'Native host missing' };
-        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, post_downloads: postDownloads } } : undefined);
+        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, x, post_downloads: postDownloads } } : undefined);
         delete this.lastError;
       },
     },
@@ -43,7 +43,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     if (url.startsWith('chrome-extension://')) return { ok: true, json: async () => ({ version: diskVersion }) };
     if (url.endsWith('/health')) {
       if (!online) throw new Error('Offline');
-      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, post_downloads: postDownloads } }) };
+      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, x, post_downloads: postDownloads } }) };
     }
     calls.push(['post', JSON.parse(options.body)]);
     return { ok: accepts, status: accepts ? 201 : 500 };
@@ -499,4 +499,65 @@ test('unrecognized native POST downloads are not converted to GET on any website
   assert.equal(calls.length, 0);
   await events.created({ ...download, id: 18, url: 'https://other.example/file.zip' });
   assert.equal(calls.filter(call => call[0] === 'post').length, 1);
+});
+
+test('X post handoff canonicalizes aliases and forwards media cookies online and after shutdown', async () => {
+  for (const online of [true, false]) {
+    const { message, calls } = worker({ online });
+    const response = await message({ type: 'download', url: 'https://twitter.com/Talal1/status/2113571139595510128/video/1?s=20' });
+    assert.equal(response.ok, true);
+    const request = online ? calls.find(c => c[0] === 'post')[1] : calls.find(c => c[0] === 'native' && c[1].type === 'download')[1].download;
+    assert.equal(request.url, 'https://x.com/Talal1/status/2113571139595510128/video/1');
+    assert.ok(request.media_cookies.startsWith('# Netscape HTTP Cookie File'));
+  }
+  const old = worker({ x: false });
+  const response = await old.message({ type: 'download', url: 'https://x.com/Talal1/status/2113571139595510128/video/1' });
+  assert.equal(response.ok, false);
+  assert.match(response.error, /v1.4.6/);
+  assert.equal(old.calls.some(c => c[0] === 'post'), false);
+});
+
+test('X URL detection rejects spoofed hosts, malformed IDs, and non-web schemes', () => {
+  const { context } = worker();
+  for (const value of ['https://x.com.evil.test/u/status/123', 'https://x.com/home', 'https://x.com/u/status/no', 'https://x.com/u/status/123/video/0', 'ftp://x.com/u/status/123']) {
+    context.value = value;
+    assert.equal(vm.runInContext('xVideoUrl(value)', context), null);
+  }
+});
+
+test('X blob player sends the post URL and follows reused SPA players', async () => {
+  const page = await overlayPage();
+  Object.assign(page.location, { hostname: 'x.com', pathname: '/Talal1/status/2113571139595510128/video/1', href: 'https://x.com/Talal1/status/2113571139595510128/video/1' });
+  page.media.currentSrc = 'blob:https://x.com/player';
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.sent[0].url, page.location.href);
+  page.location.href = 'https://x.com/other/status/123/video/2';
+  page.scan();
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.sent[1].url, page.location.href);
+});
+
+test('X timeline resolves the media article instead of downloading the timeline or another post', async () => {
+  const page = await overlayPage();
+  Object.assign(page.location, { hostname: 'x.com', pathname: '/home', href: 'https://x.com/home' });
+  page.media.currentSrc = 'blob:https://x.com/player';
+  page.media.closest = () => ({ querySelectorAll: () => [
+    { href: 'https://x.com/person', pathname: '/person', querySelector: () => null },
+    { href: 'https://x.com/Talal1/status/2113571139595510128', pathname: '/Talal1/status/2113571139595510128', querySelector: () => ({}) },
+  ] });
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.sent[0].url, 'https://x.com/Talal1/status/2113571139595510128');
+  page.media.closest = () => ({ querySelectorAll: () => [] });
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.sent.length, 1);
+  assert.equal(page.overlay.children[0].textContent, 'No direct link');
+});
+
+test('context menu handles X video pages while ordinary links keep their own destination', async () => {
+  const { events, calls } = worker();
+  const tab = { url: 'https://x.com/Talal1/status/2113571139595510128/video/1' };
+  await events.context({ menuItemId: 'idg-download-video', srcUrl: 'blob:https://x.com/player' }, tab);
+  assert.equal(calls.find(c => c[0] === 'post')[1].url, tab.url);
+  await events.context({ menuItemId: 'idg-download-link', linkUrl: 'https://example.org/file.zip' }, tab);
+  assert.equal(calls.filter(c => c[0] === 'post')[1][1].url, 'https://example.org/file.zip');
 });

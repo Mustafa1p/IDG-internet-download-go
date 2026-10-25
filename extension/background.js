@@ -195,16 +195,26 @@ async function sendDownloadToIDG(...args) {
   try { return await sendDownloadRequest(...args); }
   finally { activeHandoffs--; }
 }
+function xVideoUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || !["x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com", "m.twitter.com"].includes(url.hostname)) return null;
+    const match = url.pathname.match(/^\/(?:[A-Za-z0-9_]+|i\/web)\/status\/([0-9]+)(?:\/video\/([0-9]+))?\/?$/);
+    if (!match || (match[2] && !(Number(match[2]) > 0 && Number(match[2]) <= 4294967295))) return null;
+    return `https://x.com${url.pathname.replace(/\/$/, "")}`;
+  } catch { return null; }
+}
 async function sendDownloadRequest(url, filename, referrer, userAgent, postData) {
   if (!validUrl(url)) return { ok: false, error: "Only HTTP and HTTPS links can be sent to IDG." };
   const youtube = youtubeVideoUrl(url);
-  if (youtube) url = youtube;
+  const x = xVideoUrl(url);
+  if (youtube || x) url = youtube || x;
   let cookies = null, media_cookies = null;
   try {
     const jar = await chrome.cookies.getAll({ url });
     if (jar.length) {
       cookies = jar.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
-      if (youtube) {
+      if (youtube || x) {
         const field = value => String(value ?? "").replace(/[\t\r\n]/g, "");
         media_cookies = "# Netscape HTTP Cookie File\n" + jar.map(cookie => [
           (cookie.httpOnly ? "#HttpOnly_" : "") + field(cookie.domain),
@@ -231,8 +241,11 @@ async function sendDownloadRequest(url, filename, referrer, userAgent, postData)
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
       if (!capability?.capabilities?.post_downloads) return { ok: false, error: "POST downloads require IDG 1.4.4 or newer." };
     }
-    if (youtube) {
+    if (youtube || x) {
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
+      if (x && !capability?.capabilities?.x) {
+        return { ok: false, error: "X videos require the complete IDG v1.4.6 package or newer. Quit IDG in the tray, install the update, then reopen IDG." };
+      }
       if (!capability?.capabilities?.youtube) {
         return { ok: false, error: "YouTube requires the complete IDG v1.2.0 package or newer. Quit the old IDG in the tray, install the update, then reopen IDG." };
       }
@@ -305,7 +318,8 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  const url = youtubeVideoUrl(info.linkUrl) || youtubeVideoUrl(tab?.url) || info.linkUrl || info.srcUrl;
+  const url = youtubeVideoUrl(info.linkUrl) || xVideoUrl(info.linkUrl) ||
+    (info.menuItemId === "idg-download-video" ? youtubeVideoUrl(tab?.url) || xVideoUrl(tab?.url) : null) || info.linkUrl || info.srcUrl;
   if (!url) return;
   const result = await sendDownloadToIDG(url, null, info.pageUrl || tab?.url || null, navigator.userAgent);
   if (!result.ok) {

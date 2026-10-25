@@ -73,11 +73,12 @@ async fn dispatch(client: &reqwest::Client, message: Value) -> anyhow::Result<Va
     }
     if kind == "ping" {
         let tools = std::env::current_exe()?.with_file_name("tools");
-        let youtube = ["yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe"]
+        let youtube = ["yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe"]
             .iter()
-            .all(|name| tools.join(name).is_file());
+            .all(|name| tools.join(name).is_file())
+            && (tools.join("deno.exe").is_file() || tools.join("node.exe").is_file());
         return Ok(
-            json!({"ok": true, "installed": true, "serverOnline": online, "version": env!("CARGO_PKG_VERSION"), "capabilities": {"youtube": youtube, "post_downloads": true}}),
+            json!({"ok": true, "installed": true, "serverOnline": online, "version": env!("CARGO_PKG_VERSION"), "capabilities": {"youtube": youtube, "x": youtube, "post_downloads": true}}),
         );
     }
     let response = if kind == "list" {

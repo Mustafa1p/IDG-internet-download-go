@@ -83,7 +83,7 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
         build: env!("IDG_BUILD_ID"),
-        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "post_downloads": true}),
+        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "x": crate::download::media::tools_available(), "post_downloads": true}),
     })
 }
 
@@ -103,7 +103,7 @@ async fn add_download(
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(
-                serde_json::json!({"error": "YouTube tools are missing. Install the complete IDG v1.2.0 package."}),
+                serde_json::json!({"error": "Video tools are missing. Install the complete IDG package."}),
             ),
         );
     }

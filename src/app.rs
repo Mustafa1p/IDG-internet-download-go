@@ -650,7 +650,7 @@ impl IDGApp {
 
                 if media::video_url(&self.dialog.url).is_some() {
                     ui.separator();
-                    ui.label(RichText::new("YouTube · choose what to save").strong());
+                    ui.label(RichText::new("Video · choose what to save").strong());
                     let old_format = self.dialog.media_options.format;
                     ui.horizontal(|ui| {
                         ui.label("File type");

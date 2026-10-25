@@ -1,4 +1,4 @@
-//! YouTube page downloads through the bundled yt-dlp/FFmpeg/Deno toolchain.
+//! YouTube and X page downloads through the bundled yt-dlp/FFmpeg/Deno toolchain.
 use super::types::{Downloads, Status, safe_filename, with_item};
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
@@ -98,7 +98,7 @@ fn info_from_json(value: &Value) -> MediaInfo {
     heights.dedup();
     heights.reverse();
     MediaInfo {
-        title: value["title"].as_str().unwrap_or("YouTube video").into(),
+        title: value["title"].as_str().unwrap_or("Video").into(),
         heights,
     }
 }
@@ -122,9 +122,9 @@ pub async fn inspect(url: &str, cookies: Option<&str>) -> Result<MediaInfo> {
 async fn inspect_with_tools(url: &str, cookies: Option<&str>, tools: &Path) -> Result<MediaInfo> {
     anyhow::ensure!(
         available_at(tools),
-        "YouTube tools are missing. Install the complete IDG package."
+        "Video tools are missing. Install the complete IDG package."
     );
-    let url = video_url(url).context("Invalid YouTube video URL")?;
+    let url = video_url(url).context("Invalid video URL")?;
     let cookies = cookie_file(cookies)?;
     let mut command = Command::new(tools.join("yt-dlp.exe"));
     #[cfg(windows)]
@@ -214,6 +214,48 @@ pub fn video_url(value: &str) -> Option<String> {
         return None;
     }
     let host = url.host_str()?;
+    if matches!(
+        host,
+        "x.com"
+            | "www.x.com"
+            | "twitter.com"
+            | "www.twitter.com"
+            | "mobile.twitter.com"
+            | "m.twitter.com"
+    ) {
+        let segments: Vec<_> = url
+            .path()
+            .trim_end_matches('/')
+            .trim_start_matches('/')
+            .split('/')
+            .collect();
+        let (owner, id, rest) = match segments.as_slice() {
+            ["i", "web", "status", id, rest @ ..] => ("i/web", *id, rest),
+            [owner, "status", id, rest @ ..] => (*owner, *id, rest),
+            _ => return None,
+        };
+        if owner.is_empty()
+            || !owner
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'/'))
+            || id.is_empty()
+            || !id.bytes().all(|b| b.is_ascii_digit())
+        {
+            return None;
+        }
+        let suffix = match rest {
+            [] | [""] => String::new(),
+            ["video", index]
+                if !index.is_empty()
+                    && index.bytes().all(|b| b.is_ascii_digit())
+                    && index.parse::<u32>().ok()? > 0 =>
+            {
+                format!("/video/{index}")
+            }
+            _ => return None,
+        };
+        return Some(format!("https://x.com/{owner}/status/{id}{suffix}"));
+    }
     let id = if host == "youtu.be" {
         url.path().trim_matches('/').to_owned()
     } else if matches!(
@@ -251,6 +293,10 @@ pub fn video_url(value: &str) -> Option<String> {
 
 pub fn default_filename(url: &str) -> Option<String> {
     let canonical = video_url(url)?;
+    if canonical.starts_with("https://x.com/") {
+        let id = canonical.split("/status/").nth(1)?.replace('/', "-");
+        return Some(format!("X-{id}.mp4"));
+    }
     Some(format!("YouTube-{}.mp4", canonical.rsplit('=').next()?))
 }
 
@@ -380,10 +426,10 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
         .find(|item| item.id == id)
         .cloned()
         .context("Download was removed")?;
-    let url = video_url(&item.url).context("Unsupported YouTube video URL")?;
+    let url = video_url(&item.url).context("Unsupported video URL")?;
     anyhow::ensure!(
         available_at(&tools),
-        "YouTube tools are missing. Install the full IDG package, then retry."
+        "Video tools are missing. Install the full IDG package, then retry."
     );
     let directory = item.save_path.parent().unwrap_or(Path::new("."));
     tokio::fs::create_dir_all(directory).await?;
@@ -431,7 +477,7 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
     );
     let mut child = downloader
         .spawn()
-        .context("Could not start the bundled YouTube downloader")?;
+        .context("Could not start the bundled video downloader")?;
     let process_id = child.id();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let errors = Arc::new(Mutex::new(VecDeque::<String>::new()));
@@ -485,17 +531,17 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
             .find(|line| line.contains("ERROR:"))
             .or_else(|| errors.back())
             .map(String::as_str)
-            .unwrap_or("YouTube download failed");
+            .unwrap_or("Video download failed");
         bail!("{message}");
     }
     let reported_file =
-        reported_file.context("YouTube downloader did not report a completed file")?;
+        reported_file.context("Video downloader did not report a completed file")?;
     anyhow::ensure!(
         tokio::fs::canonicalize(&reported_file).await? == tokio::fs::canonicalize(&output).await?,
-        "Unexpected YouTube output path"
+        "Unexpected video output path"
     );
     let bytes = tokio::fs::metadata(&output).await?.len();
-    anyhow::ensure!(bytes > 0, "YouTube produced an empty file");
+    anyhow::ensure!(bytes > 0, "Video downloader produced an empty file");
     with_item(&downloads, &id, |item| {
         item.status = Status::Completed;
         item.downloaded_bytes = bytes;
@@ -509,6 +555,87 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn x_posts_keep_video_selection_and_reject_unsupported_urls() {
+        for host in [
+            "x.com",
+            "www.x.com",
+            "twitter.com",
+            "www.twitter.com",
+            "mobile.twitter.com",
+            "m.twitter.com",
+        ] {
+            assert_eq!(
+                video_url(&format!(
+                    "https://{host}/Talal1/status/2113571139595510128/video/1?s=20"
+                ))
+                .as_deref(),
+                Some("https://x.com/Talal1/status/2113571139595510128/video/1")
+            );
+        }
+        assert_eq!(
+            video_url("https://x.com/i/web/status/2113571139595510128").as_deref(),
+            Some("https://x.com/i/web/status/2113571139595510128")
+        );
+        assert_eq!(
+            default_filename("https://x.com/Talal1/status/2113571139595510128/video/1").as_deref(),
+            Some("X-2113571139595510128-video-1.mp4")
+        );
+        for url in [
+            "https://x.com/home",
+            "https://x.com/user/status/abc",
+            "https://x.com/user/status/123/video/0",
+            "https://x.com/user/status/123/video/4294967296",
+            "https://x.com.evil.test/user/status/123",
+            "ftp://x.com/user/status/123",
+            "blob:https://x.com/player",
+        ] {
+            assert!(video_url(url).is_none(), "{url}");
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "Live X download and audio/video verification using bundled tools"]
+    async fn supplied_x_video_downloads_with_audio_and_video() {
+        let tools = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/tools");
+        let url = "https://x.com/Talal1/status/2113571139595510128/video/1";
+        let info = inspect_with_tools(url, None, &tools).await.unwrap();
+        assert!(!info.heights.is_empty());
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("x-video.mp4");
+        let item = super::super::types::DownloadItem::new(url.into(), output.clone(), 0);
+        let id = item.id.clone();
+        let downloads = Arc::new(Mutex::new(vec![item]));
+        download_with_tools(downloads.clone(), id, tools.clone())
+            .await
+            .unwrap();
+        assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+        let mut probe = Command::new(tools.join("ffprobe.exe"));
+        #[cfg(windows)]
+        probe.creation_flags(0x08000000);
+        let result = probe
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "json",
+            ])
+            .arg(&output)
+            .output()
+            .await
+            .unwrap();
+        assert!(result.status.success());
+        let value: Value = serde_json::from_slice(&result.stdout).unwrap();
+        let streams = value["streams"].as_array().unwrap();
+        assert!(streams.iter().any(|s| s["codec_type"] == "video"));
+        assert!(streams.iter().any(|s| s["codec_type"] == "audio"));
+        println!(
+            "Verified supplied X post: {} bytes, audio and video",
+            std::fs::metadata(output).unwrap().len()
+        );
+    }
     #[tokio::test]
     #[ignore = "Live YouTube/network test; run after fetching the pinned media tools"]
     async fn supplied_youtube_video_downloads_with_audio_and_video() {
