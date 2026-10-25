@@ -7,6 +7,9 @@ import json
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
+import threading
 
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("music_bridge", Path(__file__).resolve().parents[1] / "music/bridge.py")
@@ -62,6 +65,80 @@ class MusicBridgeTests(unittest.TestCase):
         self.assertIn(new_spotify, merged)
         self.assertIn(updated, merged)
 
+    def test_idg_spotify_pairing_replaces_only_after_valid_session(self):
+        old = {"service": "spotify", "uuid": "old", "active": True}
+        other = {"service": "tidal", "uuid": "other"}
+        class Config:
+            accounts = [old, other]
+            def get(self, key): return self.accounts
+            def set(self, key, value): self.accounts = value
+            def save(self): pass
+        config = Config()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            class Server:
+                closed = False
+                def has_valid_session(self): return True
+                def close_session(self): pass
+                def close(self): self.closed = True
+            server = Server()
+            class Builder:
+                def __init__(self): self.conf = SimpleNamespace()
+                def create(self):
+                    self_test.assertEqual(self.device_name, "IDG")
+                    Path(self.conf.stored_credentials_file).write_text(json.dumps({"username": "fixture", "credentials": "fixture-secret", "type": "AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS"}))
+                    return server
+            self_test = self
+            zeroconf = SimpleNamespace(Builder=Builder, _ZeroconfServer__default_get_info_fields={})
+            modules = {"librespot.zeroconf": SimpleNamespace(ZeroconfServer=zeroconf),
+                       "onthespot.otsconfig": SimpleNamespace(config=config)}
+            with patch.dict(sys.modules, modules):
+                messages = []
+                bridge.pair_spotify(root, messages.append)
+                self.assertIn("select IDG", messages[0])
+                self.assertEqual(zeroconf._ZeroconfServer__default_get_info_fields["brandDisplayName"], "IDG")
+                self.assertTrue(server.closed)
+                self.assertFalse((root / "spotify-session.json").exists())
+                self.assertIn(other, config.accounts)
+                self.assertNotIn(old, config.accounts)
+                self.assertEqual(config.accounts[-1]["login"]["username"], "fixture")
+                for cancelled, timeout in [(threading.Event(), 0), (threading.Event(), 1)]:
+                    cancelled.set()
+                    config.accounts = [old, other]
+                    with self.assertRaises(bridge.BridgeError):
+                        bridge.pair_spotify(root, lambda _: None, cancelled, timeout)
+                    self.assertEqual(config.accounts, [old, other])
+                    self.assertFalse((root / "spotify-session.json").exists())
+
+    def test_idg_account_setup_rolls_back_failure_and_cancellation(self):
+        old = {"service": "apple_music", "uuid": "old", "active": True}
+        other = {"service": "tidal", "uuid": "other"}
+        class Config:
+            accounts = [old, other]
+            def get(self, key): return self.accounts
+            def set(self, key, value): self.accounts = value
+            def save(self): pass
+        config = Config()
+        cancelled = threading.Event()
+        def add_account(value):
+            config.accounts.append({"service": "apple_music", "uuid": "new", "active": True})
+            if value == "cancel": cancelled.set()
+            if value == "fail": raise RuntimeError("private-token")
+        modules = {"onthespot.otsconfig": SimpleNamespace(config=config),
+                   "onthespot.api.apple_music": SimpleNamespace(apple_music_add_account=add_account)}
+        with patch.dict(sys.modules, modules):
+            for value in ["", "fail", "cancel"]:
+                config.accounts = [old, other]
+                cancelled.clear()
+                with self.assertRaises(Exception):
+                    bridge._configure_account("apple_music", [value], lambda _: None, cancelled)
+                self.assertEqual(config.accounts, [old, other])
+            cancelled.clear()
+            bridge._configure_account("apple_music", ["success"], lambda _: None, cancelled)
+            self.assertIn(other, config.accounts)
+            self.assertNotIn(old, config.accounts)
+            self.assertEqual(config.accounts[-1]["uuid"], "new")
+
     @unittest.skipUnless(os.name == "nt", "Windows DPAPI")
     def test_accounts_survive_new_reads_and_are_encrypted_at_rest(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,6 +172,65 @@ class MusicBridgeTests(unittest.TestCase):
             self.assertTrue(active.exists())
             self.assertFalse(stale.exists())
             self.assertTrue(unrelated.exists())
+
+
+@unittest.skipUnless(importlib.util.find_spec("PyQt6"), "Optional music runtime required for UI checks")
+class MusicAccountWindowTests(unittest.TestCase):
+    def test_idg_window_masks_credentials_handles_async_errors_and_saves_no_secrets_in_ui(self):
+        from PyQt6.QtWidgets import QApplication, QLineEdit
+        from PyQt6.QtGui import QFont
+        import time
+        app = QApplication.instance() or QApplication([])
+        app.setFont(QFont("Segoe UI", 10))
+        class Config:
+            accounts = [{"service": "tidal", "active": True, "uuid": "fixture"}]
+            def get(self, key): return self.accounts
+            def set(self, key, value): self.accounts = value
+            def save(self): pass
+        config = Config()
+        with patch.dict(sys.modules, {"onthespot.otsconfig": SimpleNamespace(config=config)}):
+            window = bridge.create_account_window()
+            window.show()
+            app.processEvents()
+            try:
+                self.assertEqual(window.windowTitle(), "IDG Music Accounts")
+                self.assertFalse(any(name.startswith("onthespot.qt") for name in sys.modules))
+                self.assertIn("select IDG", window.help.text())
+                self.assertFalse(window.connect_button.isEnabled())
+                window.service.setCurrentIndex(4)
+                self.assertTrue(window.first.isVisible())
+                self.assertTrue(window.second.isVisible())
+                self.assertEqual(window.second.echoMode(), QLineEdit.EchoMode.Password)
+                app.processEvents()
+                if os.environ.get("IDG_MUSIC_UI_SCREENSHOT"):
+                    window.grab().save(os.environ["IDG_MUSIC_UI_SCREENSHOT"])
+                window.service.setCurrentIndex(2)
+                self.assertFalse(window.second.isVisible())
+                self.assertEqual(window.first.echoMode(), QLineEdit.EchoMode.Password)
+                secret = "private-fixture-not-for-status"
+                window.first.setText(secret)
+                def fail(*args):
+                    time.sleep(0.03)
+                    raise RuntimeError(secret)
+                with patch.object(bridge, "configure_account", fail):
+                    window.connect_service()
+                    self.assertFalse(window.service.isEnabled())
+                    self.assertEqual(window.first.text(), "")
+                    window.accept()  # Busy close requests cancellation instead of destroying a QThread.
+                    self.assertTrue(window.task.cancelled.is_set())
+                    deadline = time.monotonic() + 3
+                    while window.task.isRunning() and time.monotonic() < deadline:
+                        app.processEvents()
+                        time.sleep(0.01)
+                    self.assertFalse(window.task.isRunning())
+                    app.processEvents()
+                    self.assertTrue(window.service.isEnabled())
+                    self.assertNotIn(secret, window.status.text())
+                    self.assertIn("failed", window.status.text())
+                self.assertEqual(config.accounts, [{"service": "tidal", "active": True, "uuid": "fixture"}])
+            finally:
+                window.close()
+                app.processEvents()
 
 
 if __name__ == "__main__":

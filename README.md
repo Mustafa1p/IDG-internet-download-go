@@ -40,7 +40,7 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 
 ## Original-service music preview
 
-Version **[1.5.0 preview](https://github.com/Mustafa1p/IDG-internet-download-go/releases/tag/v1.5.0)** adds **Settings > Music**, with an optional OnTheSpot worker for Spotify, Bandcamp, Apple Music, Deezer, Qobuz and Tidal. Install the optional backend and connect the relevant account before downloading. It uses the original service and does not substitute YouTube search results. Bandcamp has passed a live download through IDG; authenticated Spotify and the other subscription services remain unverified until an account is connected. This preview is not offered automatically to stable users.
+Version **[1.5.1 preview](https://github.com/Mustafa1p/IDG-internet-download-go/releases/tag/v1.5.1)** adds **Settings > Music**, with IDG Music Accounts and an optional internal music backend for Spotify, Bandcamp, Apple Music, Deezer, Qobuz and Tidal. Spotify Desktop shows the pairing device as **IDG**. Install the optional backend and connect the relevant account before downloading. It uses the original service and does not substitute YouTube search results. Bandcamp has passed a live download through IDG; authenticated Spotify and the other subscription services remain unverified until an account is connected. This preview is not offered automatically to stable users.
 
 The separate music worker is GPL-2.0 licensed; IDG's Rust application remains MIT licensed. See [music setup, verification and limitations](docs/music-backend.md). The existing **1.4.8 stable** downloads below remain available.
 
@@ -146,7 +146,7 @@ Use the updated installer, then remove the old extension and load the new `exten
 
 Open the extension popup to see **IDG is connected**, **IDG is ready**, or **IDG is not connected**. The popup only reports connection status. Browser downloads are forwarded automatically; use the page's YouTube download overlay or the browser context menu for media links. Confirm filenames, formats, and save locations in the desktop app.
 
-If IDG cannot accept a request, the original browser download resumes. YouTube watch pages, Shorts, X/Twitter status videos, Instagram Reels/video posts and TikTok videos are sent to the bundled video downloader, including players that use blob URLs. Paste a post URL into New download or use its Download with IDG button. TikTok formats marked as watermarked are excluded; availability varies by post and region, and embedded creator logos are preserved. Instagram carousels download the first video. Sign in to the source website and use the extension for posts that require your session. Stable 1.4.8 does not export Spotify music. The 1.5.0 preview adds an optional original-service music backend with account setup; see the preview section above. On X, click Download with IDG on the video or paste the post URL into New download; /video/1 selection is preserved. Install both the v1.4.8 desktop app and extension, then reload existing X tabs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
+If IDG cannot accept a request, the original browser download resumes. YouTube watch pages, Shorts, X/Twitter status videos, Instagram Reels/video posts and TikTok videos are sent to the bundled video downloader, including players that use blob URLs. Paste a post URL into New download or use its Download with IDG button. TikTok formats marked as watermarked are excluded; availability varies by post and region, and embedded creator logos are preserved. Instagram carousels download the first video. Sign in to the source website and use the extension for posts that require your session. Stable 1.4.8 does not export Spotify music. The 1.5.1 preview adds an optional original-service music backend with account setup; see the preview section above. On X, click Download with IDG on the video or paste the post URL into New download; /video/1 selection is preserved. Install both the v1.4.8 desktop app and extension, then reload existing X tabs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
 
 For source builds or portable integration, keep `IDG.exe` and `IDG-native.exe` together and run:
 
@@ -289,7 +289,7 @@ Automated tests exercise handoff success/failure, native framing, stable extensi
 rustup target add i686-pc-windows-msvc
 cargo build --locked --release --bins --target i686-pc-windows-msvc
 python installer/fetch-media-tools.py x86
-python installer/package.py v1.5.0 x86
+python installer/package.py v1.5.1 x86
 ./installer/build-installer.ps1 -Architecture x86
 ```
 

@@ -347,7 +347,7 @@ pub async fn action(action: &str, progress: impl Fn(&str)) -> Result<Vec<Account
         accounts.context("Music worker did not return account status")
     };
     tokio::time::timeout(
-        Duration::from_secs(if action == "pair_spotify" { 180 } else { 7200 }),
+        Duration::from_secs(if action == "pair_spotify" { 210 } else { 7200 }),
         operation,
     )
     .await

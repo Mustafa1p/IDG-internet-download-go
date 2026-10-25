@@ -218,31 +218,286 @@ def validate_outputs(items, output):
     return paths
 
 
+def pair_spotify(root, notify, cancelled=None, timeout=180):
+    """Advertise IDG directly through the pinned Connect library."""
+    from librespot.zeroconf import ZeroconfServer
+    from onthespot.otsconfig import config
+    cancelled = cancelled or threading.Event()
+    credentials = root / "spotify-session.json"
+    fields = ZeroconfServer._ZeroconfServer__default_get_info_fields
+    fields.update({"clientID": "65b708073fc0480ea92a077233ca87bd",
+                   "brandDisplayName": "IDG", "modelDisplayName": "Internet Download Go"})
+    builder = ZeroconfServer.Builder()
+    builder.device_name = "IDG"
+    builder.conf.stored_credentials_file = str(credentials)
+    server = builder.create()
+    try:
+        notify("In Spotify Desktop, open Connect to a device and select IDG. Waiting up to 3 minutes.")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if cancelled.is_set():
+                raise BridgeError("Spotify pairing cancelled. Your saved account was kept.")
+            if server.has_valid_session() and credentials.is_file():
+                session = json.loads(credentials.read_text(encoding="utf-8"))
+                if not all(session.get(key) for key in ("username", "credentials", "type")):
+                    raise BridgeError("Spotify returned an incomplete session. Retry Connect Spotify.")
+                account = {"uuid": uuid.uuid4().hex, "service": "spotify", "active": True,
+                           "login": {key: session[key] for key in ("username", "credentials", "type")}}
+                config.set("accounts", [a for a in config.get("accounts") if a.get("service") != "spotify"] + [account])
+                config.save()
+                return
+            cancelled.wait(0.25)
+        raise BridgeError("Spotify pairing timed out. Retry Connect Spotify and select IDG in Spotify Desktop.")
+    finally:
+        try:
+            server.close_session()
+        finally:
+            server.close()
+            credentials.unlink(missing_ok=True)
+
+
+def configure_account(service, values, notify, cancelled):
+    import requests
+    original = requests.sessions.Session.request
+
+    def bounded_request(session, *args, **kwargs):
+        if cancelled.is_set():
+            raise BridgeError("Connection cancelled. Your saved account was kept.")
+        kwargs.setdefault("timeout", 20)
+        return original(session, *args, **kwargs)
+
+    requests.sessions.Session.request = bounded_request
+    try:
+        _configure_account(service, values, notify, cancelled)
+    finally:
+        requests.sessions.Session.request = original
+
+
+def _configure_account(service, values, notify, cancelled):
+    """Use service libraries without importing their application or account UI."""
+    from onthespot.otsconfig import config
+    initial = json.loads(json.dumps(config.get("accounts")))
+    try:
+        config.set("accounts", [a for a in initial if a.get("service") != service])
+        if service == "apple_music":
+            if not values[0].strip():
+                raise BridgeError("Enter your Apple Music media user token.")
+            from onthespot.api.apple_music import apple_music_add_account
+            apple_music_add_account(values[0].strip())
+        elif service == "deezer":
+            if not values[0].strip():
+                raise BridgeError("Enter your Deezer ARL session cookie.")
+            from onthespot.api.deezer import deezer_add_account
+            deezer_add_account(values[0].strip())
+        elif service == "qobuz":
+            if not values[0].strip() or not values[1]:
+                raise BridgeError("Enter your Qobuz email and password.")
+            from onthespot.api.qobuz import qobuz_add_account
+            qobuz_add_account(values[0].strip(), values[1])
+        elif service == "tidal":
+            from onthespot.api import tidal
+            from urllib.parse import urlparse
+            import requests
+            # Use bounded, cancellable OAuth polling rather than the library's
+            # unbounded GUI loop. Authorization stays on Tidal's own website.
+            response = requests.post(f"{tidal.AUTH_URL}/device_authorization",
+                                     data={"client_id": tidal.CLIENT_ID, "scope": "r_usr+w_usr+w_sub"}, timeout=20)
+            response.raise_for_status()
+            device = response.json()
+            url = device["verificationUriComplete"]
+            if not url.startswith("https://"):
+                url = "https://" + url
+            parsed = urlparse(url)
+            if parsed.scheme != "https" or parsed.hostname not in ("tidal.com", "login.tidal.com", "link.tidal.com") or parsed.username or parsed.password:
+                raise BridgeError("Tidal returned an unexpected sign-in address.")
+            notify(url)
+            deadline = time.monotonic() + min(float(device.get("expiresIn", 180)), 180)
+            interval = max(1, min(float(device.get("interval", 3)), 10))
+            while time.monotonic() < deadline and not cancelled.wait(interval):
+                response = requests.post(f"{tidal.AUTH_URL}/token", auth=tidal.AUTH,
+                    data={"client_id": tidal.CLIENT_ID, "device_code": device["deviceCode"],
+                          "grant_type": "urn:ietf:params:oauth:grant-type:device_code", "scope": "r_usr+w_usr+w_sub"}, timeout=20)
+                data = response.json()
+                if response.status_code == 200 and data.get("access_token"):
+                    login = {"username": data["user"]["username"], "country_code": data["user"]["countryCode"],
+                             "access_token": data["access_token"], "refresh_token": data["refresh_token"],
+                             "token_expiry": time.time() + float(data["expires_in"])}
+                    config.set("accounts", config.get("accounts") + [{"uuid": uuid.uuid4().hex,
+                               "service": "tidal", "active": True, "login": login}])
+                    break
+                error = data.get("error")
+                if error == "slow_down":
+                    interval = min(interval + 5, 30)
+                elif error != "authorization_pending" and data.get("sub_status") != 1002:
+                    raise BridgeError("Tidal sign-in failed or expired. Try connecting again.")
+            else:
+                raise BridgeError("Tidal sign-in cancelled or timed out. Your saved account was kept.")
+        else:
+            raise BridgeError("Use Connect Spotify in IDG Music settings. Bandcamp needs no account.")
+        if cancelled.is_set():
+            raise BridgeError("Connection cancelled. Your saved account was kept.")
+        if not any(a.get("service") == service for a in config.get("accounts")):
+            raise BridgeError("Sign-in failed. Check the account details and try again.")
+        config.save()
+    except Exception:
+        config.set("accounts", initial)
+        config.save()
+        raise
+
+
+def create_account_window():
+    """IDG-owned account UI; upstream GUI modules are never loaded."""
+    from PyQt6.QtCore import QThread, pyqtSignal, QUrl
+    from PyQt6.QtGui import QDesktopServices
+    from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLabel,
+                                QComboBox, QLineEdit, QPushButton, QHBoxLayout)
+    from onthespot.otsconfig import config
+
+    class AccountTask(QThread):
+        result = pyqtSignal(str)
+        authorization = pyqtSignal(str)
+
+        def __init__(self, service, values, parent):
+            super().__init__(parent)
+            self.service, self.values = service, values
+            self.cancelled = threading.Event()
+
+        def run(self):
+            try:
+                configure_account(self.service, self.values, self.authorization.emit, self.cancelled)
+                self.result.emit("")
+            except Exception as error:
+                self.result.emit(safe_message(error))
+            finally:
+                self.values = None
+
+    class AccountWindow(QDialog):
+        def __init__(self):
+            super().__init__()
+            self.task = None
+            self.setWindowTitle("IDG Music Accounts")
+            self.setMinimumSize(540, 420)
+            self.setStyleSheet("QDialog {background:#f5f7fb;color:#172339;} QLabel {color:#172339;} QLineEdit,QComboBox {padding:8px;background:white;color:#172339;border:1px solid #8b98ad;border-radius:4px;} QPushButton {padding:9px 16px;background:white;color:#172339;border:1px solid #8b98ad;border-radius:4px;} QPushButton:disabled {background:#e7ecf3;color:#64748b;border-color:#c0cad8;} QPushButton:focus {border:2px solid #225ed8;}")
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(24, 22, 24, 22)
+            heading = QLabel("IDG Music Accounts")
+            heading.setStyleSheet("font-size:21px;font-weight:600;")
+            layout.addWidget(heading)
+            intro = QLabel("Connect your music services here. Account data is encrypted for your Windows user when you close this window.")
+            intro.setWordWrap(True)
+            layout.addWidget(intro)
+            self.service = QComboBox()
+            for label, key in [("Spotify", "spotify"), ("Bandcamp", "bandcamp"), ("Apple Music", "apple_music"), ("Deezer", "deezer"), ("Qobuz", "qobuz"), ("Tidal", "tidal")]:
+                self.service.addItem(label, key)
+            form = QFormLayout()
+            form.addRow("Service", self.service)
+            self.first_label, self.second_label = QLabel(), QLabel("Password")
+            self.first, self.second = QLineEdit(), QLineEdit()
+            self.first.setEchoMode(QLineEdit.EchoMode.Password)
+            self.second.setEchoMode(QLineEdit.EchoMode.Password)
+            form.addRow(self.first_label, self.first)
+            form.addRow(self.second_label, self.second)
+            layout.addLayout(form)
+            self.help = QLabel()
+            self.help.setWordWrap(True)
+            layout.addWidget(self.help)
+            self.status = QLabel()
+            self.status.setWordWrap(True)
+            layout.addWidget(self.status)
+            layout.addStretch()
+            buttons = QHBoxLayout()
+            self.connect_button = QPushButton("Connect")
+            self.connect_button.setStyleSheet("QPushButton:enabled {background:#225ed8;color:white;border:1px solid #225ed8;}")
+            self.remove_button = QPushButton("Disconnect service")
+            self.close_button = QPushButton("Save and close")
+            for button in (self.connect_button, self.remove_button, self.close_button):
+                buttons.addWidget(button)
+            layout.addLayout(buttons)
+            self.service.currentIndexChanged.connect(self.update_service)
+            self.connect_button.clicked.connect(self.connect_service)
+            self.remove_button.clicked.connect(self.remove_service)
+            self.close_button.clicked.connect(self.accept)
+            self.update_service()
+
+        def update_service(self):
+            key = self.service.currentData()
+            self.first.clear()
+            self.second.clear()
+            self.first.setVisible(key in ("apple_music", "deezer", "qobuz"))
+            self.first_label.setVisible(key in ("apple_music", "deezer", "qobuz"))
+            self.second.setVisible(key == "qobuz")
+            self.second_label.setVisible(key == "qobuz")
+            self.first.setEchoMode(QLineEdit.EchoMode.Normal if key == "qobuz" else QLineEdit.EchoMode.Password)
+            self.first_label.setText({"apple_music": "Media user token", "deezer": "ARL session cookie", "qobuz": "Email"}.get(key, ""))
+            self.help.setText({"spotify": "Use Connect Spotify in IDG Settings > Music, then select IDG in Spotify Desktop's device picker.", "bandcamp": "Public Bandcamp downloads need no account.", "apple_music": "Enter the media user token from your own Apple Music web session. Sign-in is checked when downloading.", "deezer": "Enter the ARL cookie from your own Deezer web session. Sign-in is checked when downloading.", "qobuz": "Enter your Qobuz account details. A network sign-in checks them before adding the account.", "tidal": "Connect opens Tidal's sign-in website. Return here after authorizing; IDG waits for up to 3 minutes."}[key])
+            configured = any(a.get("service") == key and a.get("active") for a in config.get("accounts"))
+            self.status.setText("Public access" if key == "bandcamp" else "Configured; sign-in is checked when downloading" if configured else "Not connected")
+            self.connect_button.setEnabled(key not in ("spotify", "bandcamp"))
+            self.remove_button.setEnabled(configured and key != "bandcamp")
+
+        def remove_service(self):
+            key = self.service.currentData()
+            config.set("accounts", [a for a in config.get("accounts") if a.get("service") != key])
+            config.save()
+            self.update_service()
+
+        def connect_service(self):
+            if self.task and self.task.isRunning():
+                return
+            self.task = AccountTask(self.service.currentData(), [self.first.text(), self.second.text()], self)
+            self.first.clear()
+            self.second.clear()
+            for widget in (self.service, self.first, self.second, self.connect_button, self.remove_button):
+                widget.setEnabled(False)
+            self.close_button.setText("Cancel connection")
+            self.status.setText("Connecting. Please wait...")
+            self.task.authorization.connect(self.authorize)
+            self.task.result.connect(self.show_result)
+            self.task.finished.connect(self.finish_task)
+            self.task.start()
+
+        def authorize(self, url):
+            self.status.setText("Complete sign-in in your browser, then return here. Waiting for Tidal authorization...")
+            QDesktopServices.openUrl(QUrl(url))
+
+        def show_result(self, error):
+            self.connection_error = error
+
+        def finish_task(self):
+            for widget in (self.service, self.first, self.second):
+                widget.setEnabled(True)
+            self.close_button.setText("Save and close")
+            self.update_service()
+            error = getattr(self, "connection_error", "")
+            self.status.setText(error or "Account configured. Save and close to keep it in IDG. Sign-in is checked when downloading.")
+
+        def reject(self):
+            self.accept()
+
+        def accept(self):
+            if self.task and self.task.isRunning():
+                self.task.cancelled.set()
+                self.status.setText("Cancelling connection; waiting for the current request to finish...")
+                return
+            super().accept()
+
+        def closeEvent(self, event):
+            if self.task and self.task.isRunning():
+                self.accept()
+                event.ignore()
+            else:
+                event.accept()
+
+    return AccountWindow()
+
+
 def open_account_window():
-    # Do not call onthespot.gui.main(): it ends with os._exit(), which would
-    # bypass our encrypted-profile commit and temporary-session cleanup.
     from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtGui import QFont, QFontDatabase
-    from onthespot.qt.mainui import MainWindow
-    from onthespot.qt.minidialog import MiniDialog
+    from PyQt6.QtGui import QFont
     app = QApplication(sys.argv)
-    font = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts/segoeui.ttf"
-    if font.is_file():
-        QFontDatabase.addApplicationFont(str(font))
-        app.setFont(QFont("Segoe UI", 10))
-    dialog = MiniDialog()
-    window = MainWindow(dialog, "")
-    window.setWindowTitle("IDG Music Accounts · OnTheSpot")
-    for index in range(window.tabview.count()):
-        page = window.tabview.widget(index)
-        label = window.tabview.tabText(index) if hasattr(window.tabview, "tabText") else page.objectName()
-        if "setting" in label.lower() or "account" in label.lower():
-            window.tabview.setCurrentIndex(index)
-            if hasattr(window.tabview, "setTabVisible"):
-                for other in range(window.tabview.count()):
-                    if other != index:
-                        window.tabview.setTabVisible(other, False)
-            break
+    app.setApplicationName("IDG")
+    app.setFont(QFont("Segoe UI", 10))
+    window = create_account_window()
     window.show()
     app.exec()
 
@@ -387,13 +642,8 @@ def main(request):
     elif action == "download":
         download(request, home)
     elif action == "pair_spotify":
-        with profile(home, writable=True):
-            from onthespot.otsconfig import config
-            config.set("accounts", [a for a in config.get("accounts") if a.get("service") != "spotify"])
-            emit("progress", message="In Spotify Desktop, open Connect to a device and select OnTheSpot. Waiting up to 3 minutes.")
-            from onthespot.api.spotify import spotify_new_session
-            if not spotify_new_session():
-                raise BridgeError("Spotify pairing did not finish")
+        with profile(home, writable=True) as root:
+            pair_spotify(root, lambda message: emit("progress", message=message))
         emit("status", accounts=account_status(home))
     elif action == "accounts":
         with profile(home, writable=True):

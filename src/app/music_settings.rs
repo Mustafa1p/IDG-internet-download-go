@@ -38,7 +38,7 @@ impl IDGApp {
                 "https://www.python.org/downloads/windows/",
             );
             ui.hyperlink_to(
-                "OnTheSpot backend and GPL-2.0 source",
+                "Music library credits and GPL-2.0 source",
                 "https://github.com/ots-downloader/onthespot",
             );
         });
@@ -116,7 +116,7 @@ impl IDGApp {
                         if ui.button("Manage music accounts…").clicked() { self.music_action(ctx, "accounts"); }
                     });
                 });
-                ui.label(RichText::new("For Spotify, select OnTheSpot in Spotify Desktop's Connect to a device menu. Use Manage music accounts for Apple Music, Deezer, Qobuz and Tidal; close that window to save and return here.").size(12.0).color(TEXT_DIM));
+                ui.label(RichText::new("For Spotify, select IDG in Spotify Desktop's Connect to a device menu. Manage music accounts opens IDG's account window for Apple Music, Deezer, Qobuz and Tidal; close it to save and return here.").size(12.0).color(TEXT_DIM));
                 for (key, label) in [("spotify", "Spotify"), ("bandcamp", "Bandcamp"), ("apple_music", "Apple Music"), ("deezer", "Deezer"), ("qobuz", "Qobuz"), ("tidal", "Tidal")] {
                     let configured = state.accounts.iter().any(|a| a.service == key && a.configured);
                     ui.horizontal(|ui| { ui.label(label); ui.colored_label(if configured { SUCCESS } else { TEXT_DIM }, if configured { "Configured" } else if key == "bandcamp" { "Public access · install backend first" } else { "Not connected / not checked" }); });
