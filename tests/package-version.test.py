@@ -5,9 +5,23 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import re
+import json
+import tomllib
 
 
 class PackageVersionTests(unittest.TestCase):
+    def test_repository_release_versions_match(self):
+        root = Path(__file__).resolve().parents[1]
+        version = tomllib.loads((root / "Cargo.toml").read_text())["package"]["version"]
+        extension = json.loads((root / "extension/manifest.json").read_text())["version"]
+        installer = re.search(r'^#define AppVersion\s+"([^\"]+)"', (root / "installer/setup.iss").read_text(), re.MULTILINE)
+        self.assertIsNotNone(installer)
+        self.assertEqual(installer[1], version)
+        self.assertEqual(extension, version)
+        package = next(p for p in tomllib.loads((root / "Cargo.lock").read_text())["package"] if p["name"] == "idg")
+        self.assertEqual(package["version"], version)
+
     def test_installer_version_must_match_before_binary_checks(self):
         source = Path(__file__).resolve().parents[1]
         for installer_version, expected in [

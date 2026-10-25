@@ -33,7 +33,7 @@ Music downloads require the **Unlimited** speed setting and do not support pause
 
 IDG's Rust application is MIT licensed. The separately executed files in `music/` are GPL-2.0-only and include `music/COPYING`. The optional runtime is obtained separately from its upstream projects/PyPI and retains upstream licensing and source notices. No implementation from the unlicensed Spotify-playlist reference repository was copied.
 
-## IDG interface in 1.5.1
+## IDG interface in 1.5.2
 
 Spotify Connect advertises the device as **IDG**, including its brand and model fields. IDG implements the pairing lifecycle directly with the internal librespot library. Account setup uses IDG's own dialog rather than importing the upstream GUI. Credentials are masked, connection work runs in the background, cancellation and failed sign-ins retain previous accounts, and Tidal browser authorization has a bounded wait. Library names remain in dependency credits and corresponding source notices.
 

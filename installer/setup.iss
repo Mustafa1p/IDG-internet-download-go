@@ -1,9 +1,9 @@
 ; IDG – Internet Download GO  –  Inno Setup 6 script
 ; Build: ISCC installer\setup.iss
-; Produces: IDG-Setup-1.5.0.exe
+; Produces the installer for AppVersion below.
 
 #define AppName      "IDG – Internet Download GO"
-#define AppVersion   "1.5.0"
+#define AppVersion   "1.5.2"
 #define AppPublisher "IDG Project"
 #define AppURL       "https://github.com/Mustafa1p/IDG-internet-download-go"
 #define AppExeName   "IDG.exe"
