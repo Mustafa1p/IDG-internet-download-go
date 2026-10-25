@@ -5,6 +5,7 @@ import tomllib
 import sys
 import struct
 import subprocess
+import re
 from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path(__file__).resolve().parents[1]
@@ -14,6 +15,9 @@ if tag != f"v{version}":
     raise SystemExit(f"Release tag {tag!r} does not match Cargo version v{version}")
 if json.loads((root / "extension/manifest.json").read_text(encoding="utf-8"))["version"] != version:
     raise SystemExit("Extension and application versions do not match")
+installer_version = re.search(r'^#define AppVersion\s+"([^"]+)"', (root / "installer/setup.iss").read_text(encoding="utf-8"), re.MULTILINE)
+if not installer_version or installer_version[1] != version:
+    raise SystemExit("Installer and application versions do not match")
 arch = sys.argv[2] if len(sys.argv) > 2 else (sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in ("x64", "x86") else "x64")
 if arch not in ("x64", "x86"): raise SystemExit("Architecture must be x64 or x86")
 build = root / ("target/i686-pc-windows-msvc/release" if arch == "x86" else "target/release")

@@ -57,6 +57,8 @@ jobs:
         run: cargo test --locked ${{ matrix.cargo_args }} --bins
       - name: Extension regression tests
         run: node --test tests/extension.test.cjs
+      - name: Release version regression tests
+        run: python tests/package-version.test.py
       - name: Real Edge download-form integration tests
         if: matrix.arch == 'x64'
         shell: pwsh

@@ -244,7 +244,7 @@ async function sendDownloadRequest(url, filename, referrer, userAgent, postData)
     if (youtube || x) {
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
       if (x && !capability?.capabilities?.x) {
-        return { ok: false, error: "X videos require the complete IDG v1.4.6 package or newer. Quit IDG in the tray, install the update, then reopen IDG." };
+        return { ok: false, error: "X videos require the complete IDG v1.4.7 package or newer. Quit IDG in the tray, install the update, then reopen IDG." };
       }
       if (!capability?.capabilities?.youtube) {
         return { ok: false, error: "YouTube requires the complete IDG v1.2.0 package or newer. Quit the old IDG in the tray, install the update, then reopen IDG." };

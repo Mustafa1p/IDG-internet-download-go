@@ -513,7 +513,7 @@ test('X post handoff canonicalizes aliases and forwards media cookies online and
   const old = worker({ x: false });
   const response = await old.message({ type: 'download', url: 'https://x.com/Talal1/status/2113571139595510128/video/1' });
   assert.equal(response.ok, false);
-  assert.match(response.error, /v1.4.6/);
+  assert.match(response.error, /v1.4.7/);
   assert.equal(old.calls.some(c => c[0] === 'post'), false);
 });
 
