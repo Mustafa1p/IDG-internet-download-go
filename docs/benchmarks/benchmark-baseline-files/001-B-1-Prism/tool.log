@@ -1,0 +1,5 @@
+
+probed: fixture.bin size=Some(2147483648) resumable=true final_url=http://127.0.0.1:34118/file/fixture.bin
+Downloading  52.1% 1.04 GiB / 2.00 GiB  2.26 GiB/s  conns 8/8  eta 0s      Finalizing 100.0% 2.00 GiB / 2.00 GiB  2.20 GiB/s  conns 8/8  eta 0s      
+saved X:\github projects\IDG-internet-download-go\target\benchmark-baseline-files\001-B-1-Prism\fixture.bin (2.00 GiB)
+time 1.47s, average 1.36 GiB/s (11680.8 Mbit/s), connections requested 8

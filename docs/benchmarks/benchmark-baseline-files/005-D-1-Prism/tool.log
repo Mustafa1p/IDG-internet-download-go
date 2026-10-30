@@ -1,0 +1,651 @@
+
+probed: fixture.bin size=Some(268435456) resumable=true final_url=http://127.0.0.1:19392/file/fixture.bin
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 342.123001ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 383.78032ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading   7.5% 19.12 MiB / 256.00 MiB  37.56 MiB/s  conns 15/16  eta 6s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 272.3982ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 323.674316ms: network error: error sending request for url (http://127.0.0.1:19392/file/fixture.bin): client error (SendRequest): connection closed before message completed
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  15.9% 40.69 MiB / 256.00 MiB  38.54 MiB/s  conns 14/16  eta 5s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 337.912236ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  24.0% 61.38 MiB / 256.00 MiB  38.93 MiB/s  conns 15/16  eta 5s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 495.804916ms: network error: error sending request for url (http://127.0.0.1:19392/file/fixture.bin): client error (SendRequest): connection closed before message completed
+
+retry #2 in 261.257874ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 499.540599ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 449.764703ms: network error: error sending request for url (http://127.0.0.1:19392/file/fixture.bin): client error (SendRequest): connection closed before message completed
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 330.364129ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  31.3% 80.05 MiB / 256.00 MiB  38.46 MiB/s  conns 13/16  eta 4s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 303.285592ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #3 in 971.847171ms: network error: error sending request for url (http://127.0.0.1:19392/file/fixture.bin): client error (SendRequest): connection closed before message completed
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  38.4% 98.36 MiB / 256.00 MiB  37.71 MiB/s  conns 13/16  eta 4s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 352.502285ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 269.867503ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  46.2% 118.19 MiB / 256.00 MiB  37.97 MiB/s  conns 13/16  eta 3s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 461.684379ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #4 in 1.565225037s: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  53.9% 137.88 MiB / 256.00 MiB  37.98 MiB/s  conns 14/16  eta 3s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 254.917199ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  61.8% 158.31 MiB / 256.00 MiB  38.23 MiB/s  conns 14/16  eta 2s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 492.567497ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 486.507924ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  70.1% 179.42 MiB / 256.00 MiB  39.09 MiB/s  conns 15/16  eta 2s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 307.466995ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 343.374835ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  76.9% 196.84 MiB / 256.00 MiB  38.35 MiB/s  conns 10/16  eta 1s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 290.523605ms: network error: error sending request for url (http://127.0.0.1:19392/file/fixture.bin): client error (SendRequest): connection closed before message completed
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 279.798766ms: network error: error sending request for url (http://127.0.0.1:19392/file/fixture.bin): client error (SendRequest): connection closed before message completed
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 263.118327ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  84.5% 216.22 MiB / 256.00 MiB  38.14 MiB/s  conns 14/16  eta 1s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 348.456476ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 442.457649ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 377.297043ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  91.7% 234.70 MiB / 256.00 MiB  37.57 MiB/s  conns 11/16  eta 0s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 361.293322ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #2 in 411.130474ms: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+Downloading  98.9% 253.13 MiB / 256.00 MiB  37.94 MiB/s  conns 12/16  eta 0s      
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+retry #1 in 0ns: network error: error decoding response body: request or response body error: error reading a body from connection: end of file before message length reached
+
+saved X:\github projects\IDG-internet-download-go\target\benchmark-baseline-files\005-D-1-Prism\fixture.bin (256.00 MiB)
+time 6.99s, average 36.64 MiB/s (307.4 Mbit/s), connections requested 16

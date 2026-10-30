@@ -1,0 +1,8 @@
+                                                                               [#5bd6cb 304MiB/2.0GiB(14%) CN:8 DL:312MiB ETA:5s]                                                                               [#5bd6cb 740MiB/2.0GiB(36%) CN:8 DL:376MiB ETA:3s]                                                                               [#5bd6cb 1.1GiB/2.0GiB(58%) CN:8 DL:404MiB ETA:2s]                                                                               [#5bd6cb 1.5GiB/2.0GiB(79%) CN:8 DL:411MiB ETA:1s]                                                                               [#5bd6cb 1.9GiB/2.0GiB(99%) CN:4 DL:414MiB]
+Download Results:
+gid   |stat|avg speed  |path/URI
+======+====+===========+=======================================================
+5bd6cb|OK  |   412MiB/s|X:/github projects/IDG-internet-download-go/target/benchmark-published-files/014-B-2-aria2c/download.bin
+
+Status Legend:
+(OK):download completed.

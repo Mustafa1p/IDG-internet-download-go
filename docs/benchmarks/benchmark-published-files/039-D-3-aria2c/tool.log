@@ -1,0 +1,59 @@
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#18 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#7 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#21 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#10 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#12 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#16 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+                                                                               [#fa1bbb 39MiB/256MiB(15%) CN:10 DL:40MiB ETA:5s]
+10/30 18:15:00 [[1;31mERROR[0m] CUID#9 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#19 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#22 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#23 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#20 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:00 [[1;31mERROR[0m] CUID#17 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:01 [[1;31mERROR[0m] CUID#15 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:01 [[1;31mERROR[0m] CUID#8 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+10/30 18:15:01 [[1;31mERROR[0m] CUID#13 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+                                                                               [#fa1bbb 50MiB/256MiB(19%) CN:1 DL:25MiB ETA:7s]
+10/30 18:15:01 [[1;31mERROR[0m] CUID#14 - Download aborted. URI=http://127.0.0.1:57590/file/fixture.bin
+Exception: [DownloadCommand.cc:234] errorCode=1 Got EOF from the server.
+
+Download Results:
+gid   |stat|avg speed  |path/URI
+======+====+===========+=======================================================
+fa1bbb|ERR |    21MiB/s|X:/github projects/IDG-internet-download-go/target/benchmark-published-files/039-D-3-aria2c/download.bin
+
+Status Legend:
+(ERR):error occurred.
+
+aria2 will resume download if the transfer is restarted.
+If there are any errors, then see the log file. See '-l' option in help/man page for details.

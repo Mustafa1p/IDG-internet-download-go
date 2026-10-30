@@ -1,0 +1,8 @@
+                                                                               [#7eaaed 34MiB/76MiB(44%) CN:16 DL:50MiB]                                                                               [#7eaaed 76MiB/76MiB(99%) CN:1 DL:45MiB]
+Download Results:
+gid   |stat|avg speed  |path/URI
+======+====+===========+=======================================================
+7eaaed|OK  |    44MiB/s|X:/github projects/IDG-internet-download-go/target/benchmark-published-files/044-E-2-aria2c/download.bin
+
+Status Legend:
+(OK):download completed.

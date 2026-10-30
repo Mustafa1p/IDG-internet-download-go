@@ -1,0 +1,5 @@
+
+probed: rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz size=Some(79909984) resumable=true final_url=https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz
+Downloading   6.3% 4.83 MiB / 76.21 MiB  7.84 MiB/s  conns 4/16  eta 9s      Downloading  49.6% 37.77 MiB / 76.21 MiB  20.47 MiB/s  conns 16/16  eta 2s      Downloading  90.3% 68.83 MiB / 76.21 MiB  30.56 MiB/s  conns 14/16  eta 0s      Downloading  99.1% 75.50 MiB / 76.21 MiB  27.45 MiB/s  conns 1/16  eta 0s      Downloading  99.4% 75.78 MiB / 76.21 MiB  21.49 MiB/s  conns 1/16  eta 0s      Downloading  99.9% 76.10 MiB / 76.21 MiB  16.86 MiB/s  conns 1/16  eta 0s      
+saved X:\github projects\IDG-internet-download-go\target\benchmark-published-files\047-E-3-Prism\rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz (76.21 MiB)
+time 3.20s, average 23.83 MiB/s (199.9 Mbit/s), connections requested 16

@@ -1,0 +1,3 @@
+[IDG] starting download id=e34b2d41-d057-4a77-b196-7daf60f4b6d9 segments=16 size=Some(79909984)
+[IDG] download complete id=e34b2d41-d057-4a77-b196-7daf60f4b6d9 path=X:\github projects\IDG-internet-download-go\target\benchmark-published-files\043-E-1-IDG\download.bin
+{"bytes":79909984,"connections":16,"path":"X:\\github projects\\IDG-internet-download-go\\target\\benchmark-published-files\\043-E-1-IDG\\download.bin"}

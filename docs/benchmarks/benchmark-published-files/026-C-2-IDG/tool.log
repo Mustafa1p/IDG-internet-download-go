@@ -1,0 +1,15 @@
+[IDG] starting download id=07b728d5-eaa5-4ee8-88b8-af81e1a1a53e segments=16 size=Some(268435456)
+[IDG] segment 9 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 0 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 3 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 13 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 5 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 7 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 12 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 11 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 10 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 6 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 15 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] segment 14 retry 1/10 after 50ms: server limited connections (HTTP 503 Service Unavailable)
+[IDG] download complete id=07b728d5-eaa5-4ee8-88b8-af81e1a1a53e path=X:\github projects\IDG-internet-download-go\target\benchmark-published-files\026-C-2-IDG\download.bin
+{"bytes":268435456,"connections":16,"path":"X:\\github projects\\IDG-internet-download-go\\target\\benchmark-published-files\\026-C-2-IDG\\download.bin"}

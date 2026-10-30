@@ -1,0 +1,3 @@
+prism-testserver listening on http://127.0.0.1:23310
+  file:   http://127.0.0.1:23310/file/test.bin  (1073741824 bytes, seed 101)
+  sha256: 5d6a5c5c580246d442045411d7c3e54614d598c33af540853711838104546e00

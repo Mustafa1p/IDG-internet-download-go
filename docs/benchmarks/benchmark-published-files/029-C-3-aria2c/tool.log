@@ -1,0 +1,56 @@
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#21 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#11 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#14 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#15 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#16 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#12 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#13 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#17 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#18 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#19 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#20 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+
+10/30 18:13:33 [[1;31mERROR[0m] CUID#22 - Download aborted. URI=http://127.0.0.1:19929/file/fixture.bin
+Exception: [AbstractCommand.cc:351] errorCode=29 URI=http://127.0.0.1:19929/file/fixture.bin
+  -> [HttpSkipResponseCommand.cc:231] errorCode=29 The response status is not successful. status=503
+                                                                               [#f96e22 7.8MiB/256MiB(3%) CN:4 DL:7.8MiB ETA:31s]                                                                               [#f96e22 15MiB/256MiB(6%) CN:4 DL:7.9MiB ETA:30s]                                                                               [#f96e22 23MiB/256MiB(9%) CN:4 DL:7.9MiB ETA:29s]                                                                               [#f96e22 31MiB/256MiB(12%) CN:4 DL:7.9MiB ETA:28s]                                                                               [#f96e22 39MiB/256MiB(15%) CN:4 DL:7.9MiB ETA:27s]                                                                               [#f96e22 47MiB/256MiB(18%) CN:4 DL:7.9MiB ETA:26s]                                                                               [#f96e22 55MiB/256MiB(21%) CN:4 DL:7.9MiB ETA:25s]                                                                               [#f96e22 63MiB/256MiB(24%) CN:4 DL:7.9MiB ETA:24s]                                                                               [#f96e22 71MiB/256MiB(27%) CN:4 DL:7.9MiB ETA:23s]                                                                               [#f96e22 79MiB/256MiB(31%) CN:4 DL:7.9MiB ETA:22s]                                                                               [#f96e22 87MiB/256MiB(34%) CN:4 DL:8.0MiB ETA:21s]                                                                               [#f96e22 95MiB/256MiB(37%) CN:4 DL:8.0MiB ETA:20s]                                                                               [#f96e22 103MiB/256MiB(40%) CN:4 DL:8.0MiB ETA:19s]                                                                               [#f96e22 111MiB/256MiB(43%) CN:4 DL:8.0MiB ETA:18s]                                                                               [#f96e22 119MiB/256MiB(46%) CN:4 DL:8.0MiB ETA:17s]                                                                               [#f96e22 127MiB/256MiB(49%) CN:4 DL:8.0MiB ETA:16s]                                                                               [#f96e22 135MiB/256MiB(52%) CN:4 DL:8.0MiB ETA:15s]                                                                               [#f96e22 143MiB/256MiB(55%) CN:4 DL:8.0MiB ETA:14s]                                                                               [#f96e22 150MiB/256MiB(58%) CN:4 DL:7.9MiB ETA:13s]                                                                               [#f96e22 158MiB/256MiB(62%) CN:4 DL:7.9MiB ETA:12s]                                                                               [#f96e22 166MiB/256MiB(65%) CN:4 DL:8.0MiB ETA:11s]                                                                               [#f96e22 174MiB/256MiB(68%) CN:4 DL:8.0MiB ETA:10s]                                                                               [#f96e22 182MiB/256MiB(71%) CN:4 DL:8.0MiB ETA:9s]                                                                               [#f96e22 190MiB/256MiB(74%) CN:4 DL:7.9MiB ETA:8s]                                                                               [#f96e22 198MiB/256MiB(77%) CN:4 DL:7.9MiB ETA:7s]                                                                               [#f96e22 206MiB/256MiB(80%) CN:4 DL:7.9MiB ETA:6s]                                                                               [#f96e22 214MiB/256MiB(83%) CN:4 DL:7.9MiB ETA:5s]                                                                               [#f96e22 222MiB/256MiB(86%) CN:4 DL:8.0MiB ETA:4s]                                                                               [#f96e22 230MiB/256MiB(90%) CN:4 DL:7.9MiB ETA:3s]                                                                               [#f96e22 238MiB/256MiB(93%) CN:4 DL:7.9MiB ETA:2s]                                                                               [#f96e22 246MiB/256MiB(96%) CN:4 DL:8.0MiB ETA:1s]                                                                               [#f96e22 254MiB/256MiB(99%) CN:4 DL:8.0MiB]
+Download Results:
+gid   |stat|avg speed  |path/URI
+======+====+===========+=======================================================
+f96e22|OK  |   7.9MiB/s|X:/github projects/IDG-internet-download-go/target/benchmark-published-files/029-C-3-aria2c/download.bin
+
+Status Legend:
+(OK):download completed.
