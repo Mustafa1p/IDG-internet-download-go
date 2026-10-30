@@ -622,6 +622,7 @@ impl IDGApp {
                         chrono::Utc::now() - chrono::Duration::minutes((index as i64 + 5) * 7);
                     items.push(item);
                 }
+                #[cfg(debug_assertions)]
                 app.library_state.preview_activity();
             }
             if std::env::args().any(|arg| arg == "--preview-long-name") {
