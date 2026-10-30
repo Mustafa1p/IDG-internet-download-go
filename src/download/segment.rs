@@ -21,15 +21,11 @@ use std::{
     time::Duration,
 };
 
+use super::{gate::ConnectionGate, writer::DownloadWriter};
 use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use futures::StreamExt;
 use reqwest::Client;
-use tokio::{
-    fs::File,
-    io::{AsyncSeekExt, AsyncWriteExt},
-    sync::Mutex,
-};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -37,6 +33,7 @@ use tokio::{
 
 /// Arguments passed to a single segment worker.
 pub struct SegmentArgs {
+    pub gate: Arc<ConnectionGate>,
     pub if_range: Option<String>,
     pub total_size: Option<u64>,
     pub bandwidth: Arc<super::bandwidth::BandwidthLimiter>,
@@ -52,7 +49,7 @@ pub struct SegmentArgs {
     /// Last byte of this segment (inclusive), or `None` to download to EOF.
     pub end: Option<u64>,
     /// Shared handle to the pre-allocated output file.
-    pub file: Arc<Mutex<File>>,
+    pub file: Arc<DownloadWriter>,
     /// When set to `true` by the UI, the worker exits cleanly.
     pub cancel: Arc<AtomicBool>,
     /// When set to `true` by the UI, the worker spins until cleared.
@@ -82,6 +79,7 @@ pub async fn run_segment(mut args: SegmentArgs, max_retries: u32) -> Result<()> 
         }
         let response = args.response.take();
         let streaming_export = super::probe::is_mail_export(&args.url) || response.is_some();
+        let before = resume_at;
         let result = download_range(&args, resume_at, &mut resume_at, response).await;
 
         match result {
@@ -97,7 +95,8 @@ pub async fn run_segment(mut args: SegmentArgs, max_retries: u32) -> Result<()> 
                 if args.cancel.load(Ordering::Relaxed) {
                     bail!("segment {} cancelled", args.id);
                 }
-                attempts += 1;
+                let progressed = resume_at > before;
+                attempts = if progressed { 0 } else { attempts + 1 };
                 if attempts > max_retries {
                     bail!(
                         "segment {} failed after {} retries: {}",
@@ -106,8 +105,13 @@ pub async fn run_segment(mut args: SegmentArgs, max_retries: u32) -> Result<()> 
                         e
                     );
                 }
-                // Exponential back-off: 300ms, 600ms, 900ms, …
-                let backoff = Duration::from_millis(300 * u64::from(attempts));
+                // A productive reconnect is not a consecutive failure. Back
+                // off only without progress, bounded at one second per retry.
+                let backoff = Duration::from_millis(if progressed {
+                    0
+                } else {
+                    (50_u64 << attempts.saturating_sub(1).min(5)).min(1000)
+                });
                 eprintln!(
                     "[IDG] segment {} retry {}/{} after {}ms: {}",
                     args.id,
@@ -164,11 +168,20 @@ async fn download_range(
     } else {
         request
     };
+    let permit = args.gate.acquire(cancel).await?;
     let resp = match response {
         Some(response) => response,
         None => request.send().await.context("GET request failed")?,
     };
 
+    if matches!(
+        resp.status(),
+        reqwest::StatusCode::TOO_MANY_REQUESTS | reqwest::StatusCode::SERVICE_UNAVAILABLE
+    ) {
+        args.gate.refused(permit);
+        bail!("server limited connections (HTTP {})", resp.status());
+    }
+    let _permit = permit;
     if !resp.status().is_success() {
         bail!("server returned HTTP {}", resp.status());
     }
@@ -211,7 +224,7 @@ async fn download_range(
         }
     }
     let mut stream = resp.bytes_stream();
-    let mut buffered = Vec::with_capacity(256 * 1024);
+    let mut buffered = Vec::with_capacity(1024 * 1024);
     let mut last_write = std::time::Instant::now();
 
     while let Some(chunk_result) = stream.next().await {
@@ -226,7 +239,15 @@ async fn download_range(
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
 
-        let chunk: Bytes = chunk_result.context("stream read error")?;
+        let chunk: Bytes = match chunk_result {
+            Ok(chunk) => chunk,
+            Err(error) => {
+                // These bytes already passed range/validator checks. Acknowledge
+                // them before reconnecting, rather than discarding a short batch.
+                write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                return Err(error).context("stream read error");
+            }
+        };
         let rate = args.bandwidth.rate();
         let quantum = if rate == 0 {
             256 * 1024
@@ -263,7 +284,7 @@ async fn download_range(
             }
             buffered.extend_from_slice(part);
             let finished = end.is_some_and(|end| *cursor + buffered.len() as u64 > end);
-            if buffered.len() >= 256 * 1024
+            if buffered.len() >= 1024 * 1024
                 || last_write.elapsed() >= Duration::from_millis(50)
                 || finished
             {
@@ -289,9 +310,9 @@ async fn download_range(
     Ok(())
 }
 
-// Coalesce small network packets before taking the shared seek/write lock.
+// Coalesce packets and advance the retry cursor only after a disk acknowledgement.
 async fn write_buffer(
-    file: &Arc<Mutex<File>>,
+    file: &Arc<DownloadWriter>,
     cursor: &mut u64,
     buffered: &mut Vec<u8>,
     on_progress: &(dyn Fn(u64) + Send + Sync),
@@ -300,13 +321,10 @@ async fn write_buffer(
         return Ok(());
     }
     let count = buffered.len() as u64;
-    {
-        let mut file = file.lock().await;
-        file.seek(std::io::SeekFrom::Start(*cursor))
-            .await
-            .context("seek failed")?;
-        file.write_all(buffered).await.context("write failed")?;
-    }
+    *buffered = file
+        .write_at(*cursor, std::mem::take(buffered))
+        .await
+        .context("write failed")?;
     *cursor += count;
     buffered.clear();
     on_progress(count);

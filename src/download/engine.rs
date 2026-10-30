@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use futures::future::join_all;
-use tokio::{fs::OpenOptions, io::AsyncWriteExt, sync::Mutex};
+use tokio::fs::OpenOptions;
 
 use crate::download::{
     connections::choose_count,
@@ -33,8 +33,8 @@ use crate::download::{
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Maximum per-segment retry attempts before giving up.
-const MAX_RETRIES: u32 = 5;
+/// Consecutive failures without acknowledged progress before giving up.
+const MAX_RETRIES: u32 = 10;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -152,15 +152,18 @@ pub async fn start_download(
             .into_owned();
     });
 
-    // Reserving space up-front prevents fragmentation and ensures the disk
-    // has room before we start writing data.
+    // Sparse setup avoids Windows zero-filling unwritten holes when parallel
+    // ranges arrive out of order. Disk-full errors still propagate on write.
+    if probe_result.supports_multipart() {
+        super::writer::prepare_sparse(&file);
+    }
     if let Some(size) = probe_result.content_length {
         file.set_len(size)
             .await
             .context("failed to pre-allocate file")?;
     }
 
-    let file = Arc::new(Mutex::new(file));
+    let file = Arc::new(super::writer::DownloadWriter::new(file.into_std().await)?);
 
     // ── Step 3 & 4: Divide and spawn segments ─────────────────────────────────
     let seg_count = choose_count(
@@ -170,6 +173,7 @@ pub async fn start_download(
     );
     with_item(&downloads, &id, |item| item.num_segments = seg_count);
     let segments = build_segments(seg_count, probe_result.content_length);
+    let gate = Arc::new(super::gate::ConnectionGate::new(seg_count));
     let final_url = probe_result.final_url.clone();
 
     eprintln!(
@@ -191,6 +195,7 @@ pub async fn start_download(
             let id = id.clone();
 
             let args = SegmentArgs {
+                gate: gate.clone(),
                 if_range: probe_result.if_range.clone(),
                 total_size: probe_result.content_length,
                 bandwidth: bandwidth.clone(),
@@ -233,17 +238,8 @@ pub async fn start_download(
     if cancel.load(std::sync::atomic::Ordering::Relaxed) {
         with_item(&downloads, &id, |i| i.status = Status::Cancelled);
     } else {
-        // Tokio file writes can still be buffered after the workers finish.
-        // Flush before advertising completion or consumers may read zeroes.
-        let mut output = file.lock().await;
-        output
-            .flush()
-            .await
-            .context("failed to flush output file")?;
-        output
-            .sync_all()
-            .await
-            .context("failed to sync output file")?;
+        // The writer barrier syncs every acknowledged range before completion.
+        file.finish().await.context("failed to sync output file")?;
         eprintln!(
             "[IDG] download complete id={} path={}",
             id,
@@ -331,6 +327,115 @@ mod regression_tests {
     use std::time::Duration;
 
     const SIZE: usize = 256 * 1024 + 19;
+
+    #[tokio::test]
+    async fn connection_refusals_queue_remaining_ranges_without_losing_bytes() {
+        let slots = Arc::new(tokio::sync::Semaphore::new(4));
+        let rejected = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = rejected.clone();
+        let router = Router::new().route(
+            "/file",
+            get(move |method: Method, headers: HeaderMap| {
+                let slots = slots.clone();
+                let count = count.clone();
+                async move {
+                    if method == Method::HEAD {
+                        return range_file(method, headers).await;
+                    }
+                    let Ok(permit) = slots.try_acquire_owned() else {
+                        count.fetch_add(1, Ordering::Relaxed);
+                        return (StatusCode::SERVICE_UNAVAILABLE, "connection limit")
+                            .into_response();
+                    };
+                    range_file(method, headers).await.map(|body| {
+                        Body::from_stream(futures::stream::unfold(
+                            (body.into_data_stream(), permit),
+                            |(mut stream, permit)| async move {
+                                use futures::StreamExt;
+                                stream.next().await.map(|chunk| (chunk, (stream, permit)))
+                            },
+                        ))
+                    })
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/file", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("capped.bin");
+        let item = crate::download::types::DownloadItem::new(url, path.clone(), 16);
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            start_download(Arc::new(reqwest::Client::new()), downloads.clone(), id),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(rejected.load(Ordering::Relaxed) > 0);
+        assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+        assert_eq!(
+            std::fs::read(path).unwrap(),
+            (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+        );
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn productive_reconnects_exceed_retry_budget_without_discarding_short_buffers() {
+        let router = Router::new().route(
+            "/file",
+            get(|method: Method, headers: HeaderMap| async move {
+                let response = range_file(method.clone(), headers).await;
+                if method == Method::HEAD {
+                    return response;
+                }
+                response.map(|body| {
+                    use futures::StreamExt;
+                    let data = body
+                        .into_data_stream()
+                        .map(|chunk| chunk.map_err(std::io::Error::other))
+                        .take(2);
+                    let broken = futures::stream::once(async {
+                        tokio::time::sleep(Duration::from_millis(5)).await;
+                        Err::<bytes::Bytes, _>(std::io::Error::new(
+                            std::io::ErrorKind::ConnectionReset,
+                            "injected drop",
+                        ))
+                    });
+                    Body::from_stream(data.chain(broken))
+                })
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/file", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("reconnected.bin");
+        let item = crate::download::types::DownloadItem::new(url, path.clone(), 1);
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            start_download(Arc::new(reqwest::Client::new()), downloads.clone(), id),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(downloads.lock().unwrap()[0].downloaded_bytes, SIZE as u64);
+        assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+        assert_eq!(
+            std::fs::read(path).unwrap(),
+            (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+        );
+        server.abort();
+    }
 
     #[tokio::test]
     async fn duplicate_destinations_are_reserved_atomically_without_overwriting() {

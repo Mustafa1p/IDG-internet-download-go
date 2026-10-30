@@ -105,20 +105,7 @@ fn main() -> eframe::Result {
         }
     };
 
-    let http_client = Arc::new(runtime.block_on(async {
-        reqwest::Client::builder()
-            .user_agent(concat!(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ",
-                "AppleWebKit/537.36 (KHTML, like Gecko) ",
-                "Chrome/124.0.0.0 Safari/537.36"
-            ))
-            .pool_max_idle_per_host(16)
-            .tcp_keepalive(Duration::from_secs(30))
-            .read_timeout(Duration::from_secs(300))
-            .connect_timeout(Duration::from_secs(15))
-            .build()
-            .expect("failed to build HTTP client")
-    }));
+    let http_client = Arc::new(download::http_client().expect("failed to build HTTP client"));
 
     let rt_handle = runtime.handle().clone();
 
