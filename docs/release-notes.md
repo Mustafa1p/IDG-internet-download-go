@@ -1,10 +1,20 @@
-IDG v1.5.2 preview keeps music account setup inside IDG's own interface.
+IDG v1.6.0 - larger desktop and safer downloads
 
-- Spotify Desktop now discovers **IDG** in Connect to a device. IDG handles pairing directly through its internal Connect library.
-- Replace the upstream account window with **IDG Music Accounts**, with masked credential fields, background connection progress, disconnect controls, and safe cancellation. No separate downloader application is opened.
-- Preserve saved accounts after failed or cancelled sign-ins. Bound Tidal authorization and service network requests; allow pairing cleanup before the desktop timeout.
-- Keep the existing original-service adapters and dependency credits internally. No YouTube audio substitution.
+- Prism-inspired native desktop: charcoal surfaces, status tabs, readable filenames, state-colored progress, live speed overview and selected-download details.
+- Larger 1280 x 800 default window; Windows scaling, multi-monitor fixes and compact layouts.
+- Exact Content-Range and server-validator checks prevent mixing bytes from changed files.
+- Reject browser robot checks and unexpected HTML instead of saving them as binary files. Intentional HTML/JSON downloads remain supported.
+- Reserve duplicate destinations atomically with numbered filenames. Flush and sync output before completion.
+- Include pending Spotify browser track/library actions, metadata and media-overlay fixes. Preserve single-use form and mail-export behavior.
 
-Verification: Windows desktop tests, account persistence/output regression tests, live local Spotify Connect device identity, and IDG account-window interaction checks. Bandcamp audio was verified in the preceding preview. Authenticated Spotify, Apple Music, Deezer, Qobuz and Tidal audio downloads remain unverified.
+Install the matching 1.6.0 desktop installer and Chrome/Edge extension, then reload website tabs.
+Windows x64/x86 installers and portable packages are included, with SHA-256 checksums.
 
-Install the matching v1.5.2 desktop installer and extension. Open Settings > Music, install the optional backend if necessary, then choose Connect Spotify and select IDG in Spotify Desktop's device picker. Existing accounts and the installed music runtime are retained. The runtime requires 64-bit Windows and Python 3.12 (64-bit). This preview is not offered automatically to stable installations.
+Experimental music remains opt-in: Spotify pairing/browser actions do not establish working
+full-track audio export. Spotify audio-key access can still fail; other subscription services
+are unverified. Bandcamp was verified in the preceding preview. No YouTube substitutions.
+The optional music runtime requires 64-bit Windows and Python 3.12. See docs/music-backend.md.
+
+See docs/prism-comparison.md for source comparison and real-app before/after screenshots.
+Prism's torrents, FTP, scheduling, localization, dynamic segmentation and persistent crash
+resume are not implemented by this release. No speed/memory superiority is claimed.

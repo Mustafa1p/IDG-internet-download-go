@@ -61,8 +61,8 @@ impl IDGApp {
         surface(
             ui.painter(),
             rect,
-            Color32::from_rgb(23, 37, 55),
-            Color32::from_rgb(16, 29, 47),
+            Color32::from_rgb(22, 25, 33),
+            Color32::from_rgb(18, 21, 28),
         );
         let maximized = ctx.input(|input| input.viewport().maximized.unwrap_or(false));
         let drag = ui.interact(
@@ -83,9 +83,9 @@ impl IDGApp {
             let search_width = (ui.available_width() - controls).clamp(90.0, 500.0);
             ui.add_space((ui.available_width() - controls - search_width).max(4.0));
             Frame::none()
-                .fill(Color32::from_rgb(28, 46, 70))
+                .fill(Color32::from_rgb(29, 33, 43))
                 .stroke(Stroke::new(1.0_f32, BORDER))
-                .rounding(24.0)
+                .rounding(8.0)
                 .inner_margin(Margin::symmetric(14.0, 9.0))
                 .show(ui, |ui| {
                     ui.set_width((search_width - 28.0).max(62.0));

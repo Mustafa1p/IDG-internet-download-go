@@ -69,6 +69,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Could not install browser test driver" }
           node tests/extension-browser-smoke.cjs
           if ($LASTEXITCODE -ne 0) { throw "Browser form handoff regression failed" }
+          node tests/spotify-browser-smoke.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Spotify page action regression failed" }
+          node tests/spotify-row-browser-smoke.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Spotify row button regression failed" }
+          node tests/spotify-library-browser-smoke.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Spotify library download-all regression failed" }
+          node tests/spotify-page-browser-smoke.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Spotify linkless page state regression failed" }
+          node tests/spotify-playback-browser-smoke.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Spotify unchanged-URL playback regression failed" }
+          node tests/media-overlay-browser-smoke.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Media overlay visibility or click regression failed" }
       - name: Signing regression tests
         shell: pwsh
         run: ./tests/signing.test.ps1

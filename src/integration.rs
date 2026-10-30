@@ -11,6 +11,10 @@ const FILES: &[(&str, &[u8])] = &[
     ),
     ("content.js", include_bytes!("../extension/content.js")),
     (
+        "spotify-page.js",
+        include_bytes!("../extension/spotify-page.js"),
+    ),
+    (
         "download-form.js",
         include_bytes!("../extension/download-form.js"),
     ),

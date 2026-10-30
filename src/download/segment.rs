@@ -37,6 +37,8 @@ use tokio::{
 
 /// Arguments passed to a single segment worker.
 pub struct SegmentArgs {
+    pub if_range: Option<String>,
+    pub total_size: Option<u64>,
     pub bandwidth: Arc<super::bandwidth::BandwidthLimiter>,
     /// A GET already opened by the probe; consume it instead of requesting again.
     pub response: Option<reqwest::Response>,
@@ -75,6 +77,9 @@ pub async fn run_segment(mut args: SegmentArgs, max_retries: u32) -> Result<()> 
     let mut resume_at = args.start;
 
     loop {
+        if args.end.is_some_and(|end| resume_at > end) {
+            return Ok(());
+        }
         let response = args.response.take();
         let streaming_export = super::probe::is_mail_export(&args.url) || response.is_some();
         let result = download_range(&args, resume_at, &mut resume_at, response).await;
@@ -150,7 +155,12 @@ async fn download_range(
 
     let request = client.get(url).header("Accept-Encoding", "identity");
     let request = if end.is_some() || start > 0 {
-        request.header("Range", &range)
+        let request = request.header("Range", &range);
+        if let Some(validator) = &args.if_range {
+            request.header("If-Range", validator)
+        } else {
+            request
+        }
     } else {
         request
     };
@@ -162,9 +172,43 @@ async fn download_range(
     if !resp.status().is_success() {
         bail!("server returned HTTP {}", resp.status());
     }
+    super::probe::validate_file_response(resp.headers(), url)?;
 
     if (end.is_some() || start > 0) && resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-        bail!("Server ignored the requested byte range");
+        bail!("The file changed or the server ignored its byte range. Add a fresh download link.");
+    }
+    if end.is_some() || start > 0 {
+        let actual = resp
+            .headers()
+            .get("content-range")
+            .and_then(|v| v.to_str().ok());
+        let expected = end
+            .zip(args.total_size)
+            .map(|(end, total)| format!("bytes {start}-{end}/{total}"));
+        let correct = match expected {
+            Some(expected) => actual.is_some_and(|v| v.trim() == expected),
+            None => actual
+                .and_then(|v| v.strip_prefix("bytes "))
+                .and_then(|v| v.split_once('-'))
+                .is_some_and(|(offset, _)| offset.parse::<u64>().ok() == Some(start)),
+        };
+        anyhow::ensure!(
+            correct,
+            "Server returned an incorrect Content-Range; refusing to mix file bytes"
+        );
+        if let Some(validator) = &args.if_range {
+            let header = if validator.starts_with('"') {
+                "etag"
+            } else {
+                "last-modified"
+            };
+            if let Some(actual) = resp.headers().get(header).and_then(|v| v.to_str().ok()) {
+                anyhow::ensure!(
+                    actual == validator,
+                    "The file changed during download; add a fresh download link"
+                );
+            }
+        }
     }
     let mut stream = resp.bytes_stream();
     let mut buffered = Vec::with_capacity(256 * 1024);

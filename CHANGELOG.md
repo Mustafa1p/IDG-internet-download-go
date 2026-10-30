@@ -1,3 +1,12 @@
+## 1.6.0 - 2026-10-30
+
+- Prism-inspired transfer layout, status filters, readable rows, live speed overview and file inspector.
+- Larger 1280 x 800 default and pending Windows per-monitor DPI fixes.
+- Exact range/server-validator checks, browser-page rejection and durable completion.
+- Atomic numbered duplicate filenames preserve existing files and simultaneous downloads.
+- Include pending Spotify browser actions, metadata and overlay fixes; subscription audio remains experimental.
+- Matching Windows x64/x86 installers, portable apps, browser extension and checksums.
+
 ## 1.4.3 — 2026-10-24
 
 - Rebuild the existing Rust/egui interface around the supplied Windows 11 Fluent reference: blue sidebar, integrated search/title bar, separate live statistic cards, table and vector folder empty state.

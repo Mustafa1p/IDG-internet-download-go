@@ -4,6 +4,7 @@ use egui::{Context, Event, Id, Key, Modifiers, PointerButton, RawInput, Rect};
 
 pub(super) struct Snapshot {
     pub category: String,
+    pub details_open: bool,
     pub show_settings: bool,
     pub speed_limit_kbps: u64,
     pub show_add: bool,
@@ -57,6 +58,18 @@ fn steps() -> Vec<Step> {
             action: Action::Click(label),
         });
     }
+    for (name, control) in [
+        ("Filter active", "Filter Active"),
+        ("Filter paused", "Filter Paused"),
+        ("Filter completed", "Filter Completed"),
+        ("Filter failed", "Filter Failed"),
+        ("Filter all", "Filter All"),
+    ] {
+        steps.push(Step {
+            name,
+            action: Action::Click(control),
+        });
+    }
     for (name, action) in [
         (
             "New download shortcut",
@@ -102,6 +115,7 @@ fn steps() -> Vec<Step> {
         ("Search report", Action::Text("report")),
         ("Select search text", Action::Key(Key::A, Modifiers::CTRL)),
         ("Browser download clears search", Action::BrowserHandoff),
+        ("Close selected details", Action::Click("Close details")),
         ("Maximize", Action::Click("Maximize")),
         ("Restore", Action::Click("Restore")),
         ("Minimize and restore", Action::Click("Minimize")),
@@ -213,6 +227,12 @@ impl PreviewTest {
             return;
         }
         let okay = match step.name {
+            "Filter active" => snapshot.category == "Downloading",
+            "Filter paused" => snapshot.category == "Paused",
+            "Filter completed" => snapshot.category == "Completed",
+            "Filter failed" => snapshot.category == "Failed",
+            "Filter all" => snapshot.category == "All downloads",
+            "Close selected details" => !snapshot.details_open,
             "New download shortcut" => snapshot.show_add,
             "Close add dialog" => !snapshot.show_add,
             "Settings shortcut" | "Settings shortcut again" => snapshot.show_settings,

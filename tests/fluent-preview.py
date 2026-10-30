@@ -13,7 +13,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "target/fluent-qa"
 OUTPUT.mkdir(parents=True, exist_ok=True)
-BINARY = ROOT / "target/debug/IDG.exe"
+BINARY = Path(os.environ.get("IDG_UI_BINARY", str(ROOT / "target/debug/IDG.exe")))
 CASES = [
     (f"empty-{width}x{height}", width, height, 1.0, [])
     for width, height in [(800, 500), (1280, 720), (1366, 768), (1600, 900), (1920, 1080)]

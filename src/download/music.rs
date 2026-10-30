@@ -64,6 +64,35 @@ pub fn source(value: &str) -> Option<Source> {
         return None;
     }
     let host = url.host_str()?.to_owned();
+    if host == "open.spotify.com" {
+        let path = url.path().trim_matches('/');
+        let path = if path.starts_with("intl-") {
+            path.split_once('/').map(|(_, rest)| rest).unwrap_or(path)
+        } else {
+            path
+        };
+        if path == "collection/tracks" {
+            let values: Vec<_> = url.query_pairs().filter(|(key, _)| key == "uri").collect();
+            if values.is_empty() {
+                return Some(Source {
+                    service: "spotify",
+                    url: "https://open.spotify.com/collection/tracks".into(),
+                    collection: true,
+                    filename: "spotify-liked-songs".into(),
+                });
+            }
+            if values.len() != 1 {
+                return None;
+            }
+            let id = values[0].1.strip_prefix("spotify:track:")?;
+            if id.len() != 22 || !id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+                return None;
+            }
+            let track_path = format!("/track/{id}");
+            drop(values);
+            url.set_path(&track_path);
+        }
+    }
     let path = url.path().to_owned();
     let parts: Vec<_> = path.trim_matches('/').split('/').collect();
     let safe = |id: &str| {
@@ -439,6 +468,55 @@ fn validated_files(paths: &Value, root: &Path) -> Result<Vec<PathBuf>> {
         .collect()
 }
 
+fn metadata_destination(
+    source: &Source,
+    item: &super::types::DownloadItem,
+    event: &Value,
+    parent: &Path,
+    format: &str,
+) -> Result<Option<PathBuf>> {
+    anyhow::ensure!(
+        event["service"] == source.service && event["url"] == source.url,
+        "Music metadata does not match the requested source"
+    );
+    if source.collection || item.preserve_filename {
+        return Ok(None);
+    }
+    let title = event["title"]
+        .as_str()
+        .map(str::trim)
+        .filter(|v| !v.is_empty());
+    let artists = event["artists"]
+        .as_str()
+        .map(str::trim)
+        .filter(|v| !v.is_empty());
+    let (title, artists) = (
+        title.context("The service did not return a track title")?,
+        artists.context("The service did not return artist names")?,
+    );
+    // Replace separators rather than interpreting catalog text as a path.
+    // Append the output extension: dots in a song title are part of its name.
+    let component = |value: &str, limit| -> String {
+        value
+            .chars()
+            .map(|c| if matches!(c, '/' | '\\') { '_' } else { c })
+            .scan(0, |units, c| {
+                *units += c.len_utf16();
+                (*units <= limit).then_some(c)
+            })
+            .collect()
+    };
+    // A long artist list must not consume all space reserved for the title.
+    let stem = format!("{} - {}", component(artists, 80), component(title, 100));
+    let name = format!("{}.{format}", safe_filename(&stem));
+    let destination = parent.join(name);
+    anyhow::ensure!(
+        !destination.exists(),
+        "A file with this artist and track name already exists. Choose another name."
+    );
+    Ok(Some(destination))
+}
+
 pub async fn download(downloads: Downloads, id: String) -> Result<()> {
     let python = python()
         .context("Install the optional backend in Settings > Music, then connect this service.")?;
@@ -499,7 +577,7 @@ async fn download_with(
         "mp3"
     };
     let name = safe_filename(&item.filename);
-    let destination = if source.collection {
+    let mut destination = if source.collection {
         parent.join(name)
     } else {
         parent.join(Path::new(&name).with_extension(format))
@@ -533,6 +611,15 @@ async fn download_with(
                 anyhow::ensure!(event["idg_music"] == 1, "Unsupported music protocol");
                 match event["event"].as_str() {
                     Some("error") => bail!("{}", event["message"].as_str().unwrap_or("Music download failed")),
+                    Some("metadata") => {
+                        if let Some(path) = metadata_destination(&source, &item, &event, &parent, format)? {
+                            destination = path;
+                            with_item(&downloads, &id, |i| {
+                                i.filename = destination.file_name().unwrap().to_string_lossy().into_owned();
+                                i.save_path = destination.clone();
+                            });
+                        }
+                    },
                     Some("complete") => { anyhow::ensure!(event["service"] == source.service, "Music source changed unexpectedly"); files = Some(event["files"].clone()); },
                     Some("progress") => with_item(&downloads, &id, |i| {
                         i.status = Status::Downloading;
@@ -639,6 +726,59 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     #[test]
+    fn track_names_use_verified_metadata_and_keep_user_names_and_parent_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let source = source("https://open.spotify.com/track/3PsejBjTRczNY88SlcWUyg").unwrap();
+        let mut item = DownloadItem::new(source.url.clone(), root.path().join(&source.filename), 0);
+        item.preserve_filename = false;
+        let event = json!({"service":"spotify", "url":source.url, "title":"Song.v2 / نسخة", "artists":"Artist One, Artist Two"});
+        let name = metadata_destination(&source, &item, &event, root.path(), "mp3")
+            .unwrap()
+            .unwrap();
+        assert_eq!(name.parent().unwrap(), root.path());
+        assert_eq!(
+            name.file_name().unwrap().to_str().unwrap(),
+            "Artist One, Artist Two - Song.v2 _ نسخة.mp3"
+        );
+        std::fs::write(&name, b"existing audio").unwrap();
+        assert!(metadata_destination(&source, &item, &event, root.path(), "mp3").is_err());
+        assert_eq!(std::fs::read(&name).unwrap(), b"existing audio");
+        item.preserve_filename = true;
+        assert!(
+            metadata_destination(&source, &item, &event, root.path(), "mp3")
+                .unwrap()
+                .is_none()
+        );
+        item.preserve_filename = false;
+        for invalid in [
+            json!({"service":"spotify","url":source.url,"title":"Song"}),
+            json!({"service":"bandcamp","url":source.url,"title":"Song","artists":"Artist"}),
+            json!({"service":"spotify","url":"https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY","title":"Song","artists":"Artist"}),
+        ] {
+            assert!(metadata_destination(&source, &item, &invalid, root.path(), "mp3").is_err());
+        }
+        let long = json!({"service":"spotify", "url":source.url, "title":"My song", "artists":"Artist ".repeat(100)});
+        let name = metadata_destination(&source, &item, &long, root.path(), "mp3")
+            .unwrap()
+            .unwrap();
+        assert!(
+            name.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .ends_with(" - My song.mp3")
+        );
+        let collection = super::source("https://open.spotify.com/collection/tracks").unwrap();
+        let collection_event =
+            json!({"service":"spotify", "url":collection.url, "title":"Song", "artists":"Artist"});
+        assert!(
+            metadata_destination(&collection, &item, &collection_event, root.path(), "mp3")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
     fn music_urls_preserve_source_and_track_selection() {
         for (url, service, collection) in [
             (
@@ -689,6 +829,36 @@ mod tests {
     }
 
     #[test]
+    fn spotify_liked_songs_uri_resolves_only_an_explicit_valid_track() {
+        let expected = "https://open.spotify.com/track/3PsejBjTRczNY88SlcWUyg";
+        for locale in ["", "intl-en/"] {
+            let value = format!(
+                "https://open.spotify.com/{locale}collection/tracks?uid=ignored&uri=spotify%3Atrack%3A3PsejBjTRczNY88SlcWUyg"
+            );
+            let selected = source(&value).unwrap();
+            assert_eq!(selected.url, expected);
+            assert!(!selected.collection);
+        }
+        let liked = source("https://open.spotify.com/collection/tracks?uid=ignored").unwrap();
+        assert!(liked.collection);
+        assert_eq!(liked.url, "https://open.spotify.com/collection/tracks");
+        assert_eq!(liked.filename, "spotify-liked-songs");
+        for query in [
+            "uri=spotify:track:bad",
+            "uri=https://evil.test/track/3PsejBjTRczNY88SlcWUyg",
+            "uri=spotify:album:3PsejBjTRczNY88SlcWUyg",
+            "uri=spotify:track:3PsejBjTRczNY88SlcWUyg&uri=spotify:track:3uCdelPvIjIA0q0V6KRWFY",
+        ] {
+            assert!(
+                source(&format!(
+                    "https://open.spotify.com/collection/tracks?{query}"
+                ))
+                .is_none()
+            );
+        }
+    }
+
+    #[test]
     fn manifest_never_accepts_outside_or_empty_files() {
         let root = tempfile::tempdir().unwrap();
         let output = root.path().join("output");
@@ -713,6 +883,10 @@ r=json.loads(sys.stdin.readline()); key=r['url'].rsplit('/',1)[-1][-1]
 root=Path(r['output']); root.mkdir(exist_ok=True)
 if key=='4': time.sleep(60)
 if key=='3': sys.exit(0)
+if key in ('8','9','a'):
+ print(json.dumps({'idg_music':1,'event':'metadata','service':'spotify','url':r['url'],'title':'Song.v2 '+key,'artists':'Artist One, Artist Two'}),flush=True)
+if key=='9':
+ print(json.dumps({'idg_music':1,'event':'error','message':'Spotify audio access refused'}),flush=True);sys.exit(1)
 p=(Path(r['home'])/'outside.wav') if key=='5' else root/'audio.wav'
 if key=='2': p.write_bytes(b'<html>not audio</html>')
 else:
@@ -721,7 +895,7 @@ else:
 manifest=[{'path':str(p),'duration_ms':10000}] if key=='6' else [str(p)]
 print(json.dumps({'idg_music':1,'event':'complete','service':'spotify','files':manifest}),flush=True)
 "#).unwrap();
-        for key in ['1', '2', '3', '4', '5', '6', '7'] {
+        for key in ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'a'] {
             let output = directory.path().join(format!("result-{key}.wav"));
             let mut item = DownloadItem::new(
                 format!("https://open.spotify.com/track/000000000000000000000{key}"),
@@ -733,6 +907,7 @@ print(json.dumps({'idg_music':1,'event':'complete','service':'spotify','files':m
             } else {
                 MediaFormat::Wav
             };
+            item.preserve_filename = !matches!(key, '8' | '9');
             let cancel = item.cancel_flag.clone();
             let id = item.id.clone();
             let downloads = Arc::new(Mutex::new(vec![item]));
@@ -755,6 +930,36 @@ print(json.dumps({'idg_music':1,'event':'complete','service':'spotify','files':m
                 result.unwrap();
                 assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
                 assert!(output.metadata().unwrap().len() > 8000);
+            } else if key == '8' {
+                result.unwrap();
+                let item = &downloads.lock().unwrap()[0];
+                assert_eq!(item.status, Status::Completed);
+                assert_eq!(item.filename, "Artist One, Artist Two - Song.v2 8.wav");
+                assert_eq!(
+                    item.save_path,
+                    directory
+                        .path()
+                        .canonicalize()
+                        .unwrap()
+                        .join(&item.filename)
+                );
+                assert!(item.save_path.metadata().unwrap().len() > 8000);
+                assert!(!output.exists());
+            } else if key == '9' {
+                assert!(
+                    result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("audio access refused")
+                );
+                let item = &downloads.lock().unwrap()[0];
+                assert_eq!(item.filename, "Artist One, Artist Two - Song.v2 9.wav");
+                assert!(!item.save_path.exists());
+                assert!(!output.exists());
+            } else if key == 'a' {
+                result.unwrap();
+                assert_eq!(downloads.lock().unwrap()[0].filename, "result-a.wav");
+                assert!(output.exists());
             } else if key == '4' {
                 result.unwrap();
                 assert_eq!(downloads.lock().unwrap()[0].status, Status::Cancelled);
@@ -768,6 +973,35 @@ print(json.dumps({'idg_music':1,'event':'complete','service':'spotify','files':m
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    #[ignore = "Live original-service Spotify download; requires a paired account and installed runtime"]
+    async fn supplied_spotify_track_downloads_verified_original_audio() {
+        let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join(format!("spotify-verification-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("Spotify-3PsejBjTRczNY88SlcWUyg.mp3");
+        let mut item = DownloadItem::new(
+            "https://open.spotify.com/track/3PsejBjTRczNY88SlcWUyg".into(),
+            output.clone(),
+            0,
+        );
+        item.preserve_filename = false;
+        let id = item.id.clone();
+        let downloads = Arc::new(Mutex::new(vec![item]));
+        let result = download(downloads.clone(), id).await;
+        let resolved = downloads.lock().unwrap()[0].clone();
+        assert_eq!(resolved.filename, "ONZY, 7ari - Bohème.mp3");
+        println!("SPOTIFY_RESOLVED_NAME={}", resolved.filename);
+        result.unwrap();
+        assert_eq!(resolved.status, Status::Completed);
+        println!(
+            "VERIFIED_SPOTIFY_FILE={} BYTES={}",
+            resolved.save_path.display(),
+            resolved.save_path.metadata().unwrap().len()
+        );
     }
 
     #[tokio::test]

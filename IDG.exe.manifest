@@ -3,13 +3,13 @@
           xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
   <assemblyIdentity
     version="1.0.0.0"
-    processorArchitecture="amd64"
+    processorArchitecture="*"
     name="IDG.InternetDownloadGO"
     type="win32"/>
 
   <description>IDG – Internet Download GO</description>
 
-  <!-- DPI awareness: system-DPI aware for crisp rendering -->
+  <!-- Per-monitor DPI awareness is required when crossing displays with different scales. -->
   <asmv3:application>
     <asmv3:windowsSettings>
       <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>

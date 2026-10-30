@@ -148,6 +148,44 @@ fn toggle(ui: &mut Ui, value: &mut bool, label: &str, description: &str) {
 
 impl IDGApp {
     #[cfg(debug_assertions)]
+    pub(super) fn report_monitor_preview(&self, ctx: &egui::Context) {
+        let Some(path) = std::env::args().find_map(|arg| {
+            arg.strip_prefix("--preview-monitor-report=")
+                .map(PathBuf::from)
+        }) else {
+            return;
+        };
+        let controls = [
+            "Search downloads",
+            "Minimize",
+            "Maximize",
+            "Close",
+            "Table Name",
+            "Table Folder",
+            "Settings section",
+            "Save changes",
+        ]
+        .into_iter()
+        .filter_map(|label| {
+            ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new(format!("qa:{label}"))))
+                .map(|rect| {
+                    (
+                        label,
+                        [rect.left(), rect.top(), rect.right(), rect.bottom()],
+                    )
+                })
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+        let metadata = serde_json::json!({
+            "logical_size": [ctx.screen_rect().width(), ctx.screen_rect().height()],
+            "pixels_per_point": ctx.pixels_per_point(), "native_pixels_per_point": ctx.native_pixels_per_point(),
+            "zoom": ctx.zoom_factor(), "controls": controls,
+        });
+        let _ = std::fs::write(path, serde_json::to_vec(&metadata).unwrap());
+        ctx.request_repaint_after(Duration::from_millis(50));
+    }
+
+    #[cfg(debug_assertions)]
     pub(super) fn capture_settings_preview(&mut self, ctx: &egui::Context) {
         if std::env::args().any(|argument| argument == "--ui-preview-hold") {
             return;

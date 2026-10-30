@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IDG Integration Module",
   "description": "Intercepts browser downloads and sends them to IDG for parallel multi-segment downloading",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "icons": {
     "16": "images/icon16.png",
     "32": "images/icon32.png",
@@ -34,9 +34,23 @@
       "run_at": "document_start"
     },
     {
-      "js": ["form-hook.js"],
-      "matches": ["*://*/*"],
+      "js": [
+        "form-hook.js"
+      ],
+      "matches": [
+        "*://*/*"
+      ],
       "all_frames": true,
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "js": [
+        "spotify-page.js"
+      ],
+      "matches": [
+        "https://open.spotify.com/*"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     }

@@ -44,7 +44,9 @@ let installed = false;
 let connectionError = "";
 let lastHealth = null;
 let activeHandoffs = 0;
-const settingsReady = chrome.storage.local.get({ interceptEnabled: true, statusOnlyPopup: false }).then(async settings => {
+let pausedSites = [];
+const settingsReady = chrome.storage.local.get({ interceptEnabled: true, statusOnlyPopup: false, pausedSites: [] }).then(async settings => {
+  pausedSites = Array.isArray(settings.pausedSites) ? settings.pausedSites.filter(site => typeof site === "string") : [];
   interceptEnabled = settings.statusOnlyPopup ? settings.interceptEnabled : true;
   if (!settings.statusOnlyPopup) await chrome.storage.local.set({ interceptEnabled: true, statusOnlyPopup: true });
 });
@@ -52,6 +54,41 @@ const settingsReady = chrome.storage.local.get({ interceptEnabled: true, statusO
 function validUrl(value) {
   try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
 }
+
+// Treat www and the bare hostname as the same site; never match suffix lookalikes.
+function siteHost(value) {
+  try { return validUrl(value) ? new URL(value).hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "") : null; }
+  catch { return null; }
+}
+function isSitePaused(value) { return pausedSites.includes(siteHost(value)); }
+function siteStatus(url) {
+  return { site: siteHost(url), paused: isSitePaused(url), enabled: interceptEnabled && !isSitePaused(url) };
+}
+async function updateTabBadge(tab) {
+  if (tab?.id == null) return;
+  const paused = isSitePaused(tab.url);
+  const ready = interceptEnabled && (serverOnline || installed);
+  await chrome.action.setBadgeText({ tabId: tab.id, text: paused ? "!" : ready ? "✓" : "OFF" });
+  await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: paused ? "#c48118" : ready ? "#16865b" : "#dc5662" });
+  await chrome.action.setTitle({ tabId: tab.id, title: paused ? `IDG: Paused on ${siteHost(tab.url)}` : ready ? "IDG: Active on this site" : "IDG: Not connected or disabled" });
+}
+async function refreshSiteTabs() {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(tabs.map(async tab => {
+    try {
+      await updateTabBadge(tab);
+      await chrome.tabs.sendMessage(tab.id, { type: "siteStateChanged", ...siteStatus(tab.url) });
+    } catch { /* Closed tabs, internal pages, or tabs without a content script. */ }
+  }));
+}
+chrome.tabs.onUpdated.addListener((id, change, tab) => {
+  if (change.url || change.status === "loading") void settingsReady.then(() => updateTabBadge(tab));
+});
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  await settingsReady;
+  try { await updateTabBadge(await chrome.tabs.get(tabId)); } catch { /* Tab closed. */ }
+});
+void settingsReady.then(refreshSiteTabs);
 
 function isMailExport(value) {
   try {
@@ -130,6 +167,9 @@ async function reportIntegration() {
       signal: AbortSignal.timeout(4000),
     });
     if (response.ok) {
+      serverOnline = true;
+      await settingsReady;
+      await refreshSiteTabs();
       const update = await response.json();
       if (update.reload === true && self.installType === "development" && activeHandoffs === 0) {
         const disk = await fetch(chrome.runtime.getURL("manifest.json"), { cache: "no-store" });
@@ -140,7 +180,7 @@ async function reportIntegration() {
   } catch { /* IDG may be closed; polling never launches it. */ }
 }
 chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === "idg-integration") void reportIntegration();
+  if (alarm.name === "idg-integration") void updateServerStatus();
 });
 chrome.alarms.create("idg-integration", { periodInMinutes: 1 });
 chrome.runtime.onStartup.addListener(() => void reportIntegration());
@@ -157,8 +197,7 @@ async function updateServerStatus() {
     installed = false;
     connectionError = error.message;
   }
-  await chrome.action.setBadgeText({ text: serverOnline || installed ? "" : "OFF" });
-  await chrome.action.setBadgeBackgroundColor({ color: "#dc5662" });
+  await refreshSiteTabs();
   return { interceptEnabled, serverOnline, installed, serverVersion: lastHealth?.version, youtubeReady: lastHealth?.capabilities?.youtube === true, error: connectionError };
 }
 
@@ -228,6 +267,12 @@ function musicPageUrl(value) {
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
     const path = url.pathname.replace(/\/$/, "");
     const host = url.hostname;
+    if (host === "open.spotify.com" && /^\/(?:intl-[A-Za-z]+\/)?collection\/tracks$/.test(path)) {
+      const values = url.searchParams.getAll("uri");
+      if (values.length === 0) return 'https://open.spotify.com/collection/tracks';
+      const selected = values.length === 1 && values[0].match(/^spotify:track:([A-Za-z0-9]{22})$/);
+      return selected ? `https://open.spotify.com/track/${selected[1]}` : null;
+    }
     const supported =
       (host === "open.spotify.com" && /^\/(?:intl-[A-Za-z]+\/)?(?:track|album|playlist|episode|show)\/[A-Za-z0-9]{22}$/.test(path)) ||
       (/^[a-z0-9-]+\.bandcamp\.com$/.test(host) && /^\/(track|album)\/[A-Za-z0-9_.-]+$/.test(path)) ||
@@ -251,7 +296,7 @@ async function sendDownloadRequest(url, filename, referrer, userAgent, postData)
   const x = xVideoUrl(url);
   const social = socialVideoUrl(url);
   if (youtube || x || social) url = youtube || x || social;
-  if (music) url = music;
+  if (music) { url = music; referrer = music; }
   let cookies = null, media_cookies = null;
   try {
     const cookieUrl = social && new URL(url).hostname.endsWith("tiktok.com") ? "https://www.tiktok.com/" : url;
@@ -326,6 +371,7 @@ const attemptedDownloads = new Set();
 async function interceptDownload(item) {
   await settingsReady;
   const url = item.finalUrl || item.url;
+  if (isSitePaused(item.referrer) || isSitePaused(item.url) || isSitePaused(url)) return;
   if (item.state === "complete" || item.state === "interrupted" || attemptedDownloads.has(item.id) ||
       // A native fallback has already submitted this token. Never replay it as GET.
       isTokenDownload(item.url) || isTokenDownload(url) || browserPosted(item.url) || browserPosted(url) ||
@@ -368,9 +414,11 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  await settingsReady;
+  if (!interceptEnabled || isSitePaused(tab?.url) || isSitePaused(info.pageUrl) || isSitePaused(info.frameUrl)) return;
   const url = musicPageUrl(info.linkUrl) || youtubeVideoUrl(info.linkUrl) || xVideoUrl(info.linkUrl) || socialVideoUrl(info.linkUrl) ||
     (info.menuItemId === "idg-download-video" ? musicPageUrl(tab?.url) || youtubeVideoUrl(tab?.url) || xVideoUrl(tab?.url) || socialVideoUrl(tab?.url) : null) || info.linkUrl || info.srcUrl;
-  if (!url) return;
+  if (!url || isSitePaused(url)) return;
   const result = await sendDownloadToIDG(url, null, info.pageUrl || tab?.url || null, navigator.userAgent);
   if (!result.ok) {
     await chrome.action.setBadgeText({ text: "!" });
@@ -381,9 +429,24 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await settingsReady;
-    // Content scripts can request downloads only; settings and list access belong to the popup.
-    if (sender.tab && message.type !== "download") return { ok: false };
+    // Content scripts may download or read their own site state; settings belong to the popup.
+    if (sender.tab && !["download", "getSiteStatus"].includes(message.type)) return { ok: false };
     switch (message.type) {
+      case "getSiteStatus": {
+        const tab = sender.tab || await chrome.tabs.get(message.tabId);
+        return { ok: true, ...siteStatus(tab.url) };
+      }
+      case "setSitePaused": {
+        const tab = await chrome.tabs.get(message.tabId);
+        const site = siteHost(tab.url);
+        if (!site) return { ok: false, error: "Open a website to pause IDG." };
+        const next = pausedSites.filter(value => value !== site);
+        if (message.paused === true) next.push(site);
+        await chrome.storage.local.set({ pausedSites: next });
+        pausedSites = next;
+        await refreshSiteTabs();
+        return { ok: true, ...siteStatus(tab.url) };
+      }
       case "getStatus":
       case "ping": return updateServerStatus();
       case "toggleIntercept":
@@ -391,6 +454,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.storage.local.set({ interceptEnabled });
         return { interceptEnabled };
       case "download":
+        if (isSitePaused(sender.tab?.url) || isSitePaused(sender.url) || isSitePaused(message.referrer) || isSitePaused(message.url)) return { ok: false, error: "IDG is paused on this site." };
         if (sender.tab && !interceptEnabled) return { ok: false, error: "IDG interception is disabled." };
         return sendDownloadToIDG(message.url, typeof message.filename === "string" ? message.filename : null, sender.tab ? sender.url : message.referrer, navigator.userAgent, message.post_data);
       case "list": {

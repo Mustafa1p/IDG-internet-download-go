@@ -18,6 +18,16 @@ spec.loader.exec_module(bridge)
 
 
 class MusicBridgeTests(unittest.TestCase):
+    def test_track_names_are_reported_before_audio_without_fabricating_unknown_names(self):
+        url = "https://open.spotify.com/track/3PsejBjTRczNY88SlcWUyg"
+        with patch.object(bridge, "emit") as emit:
+            bridge.report_track_metadata("spotify", url, {"title": " Song.title ", "artists": " Artist One, Artist Two "})
+            emit.assert_called_once_with("metadata", service="spotify", url=url, title="Song.title", artists="Artist One, Artist Two")
+        for metadata in [{"title": "Song"}, {"artists": "Artist"}, {"title": " ", "artists": "Artist"}, {"title": "Song", "artists": []}]:
+            with patch.object(bridge, "emit") as emit, self.assertRaises(bridge.BridgeError):
+                bridge.report_track_metadata("spotify", url, metadata)
+            emit.assert_not_called()
+
     def test_busy_parser_and_metadata_work_cannot_report_success(self):
         complete = [{"item_status": "Downloaded"}]
         self.assertIsNone(bridge.finish_state([], False, False))
@@ -139,6 +149,98 @@ class MusicBridgeTests(unittest.TestCase):
             self.assertNotIn(old, config.accounts)
             self.assertEqual(config.accounts[-1]["uuid"], "new")
 
+    def test_spotify_collection_reads_every_page_and_preserves_order(self):
+        calls = []
+        values = [{"id": f"{i:022d}", "type": "track"} for i in range(105)]
+        values[51] = dict(values[0])  # Repeated playlist entries must remain repeated.
+        session = SimpleNamespace(tokens=lambda: SimpleNamespace(get=lambda scope: "fixture"))
+        def get(url, headers, params, timeout):
+            calls.append((url, params["offset"]))
+            entries = [{"item": item} for item in values[params["offset"]:params["offset"] + 50]]
+            return SimpleNamespace(status_code=200, headers={}, json=lambda: {"total": len(values), "items": entries})
+        with patch.dict(sys.modules, {"requests": SimpleNamespace(get=get)}):
+            tracks = bridge.spotify_collection_tracks(session, "0123456789012345678901")
+        self.assertEqual([offset for _, offset in calls], [0, 50, 100])
+        self.assertTrue(all(url.endswith("/items") for url, _ in calls))
+        self.assertEqual([item_id for _, item_id in tracks], [item["id"] for item in values])
+
+    def test_incomplete_spotify_page_does_not_become_a_completed_collection(self):
+        calls = []
+        session = SimpleNamespace(tokens=lambda: SimpleNamespace(get=lambda scope: "fixture"))
+        def get(url, params, **kwargs):
+            calls.append(params["offset"])
+            items = [{"item": {"id": f"{i:022d}", "type": "track"}} for i in range(50)] if params["offset"] == 0 else []
+            return SimpleNamespace(status_code=200, headers={}, json=lambda: {"total": 51, "items": items})
+        with patch.dict(sys.modules, {"requests": SimpleNamespace(get=get)}), self.assertRaises(bridge.BridgeError) as caught:
+            bridge.spotify_collection_tracks(session, "0123456789012345678901")
+        self.assertIn("incomplete", str(caught.exception))
+        self.assertEqual(calls, [0, 50])
+
+    def test_spotify_liked_songs_use_private_scope_and_rate_limits_stop_pagination(self):
+        calls, scopes = [], []
+        session = SimpleNamespace(tokens=lambda: SimpleNamespace(get=lambda scope: scopes.append(scope) or "fixture"))
+        def get(url, **kwargs):
+            calls.append(url)
+            return SimpleNamespace(status_code=200, headers={}, json=lambda: {"total": 1, "items": [{"track": {"id": "3PsejBjTRczNY88SlcWUyg", "type": "track"}}]})
+        with patch.dict(sys.modules, {"requests": SimpleNamespace(get=get)}):
+            tracks = bridge.spotify_collection_tracks(session)
+        self.assertEqual(scopes, ["user-library-read"])
+        self.assertEqual(calls, ["https://api.spotify.com/v1/me/tracks"])
+        self.assertEqual(tracks, [("track", "3PsejBjTRczNY88SlcWUyg")])
+        attempts = []
+        def limited(*args, **kwargs):
+            attempts.append(1)
+            return SimpleNamespace(status_code=429, headers={"Retry-After": "120"})
+        with patch.dict(sys.modules, {"requests": SimpleNamespace(get=limited)}), self.assertRaises(bridge.BridgeError):
+            bridge.spotify_collection_tracks(session)
+        self.assertEqual(len(attempts), 1)
+
+    def test_spotify_collection_rejects_access_denial_and_missing_tracks(self):
+        session = SimpleNamespace(tokens=lambda: SimpleNamespace(get=lambda scope: "fixture"))
+        for response in [SimpleNamespace(status_code=403, headers={}), SimpleNamespace(status_code=200, headers={}, json=lambda: {"total": 1, "items": [{"item": None}]})]:
+            with patch.dict(sys.modules, {"requests": SimpleNamespace(get=lambda *args, **kwargs: response)}), self.assertRaises(bridge.BridgeError):
+                bridge.spotify_collection_tracks(session)
+
+    def test_spotify_session_metadata_preserves_exact_track_and_source_duration(self):
+        album = SimpleNamespace(name="Album", artist=[SimpleNamespace(name="Artist")], disc=[], date=SimpleNamespace(year=2026), genre=[], label="Label", copyright=[], type_str="single")
+        track = SimpleNamespace(name="Song", duration=174000, album=album, artist=album.artist, number=1, disc_number=1, explicit=False, external_id=[SimpleNamespace(type="isrc", id="TEST123")], file=[object()], alternative=[])
+        seen = []
+        api = SimpleNamespace(get_metadata_4_track=lambda value: seen.append(value) or track)
+        session = SimpleNamespace(api=lambda: api)
+        modules = {"librespot.metadata": SimpleNamespace(TrackId=SimpleNamespace(from_base62=lambda value: value))}
+        with patch.dict(sys.modules, modules):
+            result = bridge.spotify_session_metadata(session, "3PsejBjTRczNY88SlcWUyg")
+            self.assertEqual(seen, ["3PsejBjTRczNY88SlcWUyg"])
+            self.assertEqual(result["length"], "174000")
+            self.assertEqual(result["title"], "Song")
+            self.assertTrue(result["is_playable"])
+            self.assertEqual(result["item_url"], "https://open.spotify.com/track/3PsejBjTRczNY88SlcWUyg")
+            track.duration = 0
+            with self.assertRaises(bridge.BridgeError):
+                bridge.spotify_session_metadata(session, "3PsejBjTRczNY88SlcWUyg")
+
+    def test_rate_limit_is_actionable_and_does_not_repeat_the_request(self):
+        with self.assertRaises(bridge.BridgeError) as caught:
+            bridge.check_rate_limit(SimpleNamespace(status_code=429, headers={"Retry-After": "120"}))
+        self.assertIn("HTTP 429", str(caught.exception))
+        self.assertIn("120 seconds", str(caught.exception))
+        with self.assertRaises(bridge.BridgeError) as caught:
+            bridge.check_rate_limit(SimpleNamespace(status_code=429, headers={"Retry-After": "private-session-token"}))
+        self.assertNotIn("private-session-token", str(caught.exception))
+        response = SimpleNamespace(status_code=200)
+        self.assertIs(bridge.check_rate_limit(response), response)
+
+    def test_spotify_audio_access_failure_is_specific_and_redacted(self):
+        def missing_key(*args, **kwargs): raise RuntimeError("Failed fetching audio key! gid: private-id, fileId: private-file")
+        manager = SimpleNamespace(get_audio_key=missing_key)
+        failure = bridge.guard_spotify_audio_access(SimpleNamespace(audio_key=lambda: manager))
+        with self.assertRaises(bridge.BridgeError) as caught:
+            manager.get_audio_key(b"fixture", b"fixture")
+        self.assertIn("did not provide audio access", str(caught.exception))
+        self.assertNotIn("private-id", str(caught.exception))
+        self.assertNotIn("private-file", str(caught.exception))
+        self.assertEqual(failure["message"], str(caught.exception))
+
     @unittest.skipUnless(os.name == "nt", "Windows DPAPI")
     def test_accounts_survive_new_reads_and_are_encrypted_at_rest(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -176,6 +278,66 @@ class MusicBridgeTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec("PyQt6"), "Optional music runtime required for UI checks")
 class MusicAccountWindowTests(unittest.TestCase):
+    def test_service_popup_is_readable_and_selectable_under_dark_system_palette(self):
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtGui import QPalette, QColor, QFont
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtTest import QTest
+        app = QApplication.instance() or QApplication([])
+        app.setFont(QFont("Segoe UI", 10))
+        original = QPalette(app.palette())
+        dark = QPalette(original)
+        for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
+            for role in (QPalette.ColorRole.Text, QPalette.ColorRole.WindowText, QPalette.ColorRole.ButtonText):
+                dark.setColor(group, role, QColor("#ffffff"))
+            dark.setColor(group, QPalette.ColorRole.Base, QColor("#191919"))
+            dark.setColor(group, QPalette.ColorRole.Window, QColor("#202020"))
+        app.setPalette(dark)
+        config = SimpleNamespace(get=lambda key: [])
+        with patch.dict(sys.modules, {"onthespot.otsconfig": SimpleNamespace(config=config)}):
+            window = bridge.create_account_window()
+            window.show()
+            app.processEvents()
+            try:
+                window.service.setCurrentIndex(2)
+                window.service.showPopup()
+                QTest.qWait(160)
+                view = window.service.view()
+                self.assertTrue(view.isVisible())
+                self.assertEqual([window.service.itemText(i) for i in range(6)], ["Spotify", "Bandcamp", "Apple Music", "Deezer", "Qobuz", "Tidal"])
+                image = view.viewport().grab().toImage()
+                rect = view.visualRect(view.model().index(0, 0))
+                # Check rendered text pixels, not just a populated (but invisible) model.
+                dark_pixels = sum(1 for y in range(max(0, rect.top()+3), min(image.height(), rect.bottom()-2))
+                                  for x in range(max(0, rect.left()+6), min(image.width(), rect.left()+110))
+                                  if max(image.pixelColor(x, y).red(), image.pixelColor(x, y).green(), image.pixelColor(x, y).blue()) < 115)
+                light_pixels = sum(1 for y in range(max(0, rect.top()+3), min(image.height(), rect.bottom()-2))
+                                   for x in range(max(0, rect.left()+6), min(image.width(), rect.left()+110))
+                                   if min(image.pixelColor(x, y).red(), image.pixelColor(x, y).green(), image.pixelColor(x, y).blue()) > 230)
+                self.assertGreater(dark_pixels, 10, "Service names need visible dark text")
+                self.assertGreater(light_pixels, 100, "Service popup needs a light background")
+                if os.environ.get("IDG_MUSIC_DROPDOWN_SCREENSHOT"):
+                    view.window().grab().save(os.environ["IDG_MUSIC_DROPDOWN_SCREENSHOT"])
+                QTest.keyClick(view, Qt.Key.Key_End)
+                QTest.keyClick(view, Qt.Key.Key_Return)
+                app.processEvents()
+                self.assertEqual(window.service.currentData(), "tidal")
+                self.assertTrue(window.isVisible())
+                window.service.showPopup()
+                QTest.qWait(350)
+                self.assertTrue(view.isVisible())
+                view.scrollTo(view.model().index(0, 0))
+                rect = view.visualRect(view.model().index(0, 0))
+                QTest.mouseMove(view.viewport(), rect.center())
+                QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
+                app.processEvents()
+                self.assertEqual(window.service.currentData(), "spotify")
+            finally:
+                window.service.hidePopup()
+                window.close()
+                app.processEvents()
+                app.setPalette(original)
+
     def test_idg_window_masks_credentials_handles_async_errors_and_saves_no_secrets_in_ui(self):
         from PyQt6.QtWidgets import QApplication, QLineEdit
         from PyQt6.QtGui import QFont

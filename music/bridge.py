@@ -230,7 +230,12 @@ def pair_spotify(root, notify, cancelled=None, timeout=180):
     builder = ZeroconfServer.Builder()
     builder.device_name = "IDG"
     builder.conf.stored_credentials_file = str(credentials)
-    server = builder.create()
+    try:
+        server = builder.create()
+    except Exception as error:
+        if type(error).__name__ == "NonUniqueNameException":
+            raise BridgeError("IDG pairing is already active. Select the existing IDG device in Spotify Desktop; wait for that attempt to finish before starting another.") from None
+        raise
     try:
         notify("In Spotify Desktop, open Connect to a device and select IDG. Waiting up to 3 minutes.")
         deadline = time.monotonic() + timeout
@@ -348,9 +353,10 @@ def _configure_account(service, values, notify, cancelled):
 def create_account_window():
     """IDG-owned account UI; upstream GUI modules are never loaded."""
     from PyQt6.QtCore import QThread, pyqtSignal, QUrl
-    from PyQt6.QtGui import QDesktopServices
+    from PyQt6.QtGui import QDesktopServices, QPalette, QColor
     from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLabel,
-                                QComboBox, QLineEdit, QPushButton, QHBoxLayout)
+                                QComboBox, QLineEdit, QPushButton, QHBoxLayout,
+                                QListView, QStyledItemDelegate)
     from onthespot.otsconfig import config
 
     class AccountTask(QThread):
@@ -377,6 +383,18 @@ def create_account_window():
             self.task = None
             self.setWindowTitle("IDG Music Accounts")
             self.setMinimumSize(540, 420)
+            # The account window is deliberately light even when Windows/Qt
+            # supplies a dark palette. Set the popup roles as well as the editor.
+            palette = QPalette(self.palette())
+            colors = {QPalette.ColorRole.Window: "#f5f7fb", QPalette.ColorRole.Base: "#ffffff",
+                      QPalette.ColorRole.Text: "#172339", QPalette.ColorRole.WindowText: "#172339",
+                      QPalette.ColorRole.Button: "#ffffff", QPalette.ColorRole.ButtonText: "#172339",
+                      QPalette.ColorRole.Highlight: "#225ed8", QPalette.ColorRole.HighlightedText: "#ffffff"}
+            for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive, QPalette.ColorGroup.Disabled):
+                for role, color in colors.items(): palette.setColor(group, role, QColor(color))
+            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#64748b"))
+            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#64748b"))
+            self.setPalette(palette)
             self.setStyleSheet("QDialog {background:#f5f7fb;color:#172339;} QLabel {color:#172339;} QLineEdit,QComboBox {padding:8px;background:white;color:#172339;border:1px solid #8b98ad;border-radius:4px;} QPushButton {padding:9px 16px;background:white;color:#172339;border:1px solid #8b98ad;border-radius:4px;} QPushButton:disabled {background:#e7ecf3;color:#64748b;border-color:#c0cad8;} QPushButton:focus {border:2px solid #225ed8;}")
             layout = QVBoxLayout(self)
             layout.setContentsMargins(24, 22, 24, 22)
@@ -387,6 +405,18 @@ def create_account_window():
             intro.setWordWrap(True)
             layout.addWidget(intro)
             self.service = QComboBox()
+            self.service.setPalette(palette)
+            # A normal item view/delegate avoids the native combo-menu renderer,
+            # which can combine a light popup with dark-theme foreground colors.
+            popup = QListView(self.service)
+            popup.setPalette(palette)
+            popup.viewport().setPalette(palette)
+            popup.setUniformItemSizes(True)
+            popup.setMouseTracking(True)
+            popup.setItemDelegate(QStyledItemDelegate(popup))
+            popup.setStyleSheet("QListView {background:#ffffff;color:#172339;border:1px solid #8b98ad;outline:0;} QListView::item {min-height:32px;padding:4px 10px;background:#ffffff;color:#172339;} QListView::item:hover {background:#e9f0fb;color:#172339;} QListView::item:selected {background:#225ed8;color:#ffffff;}")
+            self.service.setView(popup)
+            self.service.setMaxVisibleItems(6)
             for label, key in [("Spotify", "spotify"), ("Bandcamp", "bandcamp"), ("Apple Music", "apple_music"), ("Deezer", "deezer"), ("Qobuz", "qobuz"), ("Tidal", "tidal")]:
                 self.service.addItem(label, key)
             form = QFormLayout()
@@ -502,6 +532,114 @@ def open_account_window():
     app.exec()
 
 
+def check_rate_limit(response):
+    if response.status_code == 429:
+        retry = response.headers.get("Retry-After", "")
+        delay = f" Wait at least {retry} seconds before retrying." if retry.isdecimal() and len(retry) <= 12 else " Try again later."
+        raise BridgeError("The music service is rate-limiting requests (HTTP 429)." + delay)
+    return response
+
+
+def guard_spotify_audio_access(session):
+    failure = {"message": None}
+    manager = session.audio_key()
+    original = manager.get_audio_key
+    def get_audio_key(*args, **kwargs):
+        if failure["message"]:
+            raise BridgeError(failure["message"])
+        try:
+            return original(*args, **kwargs)
+        except RuntimeError as error:
+            if str(error).startswith("Failed fetching audio key!"):
+                failure["message"] = "Spotify is connected, but it did not provide audio access for this track to IDG. The download cannot proceed and was not marked complete."
+                raise BridgeError(failure["message"]) from None
+            raise
+    manager.get_audio_key = get_audio_key
+    return failure
+
+
+def spotify_collection_tracks(session, playlist_id=None):
+    """Resolve a whole playlist/saved collection before any track is downloaded."""
+    import re
+    import requests
+    if playlist_id is not None and not re.fullmatch(r"[A-Za-z0-9]{22}", playlist_id):
+        raise BridgeError("Invalid Spotify playlist ID")
+    scope = "playlist-read-private" if playlist_id else "user-library-read"
+    endpoint = f"https://api.spotify.com/v1/playlists/{playlist_id}/items" if playlist_id else "https://api.spotify.com/v1/me/tracks"
+    headers = {"Authorization": "Bearer " + session.tokens().get(scope)}
+    tracks, total, offset = [], None, 0
+    while True:
+        params = {"limit": 50, "offset": offset}
+        if playlist_id: params["additional_types"] = "track,episode"
+        response = check_rate_limit(requests.get(endpoint, headers=headers, params=params, timeout=30))
+        if response.status_code in (401, 403):
+            raise BridgeError("Spotify did not allow this collection to be read with the connected IDG account. Use the matching account; some playlists require owner or collaborator access.")
+        if response.status_code != 200:
+            raise BridgeError(f"Spotify could not return the collection (HTTP {response.status_code}). No partial collection was marked complete.")
+        try:
+            data = response.json()
+        except ValueError:
+            raise BridgeError("Spotify returned an invalid collection response. No partial collection was marked complete.") from None
+        if not isinstance(data, dict):
+            raise BridgeError("Spotify returned an invalid collection response")
+        page = data.get("items")
+        size = data.get("total")
+        if not isinstance(page, list) or type(size) is not int or not 0 <= size <= 10000:
+            raise BridgeError("Spotify returned an invalid or oversized collection")
+        if total is None: total = size
+        if total != size or (not page and offset < total) or len(page) + offset > total:
+            raise BridgeError("The Spotify collection changed or a page was incomplete. Retry after its contents stop changing.")
+        for entry in page:
+            item = (entry.get("item") if "item" in entry else entry.get("track")) if isinstance(entry, dict) else None
+            item_id = item.get("id") if isinstance(item, dict) else None
+            if not isinstance(item_id, str) or not re.fullmatch(r"[A-Za-z0-9]{22}", item_id) or item.get("is_local") or entry.get("is_local"):
+                raise BridgeError("The collection contains an unavailable or local-only track. Download the available tracks individually; this job was not marked complete.")
+            kind = item.get("type", "track")
+            if kind not in ("track", "episode"):
+                raise BridgeError("The collection contains an unsupported Spotify item type")
+            tracks.append(("podcast_episode" if kind == "episode" else "track", item_id))
+        offset += len(page)
+        if offset == total:
+            if not tracks: raise BridgeError("The Spotify collection is empty")
+            return tracks
+
+
+def spotify_session_metadata(session, item_id):
+    """Read original track metadata through the authenticated playback session."""
+    from librespot.metadata import TrackId
+    track = session.api().get_metadata_4_track(TrackId.from_base62(item_id))
+    if not track or not track.name or track.duration <= 0:
+        raise BridgeError("Spotify did not return complete metadata for this track. Check account access and try again later.")
+    album = track.album
+    artists = ", ".join(artist.name for artist in track.artist if artist.name)
+    album_artists = ", ".join(artist.name for artist in album.artist if artist.name) or artists
+    discs = list(album.disc)
+    return {
+        "title": track.name, "artists": artists, "album_name": album.name,
+        "album_artists": album_artists, "album_type": getattr(album, "type_str", "") or "album",
+        "track_number": track.number or 1, "disc_number": track.disc_number or 1,
+        "total_tracks": sum(len(disc.track) for disc in discs) or None,
+        "total_discs": len(discs) or track.disc_number or 1,
+        "release_year": str(album.date.year) if album.date.year else "",
+        "genre": ", ".join(album.genre), "label": album.label,
+        "copyright": ", ".join(value.text for value in album.copyright if value.text),
+        "explicit": track.explicit,
+        "isrc": next((value.id for value in track.external_id if value.type.lower() == "isrc"), ""),
+        "length": str(track.duration), "item_id": item_id,
+        "item_url": "https://open.spotify.com/track/" + item_id,
+        "image_url": "", "is_playable": bool(track.file or track.alternative),
+    }
+
+
+def report_track_metadata(service, url, metadata):
+    """Send catalog names before audio starts, including when audio access fails."""
+    title = metadata.get("title")
+    artists = metadata.get("artists")
+    if not isinstance(title, str) or not title.strip() or not isinstance(artists, str) or not artists.strip():
+        raise BridgeError("The service did not return the track title and artist names. No unknown-name audio file was saved.")
+    emit("metadata", service=service, url=url, title=title.strip(), artists=artists.strip())
+
+
 def download(request, home):
     service = request["service"]
     if service not in SERVICES:
@@ -537,7 +675,7 @@ def download(request, home):
 
         def bounded_request(session, *args, **kwargs):
             kwargs.setdefault("timeout", 30)
-            return original(session, *args, **kwargs)
+            return check_rate_limit(original(session, *args, **kwargs))
 
         requests.sessions.Session.request = bounded_request
         from onthespot.accounts import FillAccountPool, get_account_token
@@ -553,7 +691,18 @@ def download(request, home):
         # Resolve the complete job before starting downloads. Queue emptiness alone
         # cannot prove completion while upstream parser/metadata threads are busy.
         api = importlib.import_module("onthespot.api." + service)
+        if service == "spotify":
+            metadata_cache = {}
+            def track_metadata(session, item_id):
+                if item_id not in metadata_cache:
+                    metadata_cache[item_id] = spotify_session_metadata(session, item_id)
+                return metadata_cache[item_id]
+            # The download worker binds imported metadata functions in its module.
+            # Keep parsing and downloading on the same cached session metadata.
+            api.spotify_get_track_metadata = track_metadata
+            importlib.import_module("onthespot.downloader").spotify_get_track_metadata = track_metadata
         token = get_account_token(service)
+        audio_access_failure = guard_spotify_audio_access(token) if service == "spotify" else {"message": None}
         with state.parsing_lock:
             roots = list(state.parsing.values())
             state.parsing.clear()
@@ -567,11 +716,9 @@ def download(request, home):
             elif kind == "album":
                 tracks.extend(("track", track) for track in getattr(api, f"{service}_get_album_track_ids")(token, item_id))
             elif kind == "playlist" and service == "spotify":
-                for entry in api.spotify_get_playlist_items(token, item_id):
-                    track = entry.get("track") or {}
-                    if not track.get("id"):
-                        raise BridgeError("The playlist includes an unavailable track. Try the available tracks individually.")
-                    tracks.append(("podcast_episode" if track.get("type") == "episode" else "track", track["id"]))
+                tracks.extend(spotify_collection_tracks(token, item_id))
+            elif kind == "liked_songs" and service == "spotify":
+                tracks.extend(spotify_collection_tracks(token))
             elif kind == "playlist":
                 _, _, ids = getattr(api, f"{service}_get_playlist_data")(token, item_id)
                 tracks.extend(("track", track) for track in ids)
@@ -585,6 +732,8 @@ def download(request, home):
             metadata = getattr(api, f"{service}_get_{kind}_metadata")(token, item_id)
             if not metadata or not metadata.get("title"):
                 raise BridgeError("A track's metadata is unavailable. Check account access or try that track separately.")
+            if service == "spotify" and len(tracks) == 1 and kind == "track":
+                report_track_metadata(service, request["url"], metadata)
             local_id = uuid.uuid4().hex
             try:
                 duration_ms = float(metadata.get("length") or 0)
@@ -604,6 +753,8 @@ def download(request, home):
         started = time.monotonic()
         settled = None
         while time.monotonic() - started < 1800:
+            if audio_access_failure["message"]:
+                raise BridgeError(audio_access_failure["message"])
             with state.download_queue_lock:
                 items = [dict(item) for item in state.download_queue.values()]
             with state.parsing_lock:
@@ -615,6 +766,8 @@ def download(request, home):
                 settled = settled or time.monotonic()
                 if time.monotonic() - settled > 2:
                     if status == "failed":
+                        if audio_access_failure["message"]:
+                            raise BridgeError(audio_access_failure["message"])
                         raise BridgeError("One or more tracks failed or are unavailable. The job was not marked complete; reconnect the account or check service availability.")
                     paths = validate_outputs(items, output)
                     files = [{"path": path, "duration_ms": next((i.get("expected_duration_ms", 0) for i in items if str(Path(i.get("file_path") or "").resolve()) == path), 0)} for path in paths]
@@ -664,6 +817,6 @@ if __name__ == "__main__":
         except Exception as error:
             # Deliberately emit only our actionable errors, never raw upstream exceptions.
             message = safe_message(error)
-            emit("error", message=message)
+            emit("error", message=message, error_kind=type(error).__name__)
             exit_code = 1
     os._exit(exit_code)

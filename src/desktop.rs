@@ -2,9 +2,11 @@
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
+#[cfg(windows)]
+mod monitor_dpi;
 
 /// Initial client size and recovery size for invalid persisted geometry.
-pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(960.0, 640.0);
+pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(1280.0, 800.0);
 /// Smallest supported desktop layout, in egui points.
 pub const MIN_WINDOW_SIZE: egui::Vec2 = egui::vec2(800.0, 500.0);
 
@@ -303,6 +305,7 @@ pub fn attach_window(cc: &eframe::CreationContext<'_>) {
         if let Ok(handle) = cc.window_handle()
             && let RawWindowHandle::Win32(handle) = handle.as_raw()
         {
+            monitor_dpi::install(handle.hwnd.get() as _);
             cc.egui_ctx
                 .data_mut(|data| data.insert_temp(egui::Id::new("idg-window"), handle.hwnd.get()));
             let rounded: u32 = 2; // DWMWCP_ROUND on Windows 11; ignored by Windows 10.

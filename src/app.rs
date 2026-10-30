@@ -23,12 +23,12 @@ use crate::{
 };
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const BG: Color32 = Color32::from_rgb(11, 22, 37);
-const PANEL: Color32 = Color32::from_rgb(23, 38, 58);
-const SIDEBAR: Color32 = Color32::from_rgb(17, 30, 48);
-const ROW_EVEN: Color32 = Color32::from_rgb(25, 42, 63);
+const BG: Color32 = Color32::from_rgb(14, 16, 21);
+const PANEL: Color32 = Color32::from_rgb(24, 27, 35);
+const SIDEBAR: Color32 = Color32::from_rgb(20, 23, 31);
+const ROW_EVEN: Color32 = Color32::from_rgb(30, 34, 44);
 // Calm row selection; filename text itself is not selectable.
-const ROW_SEL: Color32 = Color32::from_rgb(25, 58, 105);
+const ROW_SEL: Color32 = Color32::from_rgb(31, 54, 86);
 const ACCENT: Color32 = Color32::from_rgb(22, 120, 242);
 const ACCENT2: Color32 = Color32::from_rgb(0, 112, 250);
 const SUCCESS: Color32 = Color32::from_rgb(32, 211, 162);
@@ -38,14 +38,27 @@ const ORANGE: Color32 = Color32::from_rgb(255, 165, 0);
 const GRAY: Color32 = Color32::from_rgb(110, 115, 135);
 const DIMGRAY: Color32 = Color32::from_rgb(140, 157, 167);
 const TEXT: Color32 = Color32::from_rgb(245, 248, 255);
-const TEXT_DIM: Color32 = Color32::from_rgb(174, 191, 215);
-const BORDER: Color32 = Color32::from_rgb(43, 60, 83);
+const TEXT_DIM: Color32 = Color32::from_rgb(166, 175, 193);
+const BORDER: Color32 = Color32::from_rgb(46, 51, 65);
 
 fn qa_control(ctx: &egui::Context, label: &str, rect: egui::Rect) {
     #[cfg(debug_assertions)]
     ctx.data_mut(|data| data.insert_temp(egui::Id::new(format!("qa:{label}")), rect));
     #[cfg(not(debug_assertions))]
     let _ = (ctx, label, rect);
+}
+
+fn update_button(label: &str, secondary: bool) -> egui::Button<'_> {
+    let (fill, text) = if secondary {
+        (Color32::from_rgb(245, 184, 75), BG)
+    } else {
+        (Color32::from_rgb(27, 104, 218), Color32::WHITE)
+    };
+    egui::Button::new(RichText::new(label).strong().color(text))
+        .fill(fill)
+        .stroke(Stroke::new(1.0_f32, fill))
+        .rounding(6.0)
+        .min_size(Vec2::new(if secondary { 88.0 } else { 140.0 }, 40.0))
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────
@@ -202,7 +215,11 @@ impl IDGApp {
                 })
                 .unwrap_or(1.0)
                 .clamp(1.0, 2.0);
-            cc.egui_ctx.set_pixels_per_point(scale);
+            if !crate::native_dpi_preview() {
+                cc.egui_ctx.set_pixels_per_point(scale);
+            } else {
+                cc.egui_ctx.set_zoom_factor(1.0);
+            }
             cc.egui_ctx
                 .send_viewport_cmd(egui::ViewportCommand::InnerSize(
                     crate::settings_preview_size().into(),
@@ -470,6 +487,10 @@ impl IDGApp {
                         4,
                     );
                     item.status = status;
+                    if std::env::args().any(|arg| arg == "--preview-long-host") {
+                        item.url =
+                            "https://release-assets.githubusercontent.com/example/file.zip".into();
+                    }
                     item.total_bytes = Some(if index == 1 { bytes } else { 20_000_000 });
                     item.downloaded_bytes = bytes;
                     item.speed_bps = if index == 0 { 3_200_000.0 } else { 0.0 };
@@ -511,15 +532,25 @@ impl IDGApp {
         {
             app.show_settings = false;
             app.show_update_prompt = true;
-            app.update_status = "A refreshed IDG 1.4.3 build with fixes is available".into();
+            app.update_status = "An IDG update is available".into();
             app.update_info = Some(UpdateInfo {
-                version: "1.4.3".into(),
-                release_notes: "- Restore download windows at their last usable size and position.\n- Show a clear update alert with release fixes.\n- Check for updates while IDG runs in the system tray.".into(),
-                release_url: "https://github.com/Mustafa1p/IDG-internet-download-go/releases".into(),
+                version: APP_VERSION.into(),
+                release_notes: include_str!("../docs/release-notes.md").into(),
+                release_url: "https://github.com/Mustafa1p/IDG-internet-download-go/releases"
+                    .into(),
                 installer_url: String::new(),
                 sha256: String::new(),
                 size: 0,
             });
+            if std::env::args().any(|argument| argument == "--update-preview-ready") {
+                let directory = tempfile::tempdir().expect("preview update directory");
+                app.prepared_update = Some(PreparedUpdate {
+                    installer: directory.path().join("preview-only.exe"),
+                    directory,
+                });
+                app.update_status =
+                    "Update verified and ready. IDG will restart after installation.".into();
+            }
         }
         app
     }
@@ -884,6 +915,9 @@ impl IDGApp {
     }
 
     fn download_update(&mut self, ctx: &egui::Context) {
+        if crate::settings_preview() {
+            return;
+        }
         let Some(info) = self.update_info.clone() else {
             return;
         };
@@ -918,6 +952,9 @@ impl IDGApp {
     }
 
     fn install_update(&mut self, ctx: &egui::Context) {
+        if crate::settings_preview() {
+            return;
+        }
         ctx.data_mut(|data| data.insert_temp(egui::Id::new("idg-installing"), true));
         if !self.can_install_update() {
             ctx.data_mut(|data| data.insert_temp(egui::Id::new("idg-installing"), false));
@@ -1021,6 +1058,7 @@ impl IDGApp {
         };
         let mut open = self.show_update_prompt;
         let mut later = false;
+        let dialog_width = 560.0_f32.min(ctx.screen_rect().width() - 48.0);
         egui::Window::new("A new IDG update is available")
             .id(egui::Id::new("idg-update-prompt"))
             .open(&mut open)
@@ -1028,8 +1066,10 @@ impl IDGApp {
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
             .order(egui::Order::Foreground)
-            .default_width(500.0)
+            .default_width(dialog_width)
+            .max_width(dialog_width)
             .show(ctx, |ui| {
+                ui.set_width(dialog_width);
                 if info.version == APP_VERSION {
                     ui.heading(format!("Please update IDG {}", info.version));
                     ui.label(
@@ -1039,29 +1079,54 @@ impl IDGApp {
                     ui.heading(format!("Please update to IDG {}", info.version));
                     ui.label(format!("You are using IDG {APP_VERSION}."));
                 }
-                ui.add_space(10.0);
-                ui.label(RichText::new("What’s new").strong().color(ACCENT));
-                egui::ScrollArea::vertical()
-                    .id_salt("update-release-notes")
-                    .max_height((ctx.screen_rect().height() * 0.35).min(260.0))
+                ui.add_space(12.0);
+                Frame::none()
+                    .fill(Color32::from_rgb(5, 9, 15))
+                    .stroke(Stroke::new(1.0_f32, BORDER))
+                    .rounding(8.0)
+                    .inner_margin(Margin::same(14.0))
                     .show(ui, |ui| {
-                        for line in crate::updater::release_highlights(&info.release_notes) {
-                            ui.horizontal_top(|ui| {
-                                ui.label("•");
-                                ui.add(egui::Label::new(line).wrap());
+                        ui.set_width(ui.available_width());
+                        ui.label(RichText::new("What’s new").strong().color(TEXT));
+                        ui.add_space(8.0);
+                        ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+                        egui::ScrollArea::vertical()
+                            .id_salt("update-release-notes")
+                            .auto_shrink([false, true])
+                            .max_height((ctx.screen_rect().height() - 380.0).clamp(90.0, 280.0))
+                            .scroll_bar_visibility(
+                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                            )
+                            .show(ui, |ui| {
+                                for line in crate::updater::release_highlights(&info.release_notes)
+                                {
+                                    ui.horizontal_top(|ui| {
+                                        ui.label(RichText::new("•").color(TEXT_DIM));
+                                        ui.add(
+                                            egui::Label::new(RichText::new(line).color(TEXT))
+                                                .wrap(),
+                                        );
+                                    });
+                                    ui.add_space(5.0);
+                                }
                             });
-                        }
                     });
-                ui.add_space(10.0);
-                ui.separator();
-                self.update_controls(ui, ctx);
-                ui.add_space(6.0);
-                later = ui.button("Later").clicked();
+                ui.add_space(12.0);
+                later = self.update_controls_with_later(ui, ctx, true);
             });
         self.show_update_prompt = open && !later;
     }
 
     fn update_controls(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        self.update_controls_with_later(ui, ctx, false);
+    }
+
+    fn update_controls_with_later(
+        &mut self,
+        ui: &mut Ui,
+        ctx: &egui::Context,
+        show_later: bool,
+    ) -> bool {
         ui.label(&self.update_status);
         if let Some(progress) = &self.update_progress {
             ui.add(
@@ -1073,30 +1138,45 @@ impl IDGApp {
         if let Some(error) = &self.update_error {
             ui.colored_label(RED, error);
         }
-        if self.prepared_update.is_some() {
-            let ready = self.can_install_update();
-            if ui
-                .add_enabled(ready, egui::Button::new("Install update and restart IDG"))
-                .clicked()
+        let mut later = false;
+        ui.add_space(6.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            if self.prepared_update.is_some() {
+                let ready = self.can_install_update();
+                if ui
+                    .add_enabled(
+                        ready,
+                        update_button("Install update and restart IDG", false),
+                    )
+                    .clicked()
+                {
+                    self.install_update(ctx);
+                }
+            } else if self.update_info.is_some() && self.update_download_rx.is_none() {
+                if ui.add(update_button("Update now", false)).clicked() {
+                    self.download_update(ctx);
+                }
+            } else if self.update_error.is_some()
+                && ui.add(update_button("Retry update check", false)).clicked()
             {
-                self.install_update(ctx);
+                self.check_updates(ctx);
             }
-            if !ready {
-                ui.label("Finish or remove pending and paused downloads before restarting.");
+            if show_later {
+                later = ui.add(update_button("Later", true)).clicked();
             }
-        } else if self.update_info.is_some() && self.update_download_rx.is_none() {
-            if ui.button("Update now").clicked() {
-                self.download_update(ctx);
-            }
-        } else if self.update_error.is_some() && ui.button("Retry update check").clicked() {
-            self.check_updates(ctx);
+        });
+        if self.prepared_update.is_some() && !self.can_install_update() {
+            ui.label("Finish or remove pending and paused downloads before restarting.");
         }
         if let Some(info) = &self.update_info {
+            ui.add_space(5.0);
             ui.hyperlink_to("Release notes", &info.release_url);
             if !self.show_update_prompt && ui.button("What’s new").clicked() {
                 self.show_update_prompt = true;
             }
         }
+        later
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
@@ -1208,7 +1288,7 @@ impl eframe::App for IDGApp {
         if crate::settings_preview() {
             self.capture_settings_preview(ctx);
         }
-        if crate::settings_preview() {
+        if crate::settings_preview() && !crate::native_dpi_preview() {
             let key = egui::Id::new("preview-scale-applied");
             let phase = ctx.data(|data| data.get_temp::<u8>(key).unwrap_or(0));
             if phase == 0 {
@@ -1333,9 +1413,9 @@ impl eframe::App for IDGApp {
         self.shell_shortcuts(ctx);
         let wide = ctx.screen_rect().width() >= 1100.0;
         let sidebar_width = if ctx.screen_rect().width() >= 1400.0 {
-            320.0
+            264.0
         } else if wide {
-            260.0
+            244.0
         } else {
             190.0
         };
@@ -1356,14 +1436,14 @@ impl eframe::App for IDGApp {
                 shell::surface(
                     ui.painter(),
                     ui.max_rect().expand(18.0),
-                    Color32::from_rgb(25, 39, 56),
+                    Color32::from_rgb(27, 30, 40),
                     SIDEBAR,
                 );
                 ui.spacing_mut().item_spacing.y = 3.0;
                 self.sidebar(ui, &items);
             });
         egui::TopBottomPanel::top("window-header")
-            .exact_height(if wide { 72.0 } else { 58.0 })
+            .exact_height(if wide { 60.0 } else { 58.0 })
             .frame(
                 Frame::none()
                     .fill(PANEL)
@@ -1371,10 +1451,10 @@ impl eframe::App for IDGApp {
             )
             .show(ctx, |ui| self.shell_header(ui, ctx));
         egui::TopBottomPanel::bottom("statusbar")
-            .exact_height(if wide { 42.0 } else { 30.0 })
+            .exact_height(32.0)
             .frame(
                 Frame::none()
-                    .fill(Color32::from_rgb(12, 24, 39))
+                    .fill(Color32::from_rgb(17, 19, 26))
                     .inner_margin(Margin::symmetric(if wide { 24.0 } else { 12.0 }, 6.0)),
             )
             .show(ctx, |ui| self.status_bar(ui, &items));
@@ -1388,7 +1468,7 @@ impl eframe::App for IDGApp {
                 shell::surface(
                     ui.painter(),
                     ui.max_rect().expand(24.0),
-                    Color32::from_rgb(13, 29, 48),
+                    Color32::from_rgb(14, 16, 21),
                     BG,
                 );
                 if self.show_settings {
@@ -1412,6 +1492,7 @@ impl eframe::App for IDGApp {
         self.preview_test.observe(
             ctx,
             preview_test::Snapshot {
+                details_open: self.selected_id.is_some(),
                 category: self.category.label().into(),
                 show_settings: self.show_settings,
                 speed_limit_kbps: self
@@ -1433,6 +1514,10 @@ impl eframe::App for IDGApp {
                 newest_first: self.newest_first,
             },
         );
+        #[cfg(debug_assertions)]
+        if crate::native_dpi_preview() {
+            self.report_monitor_preview(ctx);
+        }
         // Repaint while active
         let active = items.iter().any(|i| i.status.is_active());
         ctx.request_repaint_after(if active {

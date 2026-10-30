@@ -5,6 +5,7 @@ use egui_extras::{Column, TableBuilder};
 #[derive(Clone, Copy)]
 pub(super) enum Icon {
     Download,
+    Close,
     Check,
     Pause,
     File,
@@ -38,6 +39,10 @@ pub(super) fn draw_icon(painter: &egui::Painter, rect: egui::Rect, icon: Icon, c
         painter.line_segment([p(a.0, a.1), p(b.0, b.1)], stroke);
     };
     match icon {
+        Icon::Close => {
+            line((0.2, 0.2), (0.8, 0.8));
+            line((0.2, 0.8), (0.8, 0.2));
+        }
         Icon::Clock => {
             painter.circle_stroke(p(0.5, 0.5), rect.width() * 0.38, stroke);
             line((0.5, 0.25), (0.5, 0.5));
@@ -328,7 +333,7 @@ impl IDGApp {
             ui.spacing_mut().button_padding.y = 2.0;
             ui.spacing_mut().interact_size.y = 22.0;
         }
-        let spacious = ui.ctx().screen_rect().width() >= 1200.0 && !short;
+        let spacious = ui.ctx().screen_rect().width() >= 1100.0 && !short;
         ui.add_space(if spacious {
             22.0
         } else if short {
@@ -416,7 +421,7 @@ impl IDGApp {
             12.0
         });
         let height = if spacious {
-            44.0
+            36.0
         } else if ui.ctx().screen_rect().height() < 550.0 {
             22.0
         } else {
@@ -507,7 +512,7 @@ impl IDGApp {
                 );
                 let mut label = egui::text::LayoutJob::simple_singleline(
                     category.label().to_owned(),
-                    FontId::proportional(if spacious { 15.0 } else { 11.0 }),
+                    FontId::proportional(if spacious { 14.0 } else { 12.0 }),
                     if selected { TEXT } else { TEXT_DIM },
                 );
                 label.wrap.max_width = label_rect.width();
@@ -548,6 +553,10 @@ impl IDGApp {
                     self.settings_draft = None;
                 }
             }
+        }
+        if ui.available_height() > 272.0 {
+            ui.add_space((ui.available_height() - 270.0).max(8.0));
+            self.speed_overview(ui, items);
         }
         ui.add_space(
             (ui.available_height() - if short { 112.0 } else { 126.0 }).max(if short {
@@ -590,7 +599,7 @@ impl IDGApp {
             egui::pos2(r.left() + if spacious { 57.0 } else { 49.0 }, r.center().y),
             egui::Align2::LEFT_CENTER,
             "Settings",
-            FontId::proportional(if spacious { 15.0 } else { 11.0 }),
+            FontId::proportional(if spacious { 14.0 } else { 12.0 }),
             TEXT,
         );
         settings
@@ -638,221 +647,121 @@ impl IDGApp {
         }
     }
     pub(super) fn library_header(&mut self, ui: &mut Ui, items: &[DownloadItem]) {
-        let roomy = ui.available_width() >= 900.0;
-        ui.label(
-            RichText::new(self.category.label())
-                .family(egui::FontFamily::Name("idg-heading".into()))
-                .size(if roomy { 36.0 } else { 27.0 })
-                .strong(),
-        );
-        ui.label(
-            RichText::new("Your files, organized and ready.")
-                .size(if roomy { 17.0 } else { 13.0 })
-                .color(TEXT_DIM),
-        );
-        ui.add_space(if roomy { 18.0 } else { 12.0 });
         let speed: f64 = items
             .iter()
             .filter(|i| i.status.is_active())
             .map(|i| i.speed_bps)
-            .sum::<f64>()
-            .max(0.0);
-        let values = [
-            (
-                Icon::Speed,
-                format!("{:.2} Mbps", speed * 8.0 / 1_000_000.0),
-                "Current speed",
-            ),
-            (
-                Icon::Download,
-                items
-                    .iter()
-                    .filter(|i| i.status.is_active())
-                    .count()
-                    .to_string(),
-                "Active downloads",
-            ),
-            (
-                Icon::Check,
-                Category::Completed.count(items).to_string(),
-                "Completed",
-            ),
-            (
-                Icon::Clock,
-                items
-                    .iter()
-                    .filter(|i| matches!(i.status, Status::Queued))
-                    .count()
-                    .to_string(),
-                "Queued",
-            ),
-        ];
-        if ui.ctx().screen_rect().height() < 700.0 {
-            let gap = 8.0;
-            let width = (ui.available_width() - gap * 3.0) / 4.0;
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = gap;
-                for (index, (icon, value, label)) in values.iter().enumerate() {
-                    let (rect, _) =
-                        ui.allocate_exact_size(Vec2::new(width, 56.0), egui::Sense::hover());
-                    ui.painter().add(gradient_panel(
-                        rect,
-                        10.0,
-                        PANEL,
-                        Color32::from_rgb(20, 33, 51),
-                    ));
-                    ui.painter()
-                        .rect_stroke(rect, 10.0, Stroke::new(1.0_f32, BORDER));
-                    let color = match index {
-                        0 => ACCENT,
-                        3 => Color32::from_rgb(145, 183, 255),
-                        _ => SUCCESS,
-                    };
-                    let icon_rect = egui::Rect::from_center_size(
-                        egui::pos2(rect.left() + 23.0, rect.center().y),
-                        Vec2::splat(30.0),
-                    );
-                    ui.painter()
-                        .rect_filled(icon_rect, 8.0, color.gamma_multiply(0.10));
-                    draw_icon(ui.painter(), icon_rect.shrink(5.0), *icon, color);
-                    if index == 2 {
-                        ui.painter().circle_stroke(
-                            icon_rect.center(),
-                            11.0,
-                            Stroke::new(1.8_f32, color),
-                        );
-                    }
-                    let text_x = rect.left() + 45.0;
-                    ui.painter().text(
-                        egui::pos2(text_x, rect.center().y - 8.0),
-                        egui::Align2::LEFT_CENTER,
-                        value,
-                        FontId::proportional(13.0),
-                        TEXT,
-                    );
-                    ui.painter().text(
-                        egui::pos2(text_x, rect.center().y + 12.0),
-                        egui::Align2::LEFT_CENTER,
-                        label,
-                        FontId::proportional(10.0),
-                        TEXT_DIM,
-                    );
-                }
-            });
-            ui.add_space(10.0);
-            self.toolbar(ui);
-            ui.add_space(8.0);
-            return;
-        }
+            .sum();
         if self
             .library_state
             .sample_at
             .is_none_or(|at| at.elapsed().as_secs_f32() >= 0.5)
         {
-            self.library_state.speed_history.push_back(speed);
-            while self.library_state.speed_history.len() > 40 {
+            self.library_state.speed_history.push_back(speed.max(0.0));
+            while self.library_state.speed_history.len() > 60 {
                 self.library_state.speed_history.pop_front();
             }
             self.library_state.sample_at = Some(std::time::Instant::now());
         }
-        let gap = if roomy { 16.0 } else { 9.0 };
-        let columns = if ui.available_width() < 650.0 {
-            2.0
-        } else {
-            4.0
-        };
-        let width = (ui.available_width() - gap * (columns - 1.0)) / columns;
+        ui.label(
+            RichText::new(self.category.label())
+                .family(egui::FontFamily::Name("idg-heading".into()))
+                .size(28.0)
+                .strong(),
+        );
+        let active = items.iter().filter(|i| i.status.is_active()).count();
+        let total: u64 = items.iter().filter_map(|i| i.total_bytes).sum();
+        ui.label(
+            RichText::new(format!(
+                "{} downloads  ·  {} active  ·  {} total",
+                items.len(),
+                active,
+                fmt_size(total)
+            ))
+            .size(13.0)
+            .color(TEXT_DIM),
+        );
+        ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = gap;
-            for (index, (icon, value, label)) in values.into_iter().enumerate() {
-                let (r, _) = ui.allocate_exact_size(
-                    Vec2::new(width, if roomy { 104.0 } else { 68.0 }),
+            ui.spacing_mut().item_spacing.x = 6.0;
+            for (category, label) in [
+                (Category::All, "All"),
+                (Category::Downloading, "Active"),
+                (Category::Paused, "Paused"),
+                (Category::Completed, "Completed"),
+                (Category::Failed, "Failed"),
+            ] {
+                let selected = self.category == category;
+                let response = ui.add(
+                    egui::Button::new(
+                        RichText::new(format!("{label}  {}", category.count(items))).size(13.0),
+                    )
+                    .fill(if selected { ROW_SEL } else { PANEL })
+                    .rounding(7.0)
+                    .min_size(Vec2::new(68.0, 32.0)),
+                );
+                qa_control(ui.ctx(), &format!("Filter {label}"), response.rect);
+                if response.clicked() {
+                    self.category = category;
+                }
+            }
+        });
+        ui.add_space(12.0);
+        self.toolbar(ui);
+        ui.add_space(10.0);
+    }
+
+    fn speed_overview(&self, ui: &mut Ui, items: &[DownloadItem]) {
+        let speed: f64 = items
+            .iter()
+            .filter(|i| i.status.is_active())
+            .map(|i| i.speed_bps)
+            .sum();
+        Frame::none()
+            .fill(BG)
+            .stroke(Stroke::new(1.0_f32, BORDER))
+            .rounding(9.0)
+            .inner_margin(Margin::same(12.0))
+            .show(ui, |ui| {
+                ui.set_width((ui.available_width()).max(100.0));
+                ui.horizontal(|ui| {
+                    let (rect, _) = ui.allocate_exact_size(Vec2::splat(14.0), egui::Sense::hover());
+                    draw_icon(ui.painter(), rect, Icon::Speed, ACCENT);
+                    ui.label(RichText::new("TOTAL SPEED").size(11.0).color(TEXT_DIM));
+                });
+                ui.label(RichText::new(fmt_speed(speed)).size(24.0).strong());
+                let (rect, _) = ui.allocate_exact_size(
+                    Vec2::new(ui.available_width(), 36.0),
                     egui::Sense::hover(),
                 );
-                ui.painter().add(gradient_panel(
-                    r,
-                    12.0,
-                    PANEL,
-                    Color32::from_rgb(20, 33, 51),
-                ));
-                ui.painter()
-                    .rect_stroke(r, 12.0, Stroke::new(1.0_f32, BORDER));
-                let color = if index == 0 {
-                    ACCENT
-                } else if index == 3 {
-                    Color32::from_rgb(145, 183, 255)
-                } else {
-                    SUCCESS
-                };
-                let size = if roomy { 52.0 } else { 34.0 };
-                let icon_rect = egui::Rect::from_center_size(
-                    egui::pos2(r.left() + if roomy { 39.0 } else { 26.0 }, r.center().y),
-                    Vec2::splat(size),
-                );
-                ui.painter()
-                    .rect_filled(icon_rect, 12.0, color.gamma_multiply(0.10));
-                let glyph = icon_rect.shrink(if roomy { 8.0 } else { 5.0 });
-                draw_icon(ui.painter(), glyph, icon, color);
-                if index == 2 {
-                    ui.painter().circle_stroke(
-                        glyph.center(),
-                        glyph.width() * 0.46,
-                        Stroke::new(2.6_f32, color),
-                    );
-                }
-                let text_x = r.left() + if roomy { 80.0 } else { 49.0 };
-                ui.painter().text(
-                    egui::pos2(text_x, r.center().y - 9.0),
-                    egui::Align2::LEFT_CENTER,
-                    value,
-                    FontId::new(
-                        if roomy { 20.0 } else { 14.0 },
-                        egui::FontFamily::Name("idg-heading".into()),
-                    ),
-                    TEXT,
-                );
-                ui.painter().text(
-                    egui::pos2(text_x, r.center().y + 16.0),
-                    egui::Align2::LEFT_CENTER,
-                    label,
-                    FontId::proportional(if roomy { 13.0 } else { 10.0 }),
-                    TEXT_DIM,
-                );
-                if index == 0 && roomy {
-                    let plot = egui::Rect::from_min_max(
-                        egui::pos2(r.right() - 62.0, r.bottom() - 14.0),
-                        egui::pos2(r.right() - 12.0, r.bottom() - 5.0),
-                    );
-                    let max = self
-                        .library_state
-                        .speed_history
-                        .iter()
-                        .copied()
-                        .fold(1.0, f64::max);
-                    let n = self.library_state.speed_history.len().max(2);
-                    let points: Vec<_> = self
-                        .library_state
-                        .speed_history
+                let history = &self.library_state.speed_history;
+                let peak = history.iter().copied().fold(1.0_f64, f64::max);
+                if history.len() > 1 {
+                    let points: Vec<_> = history
                         .iter()
                         .enumerate()
                         .map(|(i, v)| {
                             egui::pos2(
-                                plot.left() + plot.width() * i as f32 / (n - 1) as f32,
-                                plot.bottom() - plot.height() * (v / max) as f32,
+                                rect.left() + rect.width() * i as f32 / (history.len() - 1) as f32,
+                                rect.bottom() - 2.0 - (v / peak) as f32 * (rect.height() - 4.0),
                             )
                         })
                         .collect();
-                    if points.len() > 1 {
-                        ui.painter()
-                            .add(egui::Shape::line(points, Stroke::new(2.0_f32, ACCENT)));
-                    }
+                    ui.painter()
+                        .add(egui::Shape::line(points, Stroke::new(1.8_f32, ACCENT)));
                 }
-            }
-        });
-        ui.add_space(if roomy { 18.0 } else { 12.0 });
-        self.toolbar(ui);
-        ui.add_space(if roomy { 14.0 } else { 8.0 });
+                ui.label(
+                    RichText::new(format!(
+                        "{} active  ·  Peak {}",
+                        items.iter().filter(|i| i.status.is_active()).count(),
+                        fmt_speed(peak.max(speed))
+                    ))
+                    .size(11.0)
+                    .color(TEXT_DIM),
+                );
+            });
     }
+
     pub(super) fn toolbar(&mut self, ui: &mut Ui) {
         let items = self.downloads.lock().unwrap().clone();
         self.library_state
@@ -1066,20 +975,18 @@ impl IDGApp {
             self.library_state.selected_ids.clear();
             self.selected_id = None;
         }
-        let selected = self.selected_id.clone();
-        let details = items
-            .iter()
-            .find(|item| Some(&item.id) == selected.as_ref() && item.status != Status::Completed);
-        let details_height = if details.is_some() {
-            if ui.ctx().screen_rect().height() < 650.0 {
-                140.0
-            } else {
-                166.0
-            }
+        let inspector = self
+            .selected_id
+            .as_ref()
+            .and_then(|id| filtered.iter().find(|i| &i.id == id))
+            .copied()
+            .cloned();
+        let detail_height = if inspector.is_some() && ui.available_height() > 280.0 {
+            132.0
         } else {
             0.0
         };
-        let table_height = (ui.available_height() - details_height - 8.0).max(90.0);
+        let table_height = (ui.available_height() - 8.0 - detail_height).max(90.0);
         let mut clicked = None;
         let mut action = None;
         let mut toggled = None;
@@ -1183,7 +1090,7 @@ impl IDGApp {
                                                                 },
                                                             )
                                                             .desired_height(5.0)
-                                                            .fill(ACCENT),
+                                                            .fill(status_info(&item.status).1),
                                                         );
                                                         ui.label(format!(
                                                             "{}   {}",
@@ -1245,19 +1152,25 @@ impl IDGApp {
                         });
                     return;
                 }
-                let data_width =
-                    (ui.available_width() - 64.0 - 7.0 * ui.spacing().item_spacing.x).max(416.0);
+                // Derive every width from the current viewport. A remainder
+                // column can retain its previous content width across a DPI
+                // change and push the date/folder columns outside the table.
+                let data_width = (ui.available_width()
+                    - ui.spacing().scroll.allocated_width()
+                    - 64.0
+                    - 7.0 * ui.spacing().item_spacing.x)
+                    .max(1.0);
                 TableBuilder::new(ui)
                     .striped(false)
                     .sense(egui::Sense::click())
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                     .column(Column::exact(30.0))
-                    .column(Column::remainder().at_least(130.0))
-                    .column(Column::exact(data_width * 0.14))
-                    .column(Column::exact(data_width * 0.16))
-                    .column(Column::exact(data_width * 0.13))
-                    .column(Column::exact(data_width * 0.14))
+                    .column(Column::exact(data_width * 0.33))
                     .column(Column::exact(data_width * 0.12))
+                    .column(Column::exact(data_width * 0.19))
+                    .column(Column::exact(data_width * 0.12))
+                    .column(Column::exact(data_width * 0.13))
+                    .column(Column::exact(data_width * 0.11))
                     .column(Column::exact(34.0))
                     .min_scrolled_height(table_height - 30.0)
                     .max_scroll_height(table_height - 30.0)
@@ -1293,7 +1206,7 @@ impl IDGApp {
                     })
                     .body(|body| {
                         body.rows(
-                            if compact { 54.0 } else { 64.0 },
+                            if compact { 58.0 } else { 66.0 },
                             filtered.len(),
                             |mut row| {
                                 let item = filtered[row.index()];
@@ -1317,6 +1230,7 @@ impl IDGApp {
                                 });
                                 row.col(|ui| {
                                     let (icon, color) = file_icon(item);
+                                    qa_control(ui.ctx(), "Table Name", ui.max_rect());
                                     let (rect, _) = ui.allocate_exact_size(
                                         Vec2::new(23.0, 29.0),
                                         egui::Sense::hover(),
@@ -1328,17 +1242,22 @@ impl IDGApp {
                                         ui.add(
                                             egui::Label::new(
                                                 RichText::new(&item.filename)
-                                                    .size(if compact { 11.5 } else { 14.0 })
+                                                    .size(if compact { 12.5 } else { 14.0 })
+                                                    .strong()
                                                     .color(TEXT),
                                             )
                                             .truncate(),
                                         )
                                         .on_hover_text(&item.filename);
-                                        ui.label(
-                                            RichText::new(host(&item.url))
-                                                .size(if compact { 10.0 } else { 11.0 })
-                                                .color(TEXT_DIM),
-                                        );
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(host(&item.url))
+                                                    .size(if compact { 10.0 } else { 11.0 })
+                                                    .color(TEXT_DIM),
+                                            )
+                                            .truncate(),
+                                        )
+                                        .on_hover_text(host(&item.url));
                                     });
                                 });
                                 row.col(|ui| {
@@ -1385,7 +1304,7 @@ impl IDGApp {
                                             egui::ProgressBar::new(progress)
                                                 .desired_width(if compact { 62.0 } else { 82.0 })
                                                 .desired_height(4.0)
-                                                .fill(ACCENT),
+                                                .fill(status_info(&item.status).1),
                                         );
                                     });
                                 });
@@ -1423,6 +1342,11 @@ impl IDGApp {
                                     });
                                 });
                                 row.col(|ui| {
+                                    let (rect, _) = ui.allocate_exact_size(
+                                        Vec2::splat(12.0),
+                                        egui::Sense::hover(),
+                                    );
+                                    draw_icon(ui.painter(), rect, Icon::Clock, TEXT_DIM);
                                     ui.label(
                                         RichText::new(
                                             item.added_at
@@ -1435,7 +1359,9 @@ impl IDGApp {
                                     );
                                 });
                                 row.col(|ui| {
-                                    if icon_button(ui, Icon::Folder, "Open folder").clicked() {
+                                    let folder = icon_button(ui, Icon::Folder, "Open folder");
+                                    qa_control(ui.ctx(), "Table Folder", folder.rect);
+                                    if folder.clicked() {
                                         action = Some((item.id.clone(), "OpenFolder"));
                                     }
                                 });
@@ -1485,7 +1411,7 @@ impl IDGApp {
                 table.response.rect,
                 12.0,
                 PANEL,
-                Color32::from_rgb(19, 32, 51),
+                Color32::from_rgb(17, 20, 27),
             ),
         );
         if !self.library_state.grid || filtered.is_empty() {
@@ -1557,9 +1483,60 @@ impl IDGApp {
                 );
             }
         }
-        if let Some(item) = details {
+        if let Some(item) = &inspector
+            && detail_height > 0.0
+        {
             ui.add_space(8.0);
-            self.download_details(ui, item);
+            card().inner_margin(Margin::same(12.0)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Label::new(RichText::new(&item.filename).strong().size(15.0))
+                            .truncate(),
+                    )
+                    .on_hover_text(&item.filename);
+                    if icon_button(ui, Icon::Close, "Close details").clicked() {
+                        self.selected_id = None;
+                    }
+                });
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(item.save_path.display().to_string())
+                            .size(12.0)
+                            .color(TEXT_DIM),
+                    )
+                    .truncate(),
+                )
+                .on_hover_text(item.save_path.display().to_string());
+                ui.horizontal(|ui| {
+                    let (label, color) = status_info(&item.status);
+                    ui.colored_label(color, label);
+                    ui.label(format!(
+                        "{} downloaded  ·  {} connections",
+                        fmt_size(item.downloaded_bytes),
+                        item.num_segments
+                    ));
+                    if icon_button(ui, Icon::Folder, "Details open folder").clicked() {
+                        action = Some((item.id.clone(), "OpenFolder"));
+                    }
+                    if ui
+                        .add_enabled(
+                            item.status == Status::Completed,
+                            egui::Button::new("Open file"),
+                        )
+                        .clicked()
+                    {
+                        action = Some((item.id.clone(), "OpenFile"));
+                    }
+                    if icon_button(ui, Icon::Link, "Copy download link").clicked() {
+                        ui.ctx().copy_text(item.url.clone());
+                    }
+                });
+                if let Some(error) = &item.error {
+                    ui.add(egui::Label::new(RichText::new(error).size(12.0).color(RED)).truncate())
+                        .on_hover_text(error);
+                }
+            });
         }
         if let Some((id, checked)) = toggled {
             if checked {
@@ -1594,107 +1571,6 @@ impl IDGApp {
                 self.handle_action(&id, command, items);
             }
         }
-    }
-    fn download_details(&self, ui: &mut Ui, item: &DownloadItem) {
-        if ui.ctx().screen_rect().height() < 650.0 {
-            card().inner_margin(Margin::same(10.0)).show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                ui.add(
-                    egui::Label::new(RichText::new(&item.filename).size(13.0).strong()).truncate(),
-                )
-                .on_hover_text(&item.filename);
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(item.save_path.to_string_lossy())
-                            .size(12.0)
-                            .color(TEXT_DIM),
-                    )
-                    .truncate(),
-                )
-                .on_hover_text(item.save_path.to_string_lossy());
-                ui.horizontal(|ui| {
-                    if icon_button(ui, Icon::Folder, "Open folder").clicked()
-                        && let Some(path) = item.save_path.parent()
-                    {
-                        open_path(path);
-                    }
-                    if ui
-                        .add_enabled(
-                            item.status == Status::Completed,
-                            egui::Button::new("Open file"),
-                        )
-                        .clicked()
-                    {
-                        open_path(&item.save_path);
-                    }
-                });
-                let (label, color) = status_info(&item.status);
-                ui.horizontal(|ui| {
-                    ui.colored_label(color, label);
-                    ui.label(format!("{} downloaded", fmt_size(item.downloaded_bytes)));
-                });
-            });
-            return;
-        }
-        card().show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Download details").size(10.0).color(TEXT_DIM));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if icon_button(ui, Icon::Link, "Copy download link").clicked() {
-                        ui.ctx().copy_text(item.url.clone());
-                    }
-                    if icon_button(ui, Icon::Folder, "Open file location").clicked()
-                        && let Some(path) = item.save_path.parent()
-                    {
-                        open_path(path);
-                    }
-                });
-            });
-            ui.add(egui::Label::new(RichText::new(&item.filename).strong().size(12.0)).truncate());
-            ui.horizontal(|ui| {
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(item.save_path.to_string_lossy())
-                            .size(10.0)
-                            .color(TEXT_DIM),
-                    )
-                    .truncate(),
-                )
-                .on_hover_text(item.save_path.to_string_lossy());
-            });
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!("{} downloaded", fmt_size(item.downloaded_bytes)))
-                        .size(10.0)
-                        .color(TEXT_DIM),
-                );
-                ui.separator();
-                let parts = if !item.supports_pause() {
-                    item.media_options.format.label().to_owned()
-                } else if item.num_segments == 0 {
-                    "Automatic connections".into()
-                } else {
-                    format!("{} connections", item.num_segments)
-                };
-                ui.label(RichText::new(parts).size(10.0).color(TEXT_DIM));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let (label, color) = status_info(&item.status);
-                    ui.label(RichText::new(label).color(color).size(10.0));
-                });
-            });
-            ui.add(
-                egui::ProgressBar::new(if item.status == Status::Completed {
-                    1.0
-                } else {
-                    item.progress()
-                })
-                .desired_height(4.0)
-                .fill(ACCENT),
-            );
-            if let Some(error) = &item.error {
-                ui.colored_label(RED, error);
-            }
-        });
     }
     pub(super) fn status_bar(&self, ui: &mut Ui, items: &[DownloadItem]) {
         ui.horizontal(|ui| {

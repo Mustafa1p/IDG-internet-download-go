@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, music = false, reload = false, diskVersion = "1.3.1", items = [], postDownloads = true } = {}) {
+function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, music = false, reload = false, diskVersion = "1.3.1", items = [], pausedSites = [], tabs = [], postDownloads = true } = {}) {
   const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
@@ -20,8 +20,9 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     },
     management: { getSelf: async () => ({ installType: 'development' }) },
     alarms: { onAlarm: event('alarm'), create() {} },
-    storage: { local: { get: async () => ({ interceptEnabled: enabled, statusOnlyPopup: migrated }), set: async value => calls.push(['settings', value]) } },
-    action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
+    storage: { local: { get: async () => ({ interceptEnabled: enabled, statusOnlyPopup: migrated, pausedSites }), set: async value => calls.push(['settings', value]) } },
+    action: { setBadgeText: async value => reports.push(['badge', value]), setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
+    tabs: { query: async () => tabs, get: async id => tabs.find(tab => tab.id === id), sendMessage: async (id, message) => reports.push(['tab', id, message]), onUpdated: event('tabUpdated'), onActivated: event('tabActivated') },
     cookies: { getAll: async () => [{ name: 'session', value: 'test-cookie' }] },
     webRequest: { onBeforeSendHeaders: event('requestHeaders'), onBeforeRequest: event('beforeRequest') },
     downloads: {
@@ -53,6 +54,59 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
   return { events, calls, message, context, reports };
 }
 const download = { id: 17, url: 'https://example.com/file.zip', filename: 'C:\\Downloads\\file.zip', referrer: 'https://example.com/source', mime: 'application/zip', fileSize: 200000 };
+
+test('site pause persists, updates badges, and leaves other sites active', async () => {
+  const tabs = [{ id: 1, url: 'https://www.youtube.com/' }, { id: 2, url: 'https://facebook.com/' }, { id: 3, url: 'https://youtube.com/' }];
+  const { message, calls, reports } = worker({ tabs });
+  assert.equal((await message({ type: 'setSitePaused', tabId: 1, paused: true })).paused, true);
+  assert.equal(calls.find(c => c[0] === 'settings')[1].pausedSites[0], 'youtube.com');
+  assert.equal((await message({ type: 'getSiteStatus', tabId: 2 })).paused, false);
+  assert.equal((await message({ type: 'getSiteStatus', tabId: 3 })).paused, true);
+  assert.ok(reports.some(r => r[0] === 'badge' && r[1].tabId === 1 && r[1].text === '!'));
+  assert.ok(reports.some(r => r[0] === 'badge' && r[1].tabId === 2 && r[1].text === '\u2713'));
+  await message({ type: 'setSitePaused', tabId: 1, paused: false });
+  assert.equal((await message({ type: 'getSiteStatus', tabId: 3 })).enabled, true);
+});
+
+test('stored paused sites block browser downloads and messages after restart', async () => {
+  const { events, calls, message } = worker({ pausedSites: ['youtube.com'] });
+  await events.created({ ...download, referrer: 'https://www.youtube.com/watch?v=5TBlPQrcweQ' });
+  await events.created({ ...download, url: 'https://youtube.com/file.zip' });
+  assert.equal(calls.length, 0);
+  assert.equal((await message({ type: 'download', url: 'https://www.youtube.com/watch?v=5TBlPQrcweQ' })).ok, false);
+  await events.created({ ...download, url: 'https://youtube.com.evil.test/file.zip' });
+  assert.ok(calls.some(c => c[0] === 'post'));
+});
+
+test('paused top-level sites block iframe and context-menu handoffs', async () => {
+  const { events, calls } = worker({ pausedSites: ['youtube.com'] });
+  const sender = { tab: { id: 1, url: 'https://youtube.com/' }, url: 'https://cdn.example.com/embed' };
+  const result = await new Promise(resolve => events.message({ type: 'download', url: download.url }, sender, resolve));
+  assert.equal(result.ok, false);
+  await events.context({ linkUrl: download.url }, sender.tab);
+  assert.equal(calls.length, 0);
+  const state = await new Promise(resolve => events.message({ type: 'getSiteStatus' }, sender, resolve));
+  assert.equal(state.paused, true);
+  const blocked = await new Promise(resolve => events.message({ type: 'setSitePaused', tabId: 1, paused: false }, sender, resolve));
+  assert.equal(blocked.ok, false);
+});
+
+test('pausing removes overlays immediately; resuming restores them without reload', async () => {
+  const page = await overlayPage();
+  assert.equal(page.parent.children.length, 1);
+  page.events.siteState({ type: 'siteStateChanged', enabled: false });
+  assert.equal(page.parent.children.length, 0);
+  page.scan(); page.navigate();
+  assert.equal(page.parent.children.length, 0);
+  const event = { target: {}, preventDefault() { this.prevented = true; } };
+  page.events['idg-post-submit'](event);
+  assert.equal(event.prevented, undefined);
+  assert.equal(page.sent.length, 0);
+  page.events.siteState({ type: 'siteStateChanged', enabled: true });
+  assert.equal(page.parent.children.length, 1);
+  await page.overlay.children[0].handlers.click(page.event());
+  assert.equal(page.sent.length, 1);
+});
 
 test('small Hostinger exports preserve repeated Inbox and Sent parameters and captured authentication', async () => {
   for (const query of ['m=2464-INBOX', 'm=534-INBOX.Sent&m=533-INBOX.Sent']) {
@@ -164,10 +218,11 @@ test('YouTube extraction does not accept spoofed domains', () => {
   const { context } = worker();
   assert.equal(vm.runInContext('youtubeVideoUrl("https://youtube.com.evil.test/watch?v=5TBlPQrcweQ")', context), null);
 });
-function overlayPage(reply = async () => ({ ok: true })) {
+async function overlayPage(reply = async () => ({ ok: true })) {
   const sent = [], events = {};
   function element(tag) {
     return { tagName: tag.toUpperCase(), nodeType: 1, style: {}, handlers: {}, attributes: {}, children: [],
+      getAttribute(name) { return this.attributes[name] ?? null; }, dispatchEvent() {},
       setAttribute(name, value) { this.attributes[name] = value; }, hasAttribute(name) { return name in this.attributes; },
       addEventListener(name, handler) { this.handlers[name] = handler; },
       appendChild(child) { child.parentElement = this; this.children.push(child); },
@@ -179,16 +234,17 @@ function overlayPage(reply = async () => ({ ok: true })) {
   media.parentElement = parent; media.currentSrc = 'blob:https://www.youtube.com/player'; media.querySelector = () => null;
   const location = { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=5TBlPQrcweQ&list=radio' };
   const document = { readyState: 'complete', documentElement: {}, title: 'Sample video - YouTube',
-    querySelectorAll: () => [media], addEventListener: (name, handler) => { events[name] = handler; }, createElement: element,
+    querySelectorAll: selector => selector === "[data-idg-overlay]" ? [...parent.children] : [media], addEventListener: (name, handler) => { events[name] = handler; }, createElement: element,
   };
   let mutation;
   const context = vm.createContext({ document, location, window: {}, URL, URLSearchParams,
     CustomEvent: class { constructor(type, options = {}) { Object.assign(this, { type, ...options }); } },
     MutationObserver: class { constructor(callback) { mutation = callback; } observe() {} }, getComputedStyle: () => ({ position: 'relative' }),
-    chrome: { runtime: { sendMessage: async message => { sent.push(message); return reply(message); } } },
+    chrome: { runtime: { onMessage: { addListener: handler => { events.siteState = handler; } }, sendMessage: async message => { if (message.type === "getSiteStatus") return { enabled: true }; sent.push(message); return reply(message); } } },
   });
   vm.runInContext(fs.readFileSync('extension/download-form.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('extension/content.js', 'utf8'), context);
+  await new Promise(resolve => setImmediate(resolve));
   const event = overrides => ({ isTrusted: true, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }, ...overrides });
   return { sent, parent, media, location, event, events, document, context, get overlay() { return parent.children[0]; },
     scan: () => mutation([{ addedNodes: [{ nodeType: 1, tagName: 'DIV', hasAttribute: () => false, querySelectorAll: () => [media] }] }]),
@@ -197,7 +253,7 @@ function overlayPage(reply = async () => ({ ok: true })) {
 }
 
 test('YouTube blob-player button follows the current SPA video URL', async () => {
-  const page = overlayPage();
+  const page = await overlayPage();
   await page.overlay.children[0].handlers.click(page.event());
   assert.equal(page.sent[0].url, page.location.href);
   assert.equal(page.sent[0].filename, 'Sample video.mp4');
@@ -207,8 +263,8 @@ test('YouTube blob-player button follows the current SPA video URL', async () =>
   assert.equal(page.sent[1].url, page.location.href);
 });
 
-test('slim overlay can be closed without downloading or immediately reappearing', () => {
-  const page = overlayPage(), overlay = page.overlay, close = overlay.children[1], event = page.event();
+test('slim overlay can be closed without downloading or immediately reappearing', async () => {
+  const page = await overlayPage(), overlay = page.overlay, close = overlay.children[1], event = page.event();
   assert.equal(overlay.style.height, '28px');
   assert.ok(close.attributes['aria-label'].includes('Hide'));
   close.handlers.click(event);
@@ -224,7 +280,7 @@ test('slim overlay can be closed without downloading or immediately reappearing'
 
 test('closing during a handoff also suppresses later errors and notices', async () => {
   let finish;
-  const page = overlayPage(() => new Promise(resolve => { finish = resolve; }));
+  const page = await overlayPage(() => new Promise(resolve => { finish = resolve; }));
   const pending = page.overlay.children[0].handlers.click(page.event());
   page.overlay.children[1].handlers.click(page.event());
   finish({ ok: false, error: 'App is offline' });
@@ -234,7 +290,7 @@ test('closing during a handoff also suppresses later errors and notices', async 
 });
 
 test('Escape and close remove error notices along with the media overlay', async () => {
-  const page = overlayPage(async () => ({ ok: false, error: 'Open IDG and retry' }));
+  const page = await overlayPage(async () => ({ ok: false, error: 'Open IDG and retry' }));
   await page.overlay.children[0].handlers.click(page.event());
   assert.equal(page.overlay.children[2].attributes.role, 'alert');
   page.overlay.handlers.keydown(page.event({ key: 'Escape' }));
@@ -244,7 +300,7 @@ test('Escape and close remove error notices along with the media overlay', async
 });
 
 test('page scripts cannot activate or dismiss the media overlay', async () => {
-  const page = overlayPage();
+  const page = await overlayPage();
   await page.overlay.children[0].handlers.click(page.event({ isTrusted: false }));
   page.overlay.children[1].handlers.click(page.event({ isTrusted: false }));
   assert.equal(page.sent.length, 0);
@@ -270,19 +326,23 @@ test('extension reload waits until browser handoffs have finished', async () => 
   assert.ok(!active.reports.includes('reload'));
 });
 
-test('status-only popup requests connection status without requesting downloads or controls', async () => {
-  const elements = { 'status-label': {}, 'connection-detail': {} }, panel = {}, messages = [];
-  let refresh;
-  const context = vm.createContext({ document: { getElementById: id => elements[id], querySelector: () => panel },
-    chrome: { runtime: { sendMessage: async message => { messages.push(message.type); return { serverOnline: true, serverVersion: '1.4.0' }; } } },
-    setInterval: callback => { refresh = callback; } });
+test('popup shows pause and resume for the current site', async () => {
+  const elements = {}, messages = [];
+  for (const id of ['status-label', 'connection-detail', 'site-host', 'site-status', 'site-toggle', 'page-check', 'page-status', 'page-reload', 'page-diagnostics', 'copy-diagnostics']) elements[id] = { setAttribute() {}, addEventListener(name, fn) { this[name] = fn; } };
+  const context = vm.createContext({ document: { getElementById: id => elements[id], querySelector: () => ({}) },
+    chrome: { tabs: { query: async () => [{ id: 1 }] }, runtime: { sendMessage: async message => {
+      messages.push(message);
+      return message.type === 'getStatus' ? { serverOnline: true } : { ok: true, site: 'youtube.com', enabled: !message.paused, paused: message.paused === true };
+    } } }, setInterval() {} });
   vm.runInContext(fs.readFileSync('extension/popup.js', 'utf8'), context);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(elements['status-label'].textContent, 'IDG is connected');
-  await refresh();
-  assert.deepEqual(messages, ['getStatus', 'getStatus']);
-  const html = fs.readFileSync('extension/popup.html', 'utf8');
-  assert.ok(!/<form|<button|<input|<footer|downloads-list|youtube-btn/.test(html));
+  assert.equal(elements['site-host'].textContent, 'youtube.com');
+  await elements['site-toggle'].click();
+  assert.equal(elements['site-status'].textContent, 'Paused on this website');
+  await elements['site-toggle'].click();
+  assert.equal(elements['site-status'].textContent, 'Active on this website');
+  assert.deepEqual(messages.filter(m => m.type === 'setSitePaused').map(m => m.paused), [true, false]);
 });
 
 test('popup migration enables capture when the old switch had been disabled', async () => {
@@ -290,6 +350,29 @@ test('popup migration enables capture when the old switch had been disabled', as
   await events.created(download);
   assert.ok(calls.some(call => call[0] === 'post'));
   assert.ok(calls.some(call => call[0] === 'settings' && call[1].statusOnlyPopup === true));
+});
+
+test('Spotify popup detects stale scripts and offers an explicit page refresh', async () => {
+  for (const page of [undefined, { build: 'old' }, { build: 'spotify-reader-20261025', reader: false }, { build: 'spotify-reader-20261025', reader: true, enabled: true, resolvedRows: 7, libraryButtons: 3 }]) {
+    const elements = {}, calls = [];
+    const document = { getElementById(id) { return elements[id] ||= { setAttribute() {}, addEventListener(name, fn) { this[name] = fn; } }; }, querySelector: () => ({}) };
+    const context = vm.createContext({ document, window: { close: () => calls.push('close') }, navigator: { clipboard: { writeText: async text => calls.push(text) } },
+      chrome: { tabs: { query: async () => [{ id: 42, url: 'https://open.spotify.com/collection/tracks' }], sendMessage: async () => page, reload: async id => calls.push(id) },
+        runtime: { id: 'idg-extension', getManifest: () => ({ version: '1.5.2' }), sendMessage: async () => ({ serverOnline: true, site: 'open.spotify.com', enabled: true }) } }, setInterval() {} });
+    vm.runInContext(fs.readFileSync('extension/popup.js', 'utf8'), context);
+    await new Promise(resolve => setImmediate(resolve));
+    const current = page?.build === 'spotify-reader-20261025' && page.reader === true;
+    assert.equal(elements['page-reload'].hidden, current);
+    assert.equal(elements['page-check'].hidden, false);
+    assert.match(elements['page-status'].textContent, current ? /7 song buttons and 3 playlist/ : /Refresh Spotify/);
+    assert.deepEqual(calls, [], 'opening the popup must not reload a playing tab');
+    await elements['page-reload'].click();
+    assert.deepEqual(calls, [42, 'close']);
+    const event = { target: {} };
+    await elements['copy-diagnostics'].click(event);
+    assert.equal(event.target.textContent, 'Copied');
+    assert.equal(JSON.parse(calls[2]).extension, 'idg-extension');
+  }
 });
 
 test('PHP endpoints use the resolved filename even with an unknown MIME and size', async () => {
@@ -340,7 +423,7 @@ function downloadButton(page, attributes = {}) {
 }
 
 test('a dynamically inserted button_dm forwards the direct URL and filename', async () => {
-  const page = overlayPage();
+  const page = await overlayPage();
   const button = downloadButton(page, { 'data-href': '/files/resource.php?token=abc', download: 'setup.zip' });
   await button.click();
   assert.equal(page.sent[0].url, 'https://example.com/files/resource.php?token=abc');
@@ -350,7 +433,7 @@ test('a dynamically inserted button_dm forwards the direct URL and filename', as
 
 test('button_dm supports simple location assignments and navigation calls', async () => {
   for (const onclick of ["location.href = '/file.zip';", "window.location = '/file.zip'; return false;", "window.location.assign('/file.zip');", "location.replace('/file.zip')"]) {
-    const page = overlayPage();
+    const page = await overlayPage();
     await downloadButton(page, { onclick }).click();
     assert.equal(page.sent[0].url, 'https://example.com/file.zip');
   }
@@ -358,18 +441,18 @@ test('button_dm supports simple location assignments and navigation calls', asyn
 
 test('button_dm keeps countdowns, token scripts, unsafe URLs and synthetic clicks in the page', async () => {
   for (const attributes of [{ onclick: 'generateToken(); startDownload();', 'data-url': '/file.zip' }, { href: '#' }, { href: 'javascript:startDownload()' }, { href: '/waiting-resource.php' }, { href: '/your-file-is-loading-please-wait/' }, {}]) {
-    const page = overlayPage(), button = downloadButton(page, attributes);
+    const page = await overlayPage(), button = downloadButton(page, attributes);
     await button.click();
     assert.equal(page.sent.length, 0);
     assert.ok(!button.event.prevented);
   }
   for (const overrides of [{ isTrusted: false }, { ctrlKey: true }, { defaultPrevented: true }]) {
-    const page = overlayPage(), button = downloadButton(page, { href: '/file.zip' });
+    const page = await overlayPage(), button = downloadButton(page, { href: '/file.zip' });
     Object.assign(button.event, overrides);
     await button.click();
     assert.equal(page.sent.length, 0);
   }
-  const page = overlayPage(), button = downloadButton(page, { href: '/file.zip' });
+  const page = await overlayPage(), button = downloadButton(page, { href: '/file.zip' });
   button.control.disabled = true;
   await button.click();
   assert.equal(page.sent.length, 0);
@@ -377,7 +460,7 @@ test('button_dm keeps countdowns, token scripts, unsafe URLs and synthetic click
 
 test('button_dm falls back to the browser if the app rejects or the extension disconnects', async () => {
   for (const reply of [async () => ({ ok: false }), async () => { throw new Error('Disconnected'); }]) {
-    const page = overlayPage(reply), navigated = [];
+    const page = await overlayPage(reply), navigated = [];
     page.location.assign = url => navigated.push(url);
     await downloadButton(page, { href: '/file.zip' }).click();
     assert.deepEqual(navigated, ['https://example.com/file.zip']);
@@ -421,7 +504,7 @@ function postForm(page, { host = 'server53.safefilehosting.com', token = 'test+t
 }
 
 test('Adsume automatic form.submit preserves tokens and suppresses duplicate submissions', async () => {
-  const page = overlayPage();
+  const page = await overlayPage();
   page.location.hostname = 'adsume.com';
   const fixture = postForm(page);
   fixture.form.submit(); fixture.form.submit();
@@ -434,7 +517,7 @@ test('Adsume automatic form.submit preserves tokens and suppresses duplicate sub
 });
 
 test('POST hook restores the original browser form once if IDG fails', async () => {
-  const page = overlayPage(async () => ({ ok: false }));
+  const page = await overlayPage(async () => ({ ok: false }));
   page.location.hostname = 'adsume.com';
   const fixture = postForm(page);
   fixture.form.submit(); fixture.form.submit();
@@ -445,7 +528,7 @@ test('POST hook restores the original browser form once if IDG fails', async () 
 
 test('POST hook leaves missing tokens, credential URLs and GET forms untouched', async () => {
   for (const options of [{ host: 'user:password@example.com' }, { token: '' }, { method: 'get' }]) {
-    const page = overlayPage(); page.location.hostname = 'adsume.com';
+    const page = await overlayPage(); page.location.hostname = 'adsume.com';
     const fixture = postForm(page, options);
     fixture.form.submit();
     assert.equal(page.sent.length, 0);
@@ -460,7 +543,7 @@ test('native token POST fallback is never recaptured as a tokenless GET', async 
 });
 
 test('other websites with explicit hidden download forms preserve all request parameters', async () => {
-  const page = overlayPage(); page.location.hostname = 'downloads.example.org';
+  const page = await overlayPage(); page.location.hostname = 'downloads.example.org';
   const fixture = postForm(page, { host: 'files.example.org' });
   fixture.form.action = 'https://files.example.org/api/resource';
   Object.defineProperty(fixture.form, 'elements', { value: [
@@ -478,13 +561,13 @@ test('other websites with explicit hidden download forms preserve all request pa
   assert.deepEqual(fields.getAll('part'), ['one', 'two']);
 });
 
-test('uploads, login inputs, unsupported encoding and ordinary POST forms stay in the browser', () => {
+test('uploads, login inputs, unsupported encoding and ordinary POST forms stay in the browser', async () => {
   for (const change of [form => { form.id = 'login'; }, form => { form.enctype = 'multipart/form-data'; }, form => {
     Object.defineProperty(form, 'elements', { value: [...form.elements, { tagName: 'INPUT', type: 'password', name: 'password', value: 'private' }] });
   }, form => {
     Object.defineProperty(form, 'elements', { value: [...form.elements, { tagName: 'INPUT', type: 'file', name: 'upload', value: '' }] });
   }]) {
-    const page = overlayPage(), fixture = postForm(page);
+    const page = await overlayPage(), fixture = postForm(page);
     change(fixture.form); fixture.form.submit();
     assert.equal(page.sent.length, 0);
     assert.equal(fixture.nativeSubmissions, 1);
@@ -648,5 +731,36 @@ test('original music services preserve the requested source and reject spoofed h
   for (const value of ['https://open.spotify.com.evil.test/track/3uCdelPvIjIA0q0V6KRWFY', 'https://artist.bandcamp.com.evil.test/track/song', 'https://user:password@listen.tidal.com/track/123', 'ftp://listen.tidal.com/track/123']) {
     context.value = value;
     assert.equal(vm.runInContext('musicPageUrl(value)', context), null);
+  }
+});
+
+
+test('Spotify Liked Songs shares resolve the uri track and discard collection identifiers', async () => {
+  const shared = 'https://open.spotify.com/collection/tracks?uid=ignored&uri=spotify%3Atrack%3A3PsejBjTRczNY88SlcWUyg';
+  for (const online of [true, false]) {
+    const { message, calls } = worker({ online, music: true });
+    assert.equal((await message({ type: 'download', url: shared }, { tab: { url: shared }, url: shared })).ok, true);
+    const request = online ? calls.find(c => c[0] === 'post')[1] : calls.find(c => c[0] === 'native' && c[1].type === 'download')[1].download;
+    assert.equal(request.url, 'https://open.spotify.com/track/3PsejBjTRczNY88SlcWUyg');
+    assert.equal(JSON.stringify(request).includes('uid='), false);
+  }
+  const { context } = worker();
+  for (const uri of ['bad', 'spotify:track:bad', 'spotify:album:3PsejBjTRczNY88SlcWUyg', 'https://evil.test/track/3PsejBjTRczNY88SlcWUyg']) {
+    context.value = 'https://open.spotify.com/collection/tracks?uri=' + encodeURIComponent(uri);
+    assert.equal(vm.runInContext('musicPageUrl(value)', context), null);
+  }
+});
+
+
+test('Spotify library download-all preserves playlists and the complete Liked Songs collection', async () => {
+  for (const online of [true, false]) {
+    const { message, calls } = worker({ online, music: true });
+    const result = await message({ type: 'download', url: 'https://open.spotify.com/collection/tracks?uid=ignored' });
+    assert.equal(result.ok, true);
+    const request = online ? calls.find(c => c[0] === 'post')[1] : calls.find(c => c[0] === 'native' && c[1].type === 'download')[1].download;
+    assert.equal(request.url, 'https://open.spotify.com/collection/tracks');
+    assert.equal(request.media_cookies, null);
+    assert.equal(request.cookies, null);
+    assert.equal(JSON.stringify(request).includes('uid='), false);
   }
 });

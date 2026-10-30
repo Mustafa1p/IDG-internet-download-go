@@ -1,0 +1,35 @@
+{
+  "controls": {
+    "Close": [
+      1357.0,
+      8.0,
+      1401.0,
+      52.0
+    ],
+    "Maximize": [
+      1307.0,
+      8.0,
+      1351.0,
+      52.0
+    ],
+    "Minimize": [
+      1257.0,
+      8.0,
+      1301.0,
+      52.0
+    ],
+    "Search downloads": [
+      694.0,
+      23.0,
+      1134.0,
+      43.0
+    ]
+  },
+  "image_height": 900,
+  "image_width": 1440,
+  "logical_height": 900.0,
+  "logical_width": 1440.0,
+  "native_pixels_per_point": 1.25,
+  "pixels_per_point": 1.0,
+  "version": "1.6.0"
+}

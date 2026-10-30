@@ -21,6 +21,8 @@ use reqwest::{Client, StatusCode};
 /// Result of probing a URL before starting a download.
 #[derive(Debug)]
 pub struct ProbeResult {
+    /// Strong server validator used to keep reconnects on the same representation.
+    pub if_range: Option<String>,
     /// Reuse a streaming GET when the endpoint cannot be probed safely.
     pub response: Option<reqwest::Response>,
     /// File size in bytes, if the server reported `Content-Length`.
@@ -40,6 +42,65 @@ impl ProbeResult {
     /// the total size must be known (so we can divide it into chunks).
     pub fn supports_multipart(&self) -> bool {
         self.accepts_ranges && self.content_length.is_some()
+    }
+}
+
+/// A browser challenge is never a file. Allow intentional HTML downloads, but
+/// do not silently save an HTML login/error response under a binary filename.
+pub fn validate_file_response(headers: &reqwest::header::HeaderMap, url: &str) -> Result<()> {
+    let challenge = headers
+        .get("cf-mitigated")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.trim().eq_ignore_ascii_case("challenge"));
+    anyhow::ensure!(
+        !challenge,
+        "This site requires a browser check. Complete it in your browser and download again."
+    );
+    let html = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| {
+            matches!(
+                v.split(';')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_ascii_lowercase()
+                    .as_str(),
+                "text/html" | "application/xhtml+xml"
+            )
+        });
+    let name = headers
+        .get("content-disposition")
+        .and_then(|v| v.to_str().ok())
+        .and_then(filename_from_content_disposition)
+        .unwrap_or_else(|| filename_from_url(url));
+    let intentional_html = std::path::Path::new(&name)
+        .extension()
+        .and_then(|v| v.to_str())
+        .is_some_and(|v| matches!(v.to_ascii_lowercase().as_str(), "html" | "htm" | "xhtml"));
+    anyhow::ensure!(
+        !html || intentional_html,
+        "The site returned a web page instead of a file. Sign in or complete the browser check, then download again."
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod response_guard_tests {
+    use super::*;
+
+    #[test]
+    fn refuses_browser_pages_but_keeps_intentional_html_and_json_downloads() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("content-type", "text/html; charset=utf-8".parse().unwrap());
+        assert!(validate_file_response(&headers, "https://example.com/driver.exe").is_err());
+        assert!(validate_file_response(&headers, "https://example.com/page.html").is_ok());
+        headers.insert("cf-mitigated", "challenge".parse().unwrap());
+        assert!(validate_file_response(&headers, "https://example.com/page.html").is_err());
+        headers.remove("cf-mitigated");
+        headers.insert("content-type", "application/json".parse().unwrap());
+        assert!(validate_file_response(&headers, "https://example.com/data.json").is_ok());
     }
 }
 
@@ -87,6 +148,13 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .context("Server rejected download probe")?;
     let final_url = resp.url().to_string();
     let headers = resp.headers().clone();
+    validate_file_response(&headers, &final_url)?;
+    let if_range = headers
+        .get("etag")
+        .and_then(|v| v.to_str().ok())
+        .filter(|v| !v.trim_start().starts_with("W/"))
+        .or_else(|| headers.get("last-modified").and_then(|v| v.to_str().ok()))
+        .map(str::to_owned);
 
     let mut accepts_ranges = headers
         .get("accept-ranges")
@@ -142,6 +210,7 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .or_else(|| Some(filename_from_url(&final_url)));
 
     Ok(ProbeResult {
+        if_range,
         response: None,
         content_length,
         accepts_ranges,
@@ -200,6 +269,7 @@ pub async fn post_probe(client: &Client, url: &str, body: String) -> Result<Prob
         .and_then(|value| value.to_str().ok())
         .and_then(filename_from_content_disposition);
     Ok(ProbeResult {
+        if_range: None,
         content_length: response.content_length(),
         accepts_ranges: false,
         filename,
@@ -251,6 +321,7 @@ async fn streaming_probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .and_then(filename_from_content_disposition)
         .unwrap_or_else(|| filename_from_url(url));
     Ok(ProbeResult {
+        if_range: None,
         content_length: response.content_length(),
         accepts_ranges: false,
         filename: Some(filename),

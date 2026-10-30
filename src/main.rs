@@ -27,6 +27,10 @@ pub fn settings_preview() -> bool {
             .any(|argument| argument == "--settings-preview" || argument == "--ui-preview")
 }
 
+pub fn native_dpi_preview() -> bool {
+    settings_preview() && std::env::args().any(|arg| arg == "--preview-native-dpi")
+}
+
 fn settings_preview_size() -> [f32; 2] {
     std::env::args()
         .find_map(|argument| {
@@ -44,6 +48,17 @@ fn settings_preview_size() -> [f32; 2] {
 fn main() -> eframe::Result {
     #[cfg(windows)]
     {
+        // Select per-monitor V2 before any library can create a native window.
+        // The thread context also prevents an inherited compatibility context
+        // from leaving the UI on the startup monitor's scale.
+        unsafe {
+            use windows_sys::Win32::UI::HiDpi::{
+                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
+                SetThreadDpiAwarenessContext,
+            };
+            SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        }
         let app_id: Vec<u16> = "IDG.InternetDownloadGO\0".encode_utf16().collect();
         // SAFETY: a null-terminated UTF-16 constant, valid for this call.
         unsafe {

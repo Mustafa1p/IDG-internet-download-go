@@ -140,13 +140,17 @@ pub async fn start_download(
         tokio::fs::create_dir_all(dir).await.ok();
     }
 
-    let file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&save_path)
-        .await
-        .with_context(|| format!("cannot open output file: {}", save_path.display()))?;
+    // Reserve atomically: two downloads with the same name must never truncate
+    // each other or replace a user's existing file.
+    let (file, save_path) = reserve_output(&save_path).await?;
+    with_item(&downloads, &id, |item| {
+        item.save_path = save_path.clone();
+        item.filename = save_path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+    });
 
     // Reserving space up-front prevents fragmentation and ensures the disk
     // has room before we start writing data.
@@ -187,6 +191,8 @@ pub async fn start_download(
             let id = id.clone();
 
             let args = SegmentArgs {
+                if_range: probe_result.if_range.clone(),
+                total_size: probe_result.content_length,
                 bandwidth: bandwidth.clone(),
                 response: initial_response.take(),
                 client: client.clone(),
@@ -229,11 +235,15 @@ pub async fn start_download(
     } else {
         // Tokio file writes can still be buffered after the workers finish.
         // Flush before advertising completion or consumers may read zeroes.
-        file.lock()
-            .await
+        let mut output = file.lock().await;
+        output
             .flush()
             .await
             .context("failed to flush output file")?;
+        output
+            .sync_all()
+            .await
+            .context("failed to sync output file")?;
         eprintln!(
             "[IDG] download complete id={} path={}",
             id,
@@ -278,6 +288,35 @@ fn build_segments(count: usize, total: Option<u64>) -> Vec<(u64, u64)> {
     }
 }
 
+async fn reserve_output(path: &std::path::Path) -> Result<(tokio::fs::File, std::path::PathBuf)> {
+    for number in 0..10_000 {
+        let candidate = if number == 0 {
+            path.to_owned()
+        } else {
+            let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+            let extension = path
+                .extension()
+                .map(|v| format!(".{}", v.to_string_lossy()))
+                .unwrap_or_default();
+            path.with_file_name(format!("{stem} ({number}){extension}"))
+        };
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+            .await
+        {
+            Ok(file) => return Ok((file, candidate)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("Cannot create {}", candidate.display()));
+            }
+        }
+    }
+    anyhow::bail!("Too many files with this name; choose another filename")
+}
+
 #[cfg(test)]
 mod regression_tests {
     use super::*;
@@ -292,6 +331,78 @@ mod regression_tests {
     use std::time::Duration;
 
     const SIZE: usize = 256 * 1024 + 19;
+
+    #[tokio::test]
+    async fn duplicate_destinations_are_reserved_atomically_without_overwriting() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("archive.zip");
+        tokio::fs::write(&path, b"existing user file")
+            .await
+            .unwrap();
+        let (a, b) = tokio::join!(reserve_output(&path), reserve_output(&path));
+        let (_, a) = a.unwrap();
+        let (_, b) = b.unwrap();
+        assert_ne!(a, b);
+        assert_ne!(a, path);
+        assert_ne!(b, path);
+        assert_eq!(tokio::fs::read(path).await.unwrap(), b"existing user file");
+    }
+
+    #[tokio::test]
+    async fn changed_source_and_wrong_ranges_never_report_completion() {
+        for changed in [false, true] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file.zip", listener.local_addr().unwrap());
+            let router = Router::new().route(
+                "/file.zip",
+                get(move |method: Method, headers: HeaderMap| async move {
+                    let mut response = range_file(method.clone(), headers.clone()).await;
+                    response
+                        .headers_mut()
+                        .insert("etag", "\"version-one\"".parse().unwrap());
+                    if method != Method::HEAD
+                        && headers.get("range").is_some_and(|v| v != "bytes=0-0")
+                    {
+                        assert_eq!(headers.get("if-range").unwrap(), "\"version-one\"");
+                        if changed {
+                            response
+                                .headers_mut()
+                                .insert("etag", "\"version-two\"".parse().unwrap());
+                        } else {
+                            response.headers_mut().insert(
+                                "content-range",
+                                format!("bytes 1-2/{SIZE}").parse().unwrap(),
+                            );
+                        }
+                    }
+                    response
+                }),
+            );
+            let source = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let directory = tempfile::tempdir().unwrap();
+            let item = crate::download::types::DownloadItem::new(
+                url,
+                directory.path().join("file.zip"),
+                1,
+            );
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            let error = start_download(Arc::new(reqwest::Client::new()), downloads.clone(), id)
+                .await
+                .unwrap_err();
+            assert!(
+                error.to_string().contains(if changed {
+                    "file changed"
+                } else {
+                    "Content-Range"
+                }),
+                "{error:#}"
+            );
+            assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
+            assert_eq!(downloads.lock().unwrap()[0].downloaded_bytes, 0);
+            source.abort();
+        }
+    }
 
     // A slow, local byte-range source gives the worker a real socket and file
     // while keeping pause/resume assertions independent of internet services.

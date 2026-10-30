@@ -23,9 +23,15 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed=assets/idg.ico");
+    println!("cargo:rerun-if-changed=IDG.exe.manifest");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         winresource::WindowsResource::new()
             .set_icon("assets/idg.ico")
+            .set_manifest_file(
+                &std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
+                    .join("IDG.exe.manifest")
+                    .to_string_lossy(),
+            )
             .set("ProductName", "IDG – Internet Download GO")
             .set("FileDescription", "IDG – Internet Download GO")
             .compile()

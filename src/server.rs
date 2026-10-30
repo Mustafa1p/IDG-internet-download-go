@@ -700,7 +700,10 @@ mod tests {
         let downloads = state.downloads.clone();
         let (api, api_task) = serve(build_router(state)).await;
         let client = reqwest::Client::new();
-        for supplied in [None, Some("main"), Some("main.zip"), Some("my-archive.zip")] {
+        for (number, supplied) in [None, Some("main"), Some("main.zip"), Some("my-archive.zip")]
+            .into_iter()
+            .enumerate()
+        {
             let response = client.post(format!("{api}/downloads"))
                 .json(&serde_json::json!({"url": format!("{source}/archive/refs/heads/main.zip"), "filename": supplied}))
                 .send().await.unwrap();
@@ -728,12 +731,14 @@ mod tests {
             .unwrap();
             assert_eq!(item.status, Status::Completed, "{:?}", item.error);
             let expected = if supplied == Some("my-archive.zip") {
-                "my-archive.zip"
+                "my-archive.zip".to_owned()
+            } else if number == 0 {
+                "Anti-Youtube-Ads-Extension-main.zip".to_owned()
             } else {
-                "Anti-Youtube-Ads-Extension-main.zip"
+                format!("Anti-Youtube-Ads-Extension-main ({number}).zip")
             };
             assert_eq!(item.filename, expected);
-            assert_eq!(item.save_path, directory.path().join(expected));
+            assert_eq!(item.save_path, directory.path().join(&expected));
             assert_eq!(std::fs::read(item.save_path).unwrap(), b"archive bytes");
         }
         source_task.abort();
