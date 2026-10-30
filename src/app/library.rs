@@ -1,11 +1,11 @@
 //! Compact desktop library: navigation, live summaries, transfer rows, and details.
 use super::*;
-use egui_extras::{Column, TableBuilder};
 
 #[derive(Clone, Copy)]
 pub(super) enum Icon {
     Download,
     Close,
+    Clock,
     Check,
     Pause,
     File,
@@ -23,7 +23,6 @@ pub(super) enum Icon {
     Puzzle,
     Wrench,
     Reset,
-    Clock,
     Grid,
 }
 
@@ -39,14 +38,14 @@ pub(super) fn draw_icon(painter: &egui::Painter, rect: egui::Rect, icon: Icon, c
         painter.line_segment([p(a.0, a.1), p(b.0, b.1)], stroke);
     };
     match icon {
+        Icon::Clock => {
+            painter.circle_stroke(p(0.5, 0.5), rect.width() * 0.38, stroke);
+            line((0.5, 0.23), (0.5, 0.5));
+            line((0.5, 0.5), (0.72, 0.62));
+        }
         Icon::Close => {
             line((0.2, 0.2), (0.8, 0.8));
             line((0.2, 0.8), (0.8, 0.2));
-        }
-        Icon::Clock => {
-            painter.circle_stroke(p(0.5, 0.5), rect.width() * 0.38, stroke);
-            line((0.5, 0.25), (0.5, 0.5));
-            line((0.5, 0.5), (0.7, 0.6));
         }
         Icon::Grid => {
             for x in [0.16, 0.58] {
@@ -263,12 +262,15 @@ fn nav_icon(category: Category) -> Icon {
     match category {
         Category::All => Icon::List,
         Category::Downloading => Icon::Download,
+        Category::Queued => Icon::Clock,
         Category::Completed => Icon::Check,
         Category::Paused => Icon::Pause,
         Category::Failed => Icon::Remove,
         Category::Videos => Icon::Video,
         Category::Documents => Icon::File,
         Category::Archives => Icon::Archive,
+        Category::Programs => Icon::Monitor,
+        Category::Images => Icon::Grid,
         Category::Other => Icon::Folder,
     }
 }
@@ -281,6 +283,8 @@ fn file_icon(item: &DownloadItem) -> (Icon, Color32) {
         Category::Videos => (Icon::Video, Color32::from_rgb(161, 119, 244)),
         Category::Archives => (Icon::Archive, Color32::from_rgb(245, 188, 77)),
         Category::Documents => (Icon::File, Color32::from_rgb(91, 175, 240)),
+        Category::Programs => (Icon::Monitor, Color32::from_rgb(96, 175, 226)),
+        Category::Images => (Icon::Grid, Color32::from_rgb(105, 198, 155)),
         _ => (Icon::File, TEXT_DIM),
     }
 }
@@ -295,9 +299,16 @@ pub(super) fn file_category(filename: &str) -> Category {
         | "ogg" | "aac" => Category::Videos,
         "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "txt" | "csv" | "epub"
         | "odt" => Category::Documents,
-        "zip" | "rar" | "7z" | "gz" | "tar" | "bz2" | "xz" => Category::Archives,
+        "zip" | "rar" | "7z" | "gz" | "tar" | "bz2" | "xz" | "iso" | "vhd" => Category::Archives,
+        "exe" | "msi" | "msix" | "appx" | "dmg" | "deb" | "rpm" => Category::Programs,
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "bmp" | "tiff" => Category::Images,
         _ => Category::Other,
     }
+}
+fn matches_search(item: &DownloadItem, query: &str) -> bool {
+    query.is_empty()
+        || item.filename.to_lowercase().contains(query)
+        || host(&item.url).to_lowercase().contains(query)
 }
 fn host(url: &str) -> String {
     reqwest::Url::parse(url)
@@ -313,6 +324,17 @@ pub(super) struct LibraryState {
     sample_at: Option<std::time::Instant>,
     pub(super) confirm_remove: bool,
 }
+#[cfg(debug_assertions)]
+impl LibraryState {
+    pub(super) fn preview_activity(&mut self) {
+        self.speed_history = (0..60)
+            .map(|i| {
+                (i as f64 * 0.18).sin().mul_add(700_000.0, 4_800_000.0)
+                    + (i as f64 * 0.47).cos() * 180_000.0
+            })
+            .collect();
+    }
+}
 fn card() -> Frame {
     Frame::none()
         .fill(PANEL)
@@ -321,330 +343,275 @@ fn card() -> Frame {
         .inner_margin(Margin::same(14.0))
 }
 
-impl IDGApp {
-    fn open_add(&mut self) {
-        self.dialog = AddDialog::new(&self.default_save_dir);
-        self.pending_browser_id = None;
-        self.show_add = true;
+#[derive(Default)]
+struct TransferInteraction {
+    clicked: Option<Option<String>>,
+    action: Option<(String, &'static str)>,
+    toggled: Option<(String, bool)>,
+}
+
+fn paint_label(ui: &Ui, rect: egui::Rect, text: &str, size: f32, color: Color32, strong: bool) {
+    if rect.width() <= 0.0 {
+        return;
     }
+    let font = FontId::new(
+        size,
+        if strong {
+            egui::FontFamily::Name("idg-heading".into())
+        } else {
+            egui::FontFamily::Proportional
+        },
+    );
+    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, color);
+    job.wrap.max_width = rect.width();
+    job.wrap.max_rows = 1;
+    job.wrap.break_anywhere = true;
+    let galley = ui.painter().layout_job(job);
+    ui.painter()
+        .with_clip_rect(rect.intersect(ui.clip_rect()))
+        .galley(
+            egui::pos2(rect.left(), rect.center().y - galley.size().y / 2.0),
+            galley,
+            color,
+        );
+}
+
+fn selection_at(ui: &mut Ui, rect: egui::Rect, checked: &mut bool) -> egui::Response {
+    ui.scope(|ui| {
+        let widgets = &mut ui.visuals_mut().widgets;
+        widgets.inactive.rounding = Rounding::same(3.0);
+        widgets.inactive.bg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(83, 93, 112));
+        widgets.hovered.rounding = Rounding::same(3.0);
+        widgets.active.rounding = Rounding::same(3.0);
+        ui.put(rect, egui::Checkbox::without_text(checked))
+    })
+    .inner
+}
+
+fn transfer_columns(width: f32) -> [f32; 9] {
+    let mut widths = [
+        26.0,
+        0.0,
+        if width >= 1000.0 {
+            75.0
+        } else if width >= 820.0 {
+            65.0
+        } else {
+            0.0
+        },
+        if width >= 900.0 { 110.0 } else { 90.0 },
+        if width >= 1050.0 {
+            230.0
+        } else if width >= 820.0 {
+            170.0
+        } else {
+            120.0
+        },
+        if width >= 900.0 { 90.0 } else { 78.0 },
+        if width >= 1150.0 { 70.0 } else { 0.0 },
+        if width >= 1150.0 {
+            120.0
+        } else if width >= 820.0 {
+            95.0
+        } else {
+            0.0
+        },
+        28.0,
+    ];
+    let gaps = widths.iter().filter(|w| **w > 0.0).count() as f32 * 8.0;
+    widths[1] = (width - widths.iter().sum::<f32>() - gaps).max(120.0);
+    widths
+}
+
+fn column_rects(rect: egui::Rect, widths: &[f32; 9]) -> [egui::Rect; 9] {
+    let mut x = rect.left();
+    std::array::from_fn(|i| {
+        let r = egui::Rect::from_min_size(
+            egui::pos2(x, rect.top()),
+            egui::vec2(widths[i], rect.height()),
+        );
+        if widths[i] > 0.0 {
+            x += widths[i] + 8.0;
+        }
+        r
+    })
+}
+
+impl IDGApp {
     pub(super) fn sidebar(&mut self, ui: &mut Ui, items: &[DownloadItem]) {
-        let short = ui.ctx().screen_rect().height() < 700.0;
-        if short {
-            ui.spacing_mut().button_padding.y = 2.0;
+        let compact = ui.ctx().screen_rect().height() < 720.0;
+        if compact {
             ui.spacing_mut().interact_size.y = 22.0;
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.spacing_mut().button_padding.y = 1.0;
         }
-        let spacious = ui.ctx().screen_rect().width() >= 1100.0 && !short;
-        ui.add_space(if spacious {
-            22.0
-        } else if short {
-            4.0
-        } else {
-            10.0
-        });
+        ui.add_space(8.0);
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 17.0;
-            let (rect, _) = ui.allocate_exact_size(
-                Vec2::splat(if spacious {
-                    52.0
-                } else if short {
-                    32.0
-                } else {
-                    40.0
-                }),
-                egui::Sense::hover(),
-            );
-            ui.painter().rect_filled(rect, 11.0, ACCENT);
-            draw_icon(ui.painter(), rect.shrink(10.0), Icon::Download, TEXT);
-            ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 3.0;
-                    ui.label(
-                        RichText::new("IDG")
-                            .family(egui::FontFamily::Name("idg-heading".into()))
-                            .size(if spacious { 28.0 } else { 22.0 })
-                            .strong(),
-                    );
-                    ui.label(
-                        RichText::new("GO")
-                            .family(egui::FontFamily::Name("idg-heading".into()))
-                            .size(if spacious { 28.0 } else { 22.0 })
-                            .color(SUCCESS)
-                            .strong(),
-                    );
-                });
-                if !short {
-                    ui.label(
-                        RichText::new("Internet Download GO")
-                            .size(if spacious { 12.0 } else { 10.0 })
-                            .color(TEXT_DIM),
-                    );
-                }
-            });
+            let (r, _) = ui.allocate_exact_size(Vec2::splat(34.0), egui::Sense::hover());
+            ui.painter().rect_filled(r, 9.0, ACCENT);
+            draw_icon(ui.painter(), r.shrink(8.0), Icon::Download, TEXT);
+            ui.add_space(4.0);
+            ui.label(RichText::new("IDG").size(22.0).strong());
+            ui.label(RichText::new("GO").size(22.0).strong().color(ACCENT));
         });
-        ui.add_space(if spacious {
-            26.0
-        } else if short {
-            8.0
-        } else {
-            14.0
-        });
-        if ui
-            .add_sized(
-                [
-                    ui.available_width(),
-                    if spacious {
-                        48.0
-                    } else if short {
-                        32.0
-                    } else {
-                        38.0
-                    },
-                ],
-                egui::Button::new(
-                    RichText::new("+  New download")
-                        .size(if spacious { 16.0 } else { 12.0 })
-                        .strong()
-                        .color(TEXT),
-                )
-                .fill(ACCENT)
-                .rounding(9.0),
-            )
-            .clicked()
-        {
-            self.open_add();
-        }
-        ui.add_space(if spacious {
-            22.0
-        } else if short {
-            6.0
-        } else {
-            12.0
-        });
-        let height = if spacious {
-            36.0
-        } else if ui.ctx().screen_rect().height() < 550.0 {
-            22.0
-        } else {
-            30.0
-        };
+        ui.add_space(if compact { 2.0 } else { 16.0 });
         for (title, categories) in [
             (
-                "",
+                "DOWNLOADS",
                 &[
                     Category::All,
                     Category::Downloading,
+                    Category::Queued,
                     Category::Completed,
                     Category::Paused,
                     Category::Failed,
                 ][..],
             ),
             (
-                "Library",
+                "FILE TYPES",
                 &[
                     Category::Videos,
                     Category::Documents,
                     Category::Archives,
+                    Category::Programs,
+                    Category::Images,
                     Category::Other,
                 ][..],
             ),
         ] {
-            ui.add_space(if height < 30.0 { 4.0 } else { 8.0 });
-            if !title.is_empty() {
-                ui.separator();
-                ui.add_space(5.0);
-                ui.label(RichText::new(title).size(14.0).color(TEXT_DIM));
-            }
-            ui.add_space(4.0);
+            ui.label(RichText::new(title).size(11.0).strong().color(DIMGRAY));
+            ui.add_space(if compact { 1.0 } else { 5.0 });
             for &category in categories {
                 let selected = !self.show_settings && self.category == category;
                 let response = ui.add_sized(
-                    [ui.available_width(), height],
+                    [ui.available_width(), if compact { 22.0 } else { 32.0 }],
                     egui::Button::new("")
+                        .frame(false)
                         .fill(if selected {
                             ROW_SEL
                         } else {
                             Color32::TRANSPARENT
                         })
-                        .rounding(8.0),
+                        .rounding(6.0),
                 );
-                let rect = response.rect;
+                let r = response.rect;
                 if response.hovered() && !selected {
-                    ui.painter().rect_filled(rect, 8.0, PANEL);
+                    ui.painter().rect_filled(r, 6.0, PANEL);
                 }
                 if selected {
-                    ui.painter().rect_filled(
-                        egui::Rect::from_min_size(rect.left_top(), Vec2::new(5.0, rect.height())),
-                        2.0,
-                        ACCENT,
+                    ui.painter().rect_stroke(
+                        r.shrink(0.5),
+                        6.0,
+                        Stroke::new(1.0_f32, ACCENT.gamma_multiply(0.4)),
                     );
                 }
                 draw_icon(
                     ui.painter(),
                     egui::Rect::from_center_size(
-                        egui::pos2(
-                            rect.left() + if spacious { 24.0 } else { 18.0 },
-                            rect.center().y,
-                        ),
-                        Vec2::splat(if spacious { 23.0 } else { 20.0 }),
+                        egui::pos2(r.left() + 16.0, r.center().y),
+                        Vec2::splat(17.0),
                     ),
                     nav_icon(category),
-                    TEXT_DIM,
-                );
-                let count = category.count(items).to_string();
-                let count_width = ui
-                    .painter()
-                    .layout_no_wrap(count.clone(), FontId::proportional(13.0), TEXT)
-                    .size()
-                    .x;
-                let badge_width = (count_width + 16.0).max(28.0);
-                let badge_height = rect.height().min(25.0);
-                let badge = egui::Rect::from_min_max(
-                    egui::pos2(
-                        rect.right() - 8.0 - badge_width,
-                        rect.center().y - badge_height * 0.5,
-                    ),
-                    egui::pos2(rect.right() - 8.0, rect.center().y + badge_height * 0.5),
-                );
-                let text_left = rect.left() + if spacious { 57.0 } else { 40.0 };
-                let label_rect = egui::Rect::from_min_max(
-                    egui::pos2(text_left, rect.top()),
-                    egui::pos2((badge.left() - 10.0).max(text_left), rect.bottom()),
-                );
-                let mut label = egui::text::LayoutJob::simple_singleline(
-                    category.label().to_owned(),
-                    FontId::proportional(if spacious { 14.0 } else { 12.0 }),
                     if selected { TEXT } else { TEXT_DIM },
                 );
-                label.wrap.max_width = label_rect.width();
-                label.wrap.max_rows = 1;
-                label.wrap.break_anywhere = true;
-                let galley = ui.painter().layout_job(label);
-                ui.painter()
-                    .with_clip_rect(label_rect.intersect(ui.clip_rect()))
-                    .galley(
-                        egui::pos2(text_left, rect.center().y - galley.size().y * 0.5),
-                        galley,
-                        if selected { TEXT } else { TEXT_DIM },
-                    );
-                ui.painter().rect_filled(
-                    badge,
-                    12.0,
-                    if selected {
-                        ACCENT.gamma_multiply(0.28)
-                    } else {
-                        PANEL
-                    },
+                paint_label(
+                    ui,
+                    egui::Rect::from_min_max(
+                        egui::pos2(r.left() + 33.0, r.top()),
+                        egui::pos2(r.right() - 30.0, r.bottom()),
+                    ),
+                    category.label(),
+                    14.0,
+                    if selected { TEXT } else { TEXT_DIM },
+                    selected,
                 );
                 ui.painter().text(
-                    badge.center(),
-                    egui::Align2::CENTER_CENTER,
-                    count,
-                    FontId::proportional(13.0),
-                    TEXT,
+                    egui::pos2(r.right() - 10.0, r.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    category.count(items),
+                    FontId::proportional(12.0),
+                    TEXT_DIM,
                 );
-                let response = response.on_hover_text(category.label());
-                qa_control(ui.ctx(), category.label(), response.rect);
+                qa_control(ui.ctx(), category.label(), r);
                 response.widget_info(|| {
                     egui::WidgetInfo::labeled(egui::WidgetType::Button, true, category.label())
                 });
-                if response.clicked() {
+                if response.on_hover_text(category.label()).clicked() {
                     self.category = category;
                     self.show_settings = false;
                     self.settings_draft = None;
                 }
             }
+            ui.add_space(if compact { 2.0 } else { 16.0 });
         }
-        if ui.available_height() > 272.0 {
-            ui.add_space((ui.available_height() - 270.0).max(8.0));
+        let footer = if compact { 88.0 } else { 112.0 };
+        if ui.available_height() > footer + 137.0 {
+            ui.add_space((ui.available_height() - footer - 137.0).max(0.0));
             self.speed_overview(ui, items);
+            ui.add_space(10.0);
+        } else {
+            ui.add_space((ui.available_height() - footer).max(0.0));
         }
-        ui.add_space(
-            (ui.available_height() - if short { 112.0 } else { 126.0 }).max(if short {
-                4.0
-            } else {
-                10.0
-            }),
-        );
         ui.separator();
-        let settings = ui.add_sized(
-            [
-                ui.available_width(),
-                if spacious {
-                    44.0
-                } else if short {
-                    26.0
+        for (icon, label) in [
+            (Icon::Settings, "Settings"),
+            (Icon::Folder, "Download folder"),
+        ] {
+            let response = ui.add_sized(
+                [ui.available_width(), if compact { 26.0 } else { 32.0 }],
+                egui::Button::new("")
+                    .frame(false)
+                    .fill(if label == "Settings" && self.show_settings {
+                        ROW_SEL
+                    } else {
+                        Color32::TRANSPARENT
+                    })
+                    .rounding(6.0),
+            );
+            let r = response.rect;
+            draw_icon(
+                ui.painter(),
+                egui::Rect::from_center_size(
+                    egui::pos2(r.left() + 16.0, r.center().y),
+                    Vec2::splat(17.0),
+                ),
+                icon,
+                TEXT_DIM,
+            );
+            paint_label(
+                ui,
+                egui::Rect::from_min_max(egui::pos2(r.left() + 34.0, r.top()), r.right_bottom()),
+                label,
+                13.0,
+                TEXT,
+                false,
+            );
+            qa_control(ui.ctx(), label, r);
+            response
+                .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+            if response.clicked() {
+                if label == "Settings" {
+                    self.open_settings();
                 } else {
-                    34.0
-                },
-            ],
-            egui::Button::new("")
-                .fill(if self.show_settings {
-                    ROW_SEL
+                    open_path(std::path::Path::new(&self.default_save_dir));
+                }
+            }
+        }
+        ui.horizontal(|ui| {
+            let unavailable = self.browser_unavailable(ui.ctx());
+            let color = if unavailable { ORANGE } else { SUCCESS };
+            let (r, _) = ui.allocate_exact_size(Vec2::splat(8.0), egui::Sense::hover());
+            ui.painter().circle_filled(r.center(), 3.5, color);
+            ui.label(
+                RichText::new(if unavailable {
+                    "Browser unavailable"
                 } else {
-                    Color32::TRANSPARENT
+                    "Browser integration ready"
                 })
-                .rounding(8.0),
-        );
-        let r = settings.rect;
-        draw_icon(
-            ui.painter(),
-            egui::Rect::from_center_size(
-                egui::pos2(r.left() + 24.0, r.center().y),
-                Vec2::splat(23.0),
-            ),
-            Icon::Settings,
-            TEXT_DIM,
-        );
-        ui.painter().text(
-            egui::pos2(r.left() + if spacious { 57.0 } else { 49.0 }, r.center().y),
-            egui::Align2::LEFT_CENTER,
-            "Settings",
-            FontId::proportional(if spacious { 14.0 } else { 12.0 }),
-            TEXT,
-        );
-        settings
-            .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Settings"));
-        if settings.clicked() {
-            self.open_settings();
-        }
-        ui.separator();
-        ui.add_space(10.0);
-        let folder = ui.add_sized(
-            [ui.available_width(), if short { 44.0 } else { 54.0 }],
-            egui::Button::new("").fill(Color32::TRANSPARENT),
-        );
-        let r = folder.rect;
-        draw_icon(
-            ui.painter(),
-            egui::Rect::from_center_size(
-                egui::pos2(r.left() + 24.0, r.center().y),
-                Vec2::splat(23.0),
-            ),
-            Icon::Folder,
-            TEXT_DIM,
-        );
-        draw_icon(
-            ui.painter(),
-            egui::Rect::from_center_size(
-                egui::pos2(r.right() - 12.0, r.center().y),
-                Vec2::splat(16.0),
-            ),
-            Icon::Link,
-            TEXT_DIM,
-        );
-        ui.painter().text(
-            egui::pos2(r.left() + if spacious { 57.0 } else { 49.0 }, r.center().y),
-            egui::Align2::LEFT_CENTER,
-            "Download folder",
-            FontId::proportional(if spacious { 14.0 } else { 11.0 }),
-            TEXT,
-        );
-        folder.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Open download folder")
+                .size(11.5)
+                .color(color),
+            );
         });
-        if folder.on_hover_text("Open download folder").clicked() {
-            open_path(std::path::Path::new(&self.default_save_dir));
-        }
     }
     pub(super) fn library_header(&mut self, ui: &mut Ui, items: &[DownloadItem]) {
         let speed: f64 = items
@@ -663,54 +630,153 @@ impl IDGApp {
             }
             self.library_state.sample_at = Some(std::time::Instant::now());
         }
-        ui.label(
-            RichText::new(self.category.label())
-                .family(egui::FontFamily::Name("idg-heading".into()))
-                .size(28.0)
-                .strong(),
-        );
-        let active = items.iter().filter(|i| i.status.is_active()).count();
-        let total: u64 = items.iter().filter_map(|i| i.total_bytes).sum();
-        ui.label(
-            RichText::new(format!(
-                "{} downloads  ·  {} active  ·  {} total",
-                items.len(),
-                active,
-                fmt_size(total)
-            ))
-            .size(13.0)
-            .color(TEXT_DIM),
-        );
-        ui.add_space(12.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = 6.0;
-            for (category, label) in [
-                (Category::All, "All"),
-                (Category::Downloading, "Active"),
-                (Category::Paused, "Paused"),
-                (Category::Completed, "Completed"),
-                (Category::Failed, "Failed"),
-            ] {
-                let selected = self.category == category;
-                let response = ui.add(
-                    egui::Button::new(
-                        RichText::new(format!("{label}  {}", category.count(items))).size(13.0),
-                    )
-                    .fill(if selected { ROW_SEL } else { PANEL })
-                    .rounding(7.0)
-                    .min_size(Vec2::new(68.0, 32.0)),
+        self.process_library_commands(ui.ctx());
+        let query = self.search.trim().to_lowercase();
+        let shown: Vec<_> = items
+            .iter()
+            .filter(|i| self.category.matches(i) && matches_search(i, &query))
+            .collect();
+        let inline = ui.available_width() >= 980.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.vertical(|ui| {
+                ui.set_width(if inline {
+                    240.0
+                } else {
+                    (ui.available_width() - 240.0).clamp(170.0, 300.0)
+                });
+                ui.label(
+                    RichText::new(self.category.label())
+                        .family(egui::FontFamily::Name("idg-heading".into()))
+                        .size(25.0)
+                        .strong(),
                 );
-                qa_control(ui.ctx(), &format!("Filter {label}"), response.rect);
-                if response.clicked() {
-                    self.category = category;
+                ui.label(
+                    RichText::new(format!(
+                        "{} files  ·  {} active  ·  {} total",
+                        shown.len(),
+                        shown.iter().filter(|i| i.status.is_active()).count(),
+                        fmt_size(shown.iter().filter_map(|i| i.total_bytes).sum())
+                    ))
+                    .size(12.0)
+                    .color(TEXT_DIM),
+                );
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                self.library_views(ui);
+                if inline {
+                    ui.add_space(8.0);
+                    self.status_filters(ui, items, true);
                 }
-            }
+            });
         });
-        ui.add_space(12.0);
-        self.toolbar(ui);
+        if !inline {
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| self.status_filters(ui, items, false));
+        }
+        if ui.ctx().screen_rect().width() < 1050.0 && !self.library_state.selected_ids.is_empty() {
+            ui.horizontal(|ui| {
+                self.toolbar(ui);
+                ui.label(
+                    RichText::new(format!(
+                        "{} selected",
+                        self.library_state.selected_ids.len()
+                    ))
+                    .size(12.0)
+                    .color(TEXT_DIM),
+                );
+            });
+        }
         ui.add_space(10.0);
     }
 
+    fn status_filters(&mut self, ui: &mut Ui, items: &[DownloadItem], reverse: bool) {
+        let mut filters = vec![
+            (Category::All, "All"),
+            (Category::Downloading, "Active"),
+            (Category::Queued, "Queued"),
+            (Category::Paused, "Paused"),
+            (Category::Completed, "Completed"),
+            (Category::Failed, "Failed"),
+        ];
+        if reverse {
+            filters.reverse();
+        }
+        ui.spacing_mut().item_spacing.x = 3.0;
+        for (category, label) in filters {
+            let response = ui.add(
+                egui::Button::new(
+                    RichText::new(format!("{label}  {}", category.count(items))).size(13.0),
+                )
+                .fill(if self.category == category {
+                    ROW_SEL
+                } else {
+                    Color32::TRANSPARENT
+                })
+                .stroke(Stroke::new(
+                    1.0_f32,
+                    if self.category == category {
+                        BORDER
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ))
+                .rounding(6.0)
+                .min_size(Vec2::new(58.0, 30.0)),
+            );
+            qa_control(ui.ctx(), &format!("Filter {label}"), response.rect);
+            if response.clicked() {
+                self.category = category;
+            }
+        }
+    }
+
+    fn library_views(&mut self, ui: &mut Ui) {
+        for (grid, icon, label) in [
+            (true, Icon::Grid, "Grid view"),
+            (false, Icon::List, "List view"),
+        ] {
+            let r = ui.add_sized(
+                [32.0, 32.0],
+                egui::Button::new("")
+                    .fill(if self.library_state.grid == grid {
+                        ROW_SEL
+                    } else {
+                        PANEL
+                    })
+                    .rounding(6.0),
+            );
+            draw_icon(
+                ui.painter(),
+                r.rect.shrink(8.0),
+                icon,
+                if self.library_state.grid == grid {
+                    ACCENT
+                } else {
+                    TEXT_DIM
+                },
+            );
+            qa_control(ui.ctx(), label, r.rect);
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+            if r.on_hover_text(label).clicked() {
+                self.library_state.grid = grid;
+            }
+        }
+        let sort = egui::ComboBox::from_id_salt("library-sort")
+            .selected_text(if self.newest_first {
+                "Newest first"
+            } else {
+                "Oldest first"
+            })
+            .width(110.0)
+            .show_ui(ui, |ui| {
+                let a = ui.selectable_value(&mut self.newest_first, true, "Newest first");
+                qa_control(ui.ctx(), "Newest first", a.rect);
+                let b = ui.selectable_value(&mut self.newest_first, false, "Oldest first");
+                qa_control(ui.ctx(), "Oldest first", b.rect);
+            });
+        qa_control(ui.ctx(), "Sort", sort.response.rect);
+    }
     fn speed_overview(&self, ui: &mut Ui, items: &[DownloadItem]) {
         let speed: f64 = items
             .iter()
@@ -764,16 +830,85 @@ impl IDGApp {
 
     pub(super) fn toolbar(&mut self, ui: &mut Ui) {
         let items = self.downloads.lock().unwrap().clone();
+        let selected: Vec<_> = items
+            .iter()
+            .filter(|i| self.library_state.selected_ids.contains(&i.id))
+            .collect();
+        let mut command = None;
+        for (icon, label, enabled) in [
+            (
+                Icon::Play,
+                "Resume",
+                selected.iter().any(|i| i.status == Status::Paused),
+            ),
+            (
+                Icon::Pause,
+                "Pause",
+                selected
+                    .iter()
+                    .any(|i| i.status.is_active() && i.supports_pause()),
+            ),
+            (Icon::Remove, "Remove", !selected.is_empty()),
+            (Icon::Folder, "Open folder", true),
+        ] {
+            let response = ui.add_enabled(
+                enabled,
+                egui::Button::new("")
+                    .min_size(Vec2::splat(34.0))
+                    .frame(false)
+                    .rounding(6.0),
+            );
+            if response.hovered() && enabled {
+                ui.painter().rect_filled(response.rect, 6.0, PANEL);
+            }
+            draw_icon(
+                ui.painter(),
+                response.rect.shrink(8.0),
+                icon,
+                if enabled {
+                    TEXT_DIM
+                } else {
+                    GRAY.gamma_multiply(0.55)
+                },
+            );
+            qa_control(ui.ctx(), label, response.rect);
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label)
+            });
+            if response.on_hover_text(label).clicked() {
+                if label == "Remove" {
+                    self.library_state.confirm_remove = true;
+                } else if label == "Open folder" && selected.is_empty() {
+                    open_path(std::path::Path::new(&self.default_save_dir));
+                } else {
+                    command = Some(if label == "Open folder" {
+                        "OpenFolder"
+                    } else {
+                        label
+                    });
+                }
+            }
+        }
+        if let Some(command) = command {
+            let ids: Vec<_> = self.library_state.selected_ids.iter().cloned().collect();
+            for id in ids {
+                self.handle_action(&id, command, &items);
+            }
+        }
+    }
+
+    fn process_library_commands(&mut self, ctx: &egui::Context) {
+        let items = self.downloads.lock().unwrap().clone();
         self.library_state
             .selected_ids
             .retain(|id| items.iter().any(|i| &i.id == id));
-        if !ui.ctx().wants_keyboard_input() {
-            if ui.input(|i| i.key_pressed(egui::Key::Delete))
+        if !ctx.wants_keyboard_input() {
+            if ctx.input(|i| i.key_pressed(egui::Key::Delete))
                 && !self.library_state.selected_ids.is_empty()
             {
                 self.library_state.confirm_remove = true;
             }
-            if ui.input(|i| i.key_pressed(egui::Key::Space)) {
+            if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
                 let pause = items.iter().any(|i| {
                     self.library_state.selected_ids.contains(&i.id)
                         && i.status.is_active()
@@ -786,147 +921,12 @@ impl IDGApp {
             }
         }
         let ids: Vec<_> = self.library_state.selected_ids.iter().cloned().collect();
-        let selected: Vec<_> = items.iter().filter(|i| ids.contains(&i.id)).collect();
-        let roomy = ui.available_width() >= 1000.0;
-        let mut command = None;
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = if roomy { 12.0 } else { 6.0 };
-            for (icon, label, enabled) in [
-                (
-                    Icon::Play,
-                    "Resume",
-                    selected.iter().any(|i| i.status == Status::Paused),
-                ),
-                (
-                    Icon::Pause,
-                    "Pause",
-                    selected
-                        .iter()
-                        .any(|i| i.status.is_active() && i.supports_pause()),
-                ),
-                (Icon::Remove, "Remove", !selected.is_empty()),
-                (Icon::Folder, "Open folder", true),
-            ] {
-                let response = ui.add_enabled(
-                    enabled,
-                    egui::Button::new("")
-                        .min_size(Vec2::new(
-                            if label == "Open folder" {
-                                if roomy { 50.0 } else { 34.0 }
-                            } else if roomy {
-                                116.0
-                            } else {
-                                86.0
-                            },
-                            if roomy { 50.0 } else { 34.0 },
-                        ))
-                        .rounding(8.0),
-                );
-                let color = if enabled {
-                    TEXT
-                } else {
-                    TEXT_DIM.gamma_multiply(0.5)
-                };
-                draw_icon(
-                    ui.painter(),
-                    egui::Rect::from_center_size(
-                        egui::pos2(
-                            if label == "Open folder" {
-                                response.rect.center().x
-                            } else {
-                                response.rect.left() + 18.0
-                            },
-                            response.rect.center().y,
-                        ),
-                        Vec2::splat(18.0),
-                    ),
-                    icon,
-                    color,
-                );
-                if label != "Open folder" {
-                    ui.painter().text(
-                        egui::pos2(response.rect.left() + 33.0, response.rect.center().y),
-                        egui::Align2::LEFT_CENTER,
-                        label,
-                        FontId::proportional(if roomy { 14.0 } else { 11.0 }),
-                        color,
-                    );
-                }
-                let response = response.on_hover_text(label);
-                qa_control(ui.ctx(), label, response.rect);
-                response.widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label)
-                });
-                if response.clicked() {
-                    match label {
-                        "Remove" => self.library_state.confirm_remove = true,
-                        "Open folder" => {
-                            if selected.is_empty() {
-                                open_path(std::path::Path::new(&self.default_save_dir));
-                            } else {
-                                command = Some("OpenFolder");
-                            }
-                        }
-                        _ => command = Some(label),
-                    }
-                }
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let sort = egui::ComboBox::from_id_salt("library-sort")
-                    .selected_text(if self.newest_first {
-                        "Newest first"
-                    } else {
-                        "Oldest first"
-                    })
-                    .width(if roomy { 140.0 } else { 100.0 })
-                    .show_ui(ui, |ui| {
-                        let newest =
-                            ui.selectable_value(&mut self.newest_first, true, "Newest first");
-                        qa_control(ui.ctx(), "Newest first", newest.rect);
-                        let oldest =
-                            ui.selectable_value(&mut self.newest_first, false, "Oldest first");
-                        qa_control(ui.ctx(), "Oldest first", oldest.rect);
-                    });
-                qa_control(ui.ctx(), "Sort", sort.response.rect);
-                for (grid, icon, label) in [
-                    (true, Icon::Grid, "Grid view"),
-                    (false, Icon::List, "List view"),
-                ] {
-                    let response = ui.add_sized(
-                        [
-                            if roomy { 46.0 } else { 30.0 },
-                            if roomy { 42.0 } else { 32.0 },
-                        ],
-                        egui::Button::new("")
-                            .fill(if self.library_state.grid == grid {
-                                ACCENT2
-                            } else {
-                                PANEL
-                            })
-                            .rounding(7.0),
-                    );
-                    draw_icon(ui.painter(), response.rect.shrink(8.0), icon, TEXT_DIM);
-                    qa_control(ui.ctx(), label, response.rect);
-                    response.widget_info(|| {
-                        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label)
-                    });
-                    if response.on_hover_text(label).clicked() {
-                        self.library_state.grid = grid;
-                    }
-                }
-            });
-        });
-        if let Some(command) = command {
-            for id in &ids {
-                self.handle_action(id, command, &items);
-            }
-        }
         if self.library_state.confirm_remove {
             egui::Window::new("Remove selected downloads?")
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
-                .show(ui.ctx(), |ui| {
+                .show(ctx, |ui| {
                     ui.label(format!(
                         "Remove {} selected download(s) from the list?",
                         ids.len()
@@ -934,7 +934,7 @@ impl IDGApp {
                     ui.label("Active transfers will stop. Downloaded files will remain on disk.");
                     ui.horizontal(|ui| {
                         let cancel = ui.button("Cancel");
-                        qa_control(ui.ctx(), "Cancel remove", cancel.rect);
+                        qa_control(ctx, "Cancel remove", cancel.rect);
                         if cancel.clicked() {
                             self.library_state.confirm_remove = false;
                         }
@@ -952,14 +952,321 @@ impl IDGApp {
                 });
         }
     }
+    fn transfer_rows(
+        &mut self,
+        ui: &mut Ui,
+        items: &[&DownloadItem],
+        height: f32,
+    ) -> TransferInteraction {
+        let mut result = TransferInteraction::default();
+        let width = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(100.0);
+        let widths = transfer_columns(width);
+        let (header, _) = ui.allocate_exact_size(Vec2::new(width, 34.0), egui::Sense::hover());
+        let cols = column_rects(header, &widths);
+        let mut all = !items.is_empty()
+            && items
+                .iter()
+                .all(|i| self.library_state.selected_ids.contains(&i.id));
+        let select = selection_at(
+            ui,
+            egui::Rect::from_center_size(cols[0].center(), Vec2::splat(22.0)),
+            &mut all,
+        );
+        qa_control(ui.ctx(), "Select all", select.rect);
+        if select.changed() {
+            for item in items {
+                if all {
+                    self.library_state.selected_ids.insert(item.id.clone());
+                } else {
+                    self.library_state.selected_ids.remove(&item.id);
+                }
+            }
+        }
+        for (i, label) in [
+            (1, "Name"),
+            (2, "Size"),
+            (3, "Status"),
+            (4, "Progress"),
+            (5, "Speed"),
+            (6, "Time left"),
+            (7, "Added"),
+        ] {
+            paint_label(ui, cols[i], label, 12.0, TEXT_DIM, false);
+        }
+        ui.painter().hline(
+            header.x_range(),
+            header.bottom(),
+            Stroke::new(1.0_f32, BORDER),
+        );
+        let row_spacing = ui.spacing().item_spacing.y;
+        ui.spacing_mut().item_spacing.y = 0.0;
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .max_height((height - 36.0).max(60.0))
+            .show_rows(ui, 52.0, items.len(), |ui, range| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                let (block, _) = ui.allocate_exact_size(
+                    Vec2::new(width, range.len() as f32 * 52.0),
+                    egui::Sense::hover(),
+                );
+                for (visible, index) in range.enumerate() {
+                    let item = items[index];
+                    let rect = egui::Rect::from_min_size(
+                        block.min + Vec2::new(0.0, visible as f32 * 52.0),
+                        Vec2::new(width, 52.0),
+                    );
+                    let cols = column_rects(rect, &widths);
+                    let response = ui.interact(
+                        rect,
+                        egui::Id::new(("transfer-row", &item.id)),
+                        egui::Sense::click(),
+                    );
+                    qa_control(ui.ctx(), &format!("Row {}", item.filename), rect);
+                    response.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &item.filename)
+                    });
+                    let selected = self.library_state.selected_ids.contains(&item.id);
+                    if selected || response.hovered() {
+                        ui.painter().rect_filled(
+                            rect.shrink2(Vec2::new(0.0, 1.0)),
+                            4.0,
+                            if selected { ROW_SEL } else { PANEL },
+                        );
+                    }
+                    ui.painter().hline(
+                        rect.x_range(),
+                        rect.bottom(),
+                        Stroke::new(1.0_f32, BORDER.gamma_multiply(0.45)),
+                    );
+                    let mut checked = selected;
+                    let checkbox = selection_at(
+                        ui,
+                        egui::Rect::from_center_size(cols[0].center(), Vec2::splat(22.0)),
+                        &mut checked,
+                    );
+                    checkbox.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::Checkbox,
+                            true,
+                            format!("Select {}", item.filename),
+                        )
+                    });
+                    if checkbox.changed() {
+                        result.toggled = Some((item.id.clone(), checked));
+                    }
+                    let (icon, color) = file_icon(item);
+                    let glyph = egui::Rect::from_center_size(
+                        egui::pos2(cols[1].left() + 15.0, rect.center().y),
+                        Vec2::splat(30.0),
+                    );
+                    ui.painter()
+                        .rect_filled(glyph, 6.0, color.gamma_multiply(0.12));
+                    ui.painter().rect_stroke(
+                        glyph,
+                        6.0,
+                        Stroke::new(1.0_f32, color.gamma_multiply(0.25)),
+                    );
+                    draw_icon(ui.painter(), glyph.shrink(7.0), icon, color);
+                    let name = egui::Rect::from_min_max(
+                        egui::pos2(cols[1].left() + 41.0, rect.top() + 5.0),
+                        egui::pos2(cols[1].right(), rect.center().y + 3.0),
+                    );
+                    paint_label(ui, name, &item.filename, 14.0, TEXT, true);
+                    qa_control(
+                        ui.ctx(),
+                        &format!("File name {}", item.filename),
+                        egui::Rect::from_min_size(
+                            name.min,
+                            Vec2::new(name.width().min(160.0), name.height()),
+                        ),
+                    );
+                    let source = host(&item.url);
+                    paint_label(
+                        ui,
+                        name.translate(Vec2::new(0.0, 20.0)),
+                        &source,
+                        11.5,
+                        TEXT_DIM,
+                        false,
+                    );
+                    ui.interact(
+                        cols[1],
+                        egui::Id::new(("transfer-name", &item.id)),
+                        egui::Sense::hover(),
+                    )
+                    .on_hover_text(format!("{}\n{}", item.filename, source));
+                    qa_control(ui.ctx(), "Table Name", cols[1]);
+                    let total = item.total_bytes.or_else(|| {
+                        (item.status == Status::Completed).then_some(item.downloaded_bytes)
+                    });
+                    paint_label(
+                        ui,
+                        cols[2],
+                        &total.map(fmt_size).unwrap_or_else(|| "Unknown".into()),
+                        13.0,
+                        TEXT_DIM,
+                        false,
+                    );
+                    let (status, color) = status_info(&item.status);
+                    ui.painter().circle_filled(
+                        egui::pos2(cols[3].left() + 4.0, rect.center().y),
+                        3.0,
+                        color,
+                    );
+                    paint_label(
+                        ui,
+                        cols[3]
+                            .shrink2(Vec2::new(12.0, 0.0))
+                            .translate(Vec2::new(3.0, 0.0)),
+                        status,
+                        12.5,
+                        color,
+                        false,
+                    );
+                    ui.interact(
+                        cols[3],
+                        egui::Id::new(("transfer-status", &item.id)),
+                        egui::Sense::hover(),
+                    )
+                    .on_hover_text(item.error.as_deref().unwrap_or(status));
+                    let progress = if item.status == Status::Completed {
+                        1.0
+                    } else {
+                        item.progress()
+                    };
+                    let progress_text = if total.is_some() {
+                        format!("{:.0}%", progress * 100.0)
+                    } else {
+                        "—".into()
+                    };
+                    let p = cols[4];
+                    paint_label(
+                        ui,
+                        egui::Rect::from_min_max(
+                            p.left_top(),
+                            egui::pos2(p.left() + 44.0, p.center().y + 2.0),
+                        ),
+                        &progress_text,
+                        13.0,
+                        TEXT,
+                        true,
+                    );
+                    let bytes = if p.width() >= 170.0 {
+                        format!(
+                            "{} / {}",
+                            fmt_size(item.downloaded_bytes),
+                            total.map(fmt_size).unwrap_or_else(|| "?".into())
+                        )
+                    } else {
+                        fmt_size(item.downloaded_bytes)
+                    };
+                    let galley =
+                        ui.painter()
+                            .layout_no_wrap(bytes, FontId::proportional(11.0), TEXT_DIM);
+                    ui.painter().with_clip_rect(p).galley(
+                        egui::pos2(p.right() - galley.size().x, p.top() + 10.0),
+                        galley,
+                        TEXT_DIM,
+                    );
+                    let track = egui::Rect::from_min_size(
+                        egui::pos2(p.left(), p.center().y + 8.0),
+                        Vec2::new(p.width(), 4.0),
+                    );
+                    ui.painter()
+                        .rect_filled(track, 2.0, BORDER.gamma_multiply(0.65));
+                    if progress > 0.0 {
+                        ui.painter().rect_filled(
+                            egui::Rect::from_min_size(
+                                track.min,
+                                Vec2::new(track.width() * progress.clamp(0.0, 1.0), 4.0),
+                            ),
+                            2.0,
+                            color,
+                        );
+                    }
+                    let speed = if item.status.is_active() {
+                        fmt_speed(item.speed_bps)
+                    } else {
+                        "—".into()
+                    };
+                    paint_label(ui, cols[5], &speed, 12.5, TEXT_DIM, false);
+                    ui.interact(
+                        cols[5],
+                        egui::Id::new(("transfer-speed", &item.id)),
+                        egui::Sense::hover(),
+                    )
+                    .on_hover_text(&speed);
+                    paint_label(
+                        ui,
+                        cols[6],
+                        &item.eta_secs().map(fmt_eta).unwrap_or_else(|| "—".into()),
+                        12.0,
+                        TEXT_DIM,
+                        false,
+                    );
+                    let added = item.added_at.with_timezone(&chrono::Local);
+                    let date = if added.date_naive() == chrono::Local::now().date_naive() {
+                        added.format("Today %H:%M").to_string()
+                    } else {
+                        added.format("%d %b %Y").to_string()
+                    };
+                    paint_label(ui, cols[7], &date, 11.5, TEXT_DIM, false);
+                    let folder = ui.put(
+                        egui::Rect::from_center_size(cols[8].center(), Vec2::splat(28.0)),
+                        egui::Button::new("").frame(false),
+                    );
+                    draw_icon(
+                        ui.painter(),
+                        folder.rect.shrink(6.0),
+                        Icon::Folder,
+                        TEXT_DIM,
+                    );
+                    qa_control(ui.ctx(), "Table Folder", folder.rect);
+                    if folder.on_hover_text("Open folder").clicked() {
+                        result.action = Some((item.id.clone(), "OpenFolder"));
+                    }
+                    if response.clicked() && result.toggled.is_none() && result.action.is_none() {
+                        result.clicked = Some(Some(item.id.clone()));
+                    }
+                    if response.double_clicked() && item.status == Status::Completed {
+                        result.action = Some((item.id.clone(), "OpenFile"));
+                    }
+                    response.context_menu(|ui| {
+                        for (label, command) in [
+                            ("Resume", "Resume"),
+                            ("Pause", "Pause"),
+                            ("Copy link", "CopyLink"),
+                            ("Open file", "OpenFile"),
+                            ("Open folder", "OpenFolder"),
+                            ("Remove", "Delete"),
+                        ] {
+                            let enabled = match command {
+                                "Resume" => item.status == Status::Paused,
+                                "Pause" => item.status.is_active() && item.supports_pause(),
+                                "OpenFile" => item.status == Status::Completed,
+                                _ => true,
+                            };
+                            if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                                result.action = Some((item.id.clone(), command));
+                                ui.close_menu();
+                            }
+                        }
+                    });
+                }
+            });
+        ui.spacing_mut().item_spacing.y = row_spacing;
+        result
+    }
+
     pub(super) fn download_table(&mut self, ui: &mut Ui, items: &[DownloadItem]) {
         let query = self.search.trim().to_lowercase();
         let mut filtered: Vec<_> = items
             .iter()
-            .filter(|item| {
-                self.category.matches(item) && item.filename.to_lowercase().contains(&query)
-            })
+            .filter(|item| self.category.matches(item) && matches_search(item, &query))
             .collect();
+        #[cfg(debug_assertions)]
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(egui::Id::new("qa:visible-downloads"), filtered.len()));
         filtered.sort_by_key(|item| item.added_at);
         if self.newest_first {
             filtered.reverse();
@@ -982,7 +1289,7 @@ impl IDGApp {
             .copied()
             .cloned();
         let detail_height = if inspector.is_some() && ui.available_height() > 280.0 {
-            132.0
+            148.0
         } else {
             0.0
         };
@@ -990,438 +1297,144 @@ impl IDGApp {
         let mut clicked = None;
         let mut action = None;
         let mut toggled = None;
-        let table_background = ui.painter().add(egui::Shape::Noop);
-        let table = card()
-            .fill(Color32::TRANSPARENT)
-            .inner_margin(Margin::symmetric(6.0, 0.0))
-            .show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                ui.set_min_height(table_height);
-                let compact = ui.available_width() < 900.0;
-                if self.library_state.grid && !filtered.is_empty() {
-                    egui::ScrollArea::vertical()
-                        .max_height(table_height - 8.0)
-                        .show(ui, |ui| {
-                            let gap = 12.0;
-                            let columns = (((ui.available_width() + gap) / (255.0 + gap)).floor()
-                                as usize)
-                                .max(1);
-                            let width = (ui.available_width() - 12.0 * (columns - 1) as f32)
-                                / columns as f32;
-                            for chunk in filtered.chunks(columns) {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = gap;
-                                    for item in chunk {
-                                        card()
-                                            .fill(
-                                                if self
-                                                    .library_state
-                                                    .selected_ids
-                                                    .contains(&item.id)
-                                                {
-                                                    ROW_SEL
-                                                } else {
-                                                    BG
-                                                },
-                                            )
-                                            .show(ui, |ui| {
-                                                // Frames inherit the row layout; each card needs its own
-                                                // vertical flow so metadata cannot collide with the title.
-                                                ui.with_layout(
-                                                    egui::Layout::top_down(egui::Align::Min),
-                                                    |ui| {
-                                                        ui.set_width((width - 30.0).max(100.0));
-                                                        ui.set_min_height(166.0);
-                                                        let mut checked = self
-                                                            .library_state
-                                                            .selected_ids
-                                                            .contains(&item.id);
-                                                        ui.horizontal(|ui| {
-                                                            if selection_box(ui, &mut checked)
-                                                                .changed()
-                                                            {
-                                                                toggled = Some((
-                                                                    item.id.clone(),
-                                                                    checked,
-                                                                ));
-                                                            }
-                                                            let (icon, color) = file_icon(item);
-                                                            let (r, _) = ui.allocate_exact_size(
-                                                                Vec2::splat(25.0),
-                                                                egui::Sense::hover(),
-                                                            );
-                                                            draw_icon(ui.painter(), r, icon, color);
-                                                            if ui
-                                                                .add(
-                                                                    egui::Label::new(
-                                                                        RichText::new(
-                                                                            &item.filename,
-                                                                        )
-                                                                        .strong(),
-                                                                    )
-                                                                    .truncate()
-                                                                    .sense(egui::Sense::click()),
-                                                                )
-                                                                .on_hover_text(&item.filename)
-                                                                .clicked()
-                                                            {
-                                                                clicked =
-                                                                    Some(Some(item.id.clone()));
-                                                            }
-                                                        });
-                                                        let (label, color) =
-                                                            status_info(&item.status);
-                                                        ui.colored_label(color, label);
-                                                        ui.add(
-                                                            egui::Label::new(
-                                                                RichText::new(host(&item.url))
-                                                                    .size(11.0)
-                                                                    .color(TEXT_DIM),
-                                                            )
-                                                            .truncate(),
-                                                        );
-                                                        ui.add(
-                                                            egui::ProgressBar::new(
-                                                                if item.status == Status::Completed
-                                                                {
-                                                                    1.0
-                                                                } else {
-                                                                    item.progress()
-                                                                },
-                                                            )
-                                                            .desired_height(5.0)
-                                                            .fill(status_info(&item.status).1),
-                                                        );
-                                                        ui.label(format!(
-                                                            "{}   {}",
-                                                            fmt_size(item.downloaded_bytes),
-                                                            if item.status.is_active() {
-                                                                fmt_speed(item.speed_bps)
-                                                            } else {
-                                                                String::new()
-                                                            }
-                                                        ));
-                                                        ui.horizontal(|ui| {
-                                                            if item.status == Status::Paused
-                                                                && icon_button(
-                                                                    ui,
-                                                                    Icon::Play,
-                                                                    "Resume",
-                                                                )
-                                                                .clicked()
-                                                            {
-                                                                action = Some((
-                                                                    item.id.clone(),
-                                                                    "Resume",
-                                                                ));
-                                                            }
-                                                            if item.status.is_active()
-                                                                && item.supports_pause()
-                                                                && icon_button(
-                                                                    ui,
-                                                                    Icon::Pause,
-                                                                    "Pause",
-                                                                )
-                                                                .clicked()
-                                                            {
-                                                                action = Some((
-                                                                    item.id.clone(),
-                                                                    "Pause",
-                                                                ));
-                                                            }
-                                                            if icon_button(
-                                                                ui,
-                                                                Icon::Folder,
-                                                                "Open folder",
-                                                            )
-                                                            .clicked()
-                                                            {
-                                                                action = Some((
-                                                                    item.id.clone(),
-                                                                    "OpenFolder",
-                                                                ));
-                                                            }
-                                                        });
-                                                    },
-                                                );
-                                            });
-                                    }
-                                });
-                                ui.add_space(10.0);
-                            }
-                        });
-                    return;
-                }
-                // Derive every width from the current viewport. A remainder
-                // column can retain its previous content width across a DPI
-                // change and push the date/folder columns outside the table.
-                let data_width = (ui.available_width()
-                    - ui.spacing().scroll.allocated_width()
-                    - 64.0
-                    - 7.0 * ui.spacing().item_spacing.x)
-                    .max(1.0);
-                TableBuilder::new(ui)
-                    .striped(false)
-                    .sense(egui::Sense::click())
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .column(Column::exact(30.0))
-                    .column(Column::exact(data_width * 0.33))
-                    .column(Column::exact(data_width * 0.12))
-                    .column(Column::exact(data_width * 0.19))
-                    .column(Column::exact(data_width * 0.12))
-                    .column(Column::exact(data_width * 0.13))
-                    .column(Column::exact(data_width * 0.11))
-                    .column(Column::exact(34.0))
-                    .min_scrolled_height(table_height - 30.0)
-                    .max_scroll_height(table_height - 30.0)
-                    .header(if compact { 36.0 } else { 42.0 }, |mut header| {
-                        header.col(|ui| {
-                            let mut all = !filtered.is_empty()
-                                && filtered
-                                    .iter()
-                                    .all(|i| self.library_state.selected_ids.contains(&i.id));
-                            let selection = ui
-                                .checkbox(&mut all, "")
-                                .on_hover_text("Select all visible downloads");
-                            qa_control(ui.ctx(), "Select all", selection.rect);
-                            if selection.changed() {
-                                for i in &filtered {
-                                    if all {
-                                        self.library_state.selected_ids.insert(i.id.clone());
-                                    } else {
-                                        self.library_state.selected_ids.remove(&i.id);
-                                    }
-                                }
-                            }
-                        });
-                        for label in ["Name", "Size", "Progress", "Speed", "Status", "Added", ""] {
-                            header.col(|ui| {
-                                ui.label(
-                                    RichText::new(label)
-                                        .size(if compact { 12.0 } else { 13.0 })
-                                        .color(TEXT_DIM),
-                                );
-                            });
-                        }
-                    })
-                    .body(|body| {
-                        body.rows(
-                            if compact { 58.0 } else { 66.0 },
-                            filtered.len(),
-                            |mut row| {
-                                let item = filtered[row.index()];
-                                row.set_selected(
-                                    self.library_state.selected_ids.contains(&item.id),
-                                );
-                                row.col(|ui| {
-                                    let mut checked =
-                                        self.library_state.selected_ids.contains(&item.id);
-                                    let selection = selection_box(ui, &mut checked);
-                                    selection.widget_info(|| {
-                                        egui::WidgetInfo::labeled(
-                                            egui::WidgetType::Checkbox,
-                                            true,
-                                            format!("Select {}", item.filename),
-                                        )
-                                    });
-                                    if selection.changed() {
-                                        toggled = Some((item.id.clone(), checked));
-                                    }
-                                });
-                                row.col(|ui| {
-                                    let (icon, color) = file_icon(item);
-                                    qa_control(ui.ctx(), "Table Name", ui.max_rect());
-                                    let (rect, _) = ui.allocate_exact_size(
-                                        Vec2::new(23.0, 29.0),
-                                        egui::Sense::hover(),
-                                    );
-                                    ui.painter()
-                                        .rect_filled(rect, 4.0, color.gamma_multiply(0.16));
-                                    draw_icon(ui.painter(), rect.shrink(4.0), icon, color);
-                                    ui.vertical(|ui| {
-                                        ui.add(
-                                            egui::Label::new(
-                                                RichText::new(&item.filename)
-                                                    .size(if compact { 12.5 } else { 14.0 })
-                                                    .strong()
-                                                    .color(TEXT),
-                                            )
-                                            .truncate(),
-                                        )
-                                        .on_hover_text(&item.filename);
-                                        ui.add(
-                                            egui::Label::new(
-                                                RichText::new(host(&item.url))
-                                                    .size(if compact { 10.0 } else { 11.0 })
-                                                    .color(TEXT_DIM),
-                                            )
-                                            .truncate(),
-                                        )
-                                        .on_hover_text(host(&item.url));
-                                    });
-                                });
-                                row.col(|ui| {
-                                    ui.vertical(|ui| {
-                                        ui.label(
-                                            RichText::new(fmt_size(item.downloaded_bytes))
-                                                .size(if compact { 11.0 } else { 13.0 }),
-                                        );
-                                        ui.label(
-                                            RichText::new(
-                                                item.total_bytes
-                                                    .or_else(|| {
-                                                        (item.status == Status::Completed)
-                                                            .then_some(item.downloaded_bytes)
-                                                    })
-                                                    .map(|total| format!("/ {}", fmt_size(total)))
-                                                    .unwrap_or_else(|| "/ Unknown".into()),
-                                            )
-                                            .size(if compact { 10.0 } else { 11.0 })
-                                            .color(TEXT_DIM),
-                                        );
-                                    });
-                                });
-                                row.col(|ui| {
-                                    ui.vertical(|ui| {
-                                        let progress = if item.status == Status::Completed {
-                                            1.0
-                                        } else {
-                                            item.progress()
-                                        };
-                                        ui.label(
-                                            RichText::new(
-                                                if item.total_bytes.is_some()
-                                                    || item.status == Status::Completed
-                                                {
-                                                    format!("{:.0}%", progress * 100.0)
-                                                } else {
-                                                    "—".into()
-                                                },
-                                            )
-                                            .size(if compact { 11.0 } else { 13.0 }),
-                                        );
-                                        ui.add(
-                                            egui::ProgressBar::new(progress)
-                                                .desired_width(if compact { 62.0 } else { 82.0 })
-                                                .desired_height(4.0)
-                                                .fill(status_info(&item.status).1),
-                                        );
-                                    });
-                                });
-                                row.col(|ui| {
-                                    ui.vertical(|ui| {
-                                        ui.label(
-                                            RichText::new(if item.status.is_active() {
-                                                fmt_speed(item.speed_bps)
+        let table = Frame::none().inner_margin(Margin::ZERO).show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.set_min_height(table_height);
+            if self.library_state.grid && !filtered.is_empty() {
+                egui::ScrollArea::vertical()
+                    .max_height(table_height - 8.0)
+                    .show(ui, |ui| {
+                        let gap = 12.0;
+                        let columns = (((ui.available_width() + gap) / (255.0 + gap)).floor()
+                            as usize)
+                            .max(1);
+                        let width =
+                            (ui.available_width() - 12.0 * (columns - 1) as f32) / columns as f32;
+                        for chunk in filtered.chunks(columns) {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = gap;
+                                for item in chunk {
+                                    card()
+                                        .fill(
+                                            if self.library_state.selected_ids.contains(&item.id) {
+                                                ROW_SEL
                                             } else {
-                                                "—".into()
-                                            })
-                                            .size(if compact { 12.0 } else { 13.0 }),
-                                        );
-                                        if let Some(seconds) = item.eta_secs() {
-                                            ui.label(
-                                                RichText::new(format!("{} left", fmt_eta(seconds)))
-                                                    .size(9.5)
-                                                    .color(TEXT_DIM),
-                                            );
-                                        }
-                                    });
-                                });
-                                row.col(|ui| {
-                                    ui.vertical(|ui| {
-                                        let (label, color) = status_info(&item.status);
-                                        ui.add(
-                                            egui::Label::new(
-                                                RichText::new(label)
-                                                    .size(if compact { 12.0 } else { 13.0 })
-                                                    .color(color),
-                                            )
-                                            .truncate(),
+                                                BG
+                                            },
                                         )
-                                        .on_hover_text(item.error.as_deref().unwrap_or(label));
-                                    });
-                                });
-                                row.col(|ui| {
-                                    let (rect, _) = ui.allocate_exact_size(
-                                        Vec2::splat(12.0),
-                                        egui::Sense::hover(),
-                                    );
-                                    draw_icon(ui.painter(), rect, Icon::Clock, TEXT_DIM);
-                                    ui.label(
-                                        RichText::new(
-                                            item.added_at
-                                                .with_timezone(&chrono::Local)
-                                                .format("%d %b %Y")
-                                                .to_string(),
-                                        )
-                                        .size(if compact { 10.0 } else { 12.0 })
-                                        .color(TEXT_DIM),
-                                    );
-                                });
-                                row.col(|ui| {
-                                    let folder = icon_button(ui, Icon::Folder, "Open folder");
-                                    qa_control(ui.ctx(), "Table Folder", folder.rect);
-                                    if folder.clicked() {
-                                        action = Some((item.id.clone(), "OpenFolder"));
-                                    }
-                                });
-                                let response = row.response();
-                                if response.clicked() && clicked.is_none() && toggled.is_none() {
-                                    clicked = Some(Some(item.id.clone()));
-                                }
-                                if response.double_clicked() && item.status == Status::Completed {
-                                    action = Some((item.id.clone(), "OpenFile"));
-                                }
-                                response.context_menu(|ui| {
-                                    for (label, command) in [
-                                        ("Resume", "Resume"),
-                                        ("Pause", "Pause"),
-                                        ("Copy link", "CopyLink"),
-                                        ("Open file", "OpenFile"),
-                                        ("Open folder", "OpenFolder"),
-                                        ("Remove", "Delete"),
-                                    ] {
-                                        if ui
-                                            .add_enabled(
-                                                match command {
-                                                    "OpenFile" => item.status == Status::Completed,
-                                                    "Resume" => item.status == Status::Paused,
-                                                    "Pause" => {
-                                                        item.status.is_active()
+                                        .show(ui, |ui| {
+                                            // Frames inherit the row layout; each card needs its own
+                                            // vertical flow so metadata cannot collide with the title.
+                                            ui.with_layout(
+                                                egui::Layout::top_down(egui::Align::Min),
+                                                |ui| {
+                                                    ui.set_width((width - 30.0).max(100.0));
+                                                    ui.set_min_height(166.0);
+                                                    let mut checked = self
+                                                        .library_state
+                                                        .selected_ids
+                                                        .contains(&item.id);
+                                                    ui.horizontal(|ui| {
+                                                        if selection_box(ui, &mut checked).changed()
+                                                        {
+                                                            toggled =
+                                                                Some((item.id.clone(), checked));
+                                                        }
+                                                        let (icon, color) = file_icon(item);
+                                                        let (r, _) = ui.allocate_exact_size(
+                                                            Vec2::splat(25.0),
+                                                            egui::Sense::hover(),
+                                                        );
+                                                        draw_icon(ui.painter(), r, icon, color);
+                                                        if ui
+                                                            .add(
+                                                                egui::Label::new(
+                                                                    RichText::new(&item.filename)
+                                                                        .strong(),
+                                                                )
+                                                                .truncate()
+                                                                .sense(egui::Sense::click()),
+                                                            )
+                                                            .on_hover_text(&item.filename)
+                                                            .clicked()
+                                                        {
+                                                            clicked = Some(Some(item.id.clone()));
+                                                        }
+                                                    });
+                                                    let (label, color) = status_info(&item.status);
+                                                    ui.colored_label(color, label);
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            RichText::new(host(&item.url))
+                                                                .size(11.0)
+                                                                .color(TEXT_DIM),
+                                                        )
+                                                        .truncate(),
+                                                    );
+                                                    ui.add(
+                                                        egui::ProgressBar::new(
+                                                            if item.status == Status::Completed {
+                                                                1.0
+                                                            } else {
+                                                                item.progress()
+                                                            },
+                                                        )
+                                                        .desired_height(5.0)
+                                                        .fill(status_info(&item.status).1),
+                                                    );
+                                                    ui.label(format!(
+                                                        "{}   {}",
+                                                        fmt_size(item.downloaded_bytes),
+                                                        if item.status.is_active() {
+                                                            fmt_speed(item.speed_bps)
+                                                        } else {
+                                                            String::new()
+                                                        }
+                                                    ));
+                                                    ui.horizontal(|ui| {
+                                                        if item.status == Status::Paused
+                                                            && icon_button(ui, Icon::Play, "Resume")
+                                                                .clicked()
+                                                        {
+                                                            action =
+                                                                Some((item.id.clone(), "Resume"));
+                                                        }
+                                                        if item.status.is_active()
                                                             && item.supports_pause()
-                                                    }
-                                                    _ => true,
+                                                            && icon_button(ui, Icon::Pause, "Pause")
+                                                                .clicked()
+                                                        {
+                                                            action =
+                                                                Some((item.id.clone(), "Pause"));
+                                                        }
+                                                        if icon_button(
+                                                            ui,
+                                                            Icon::Folder,
+                                                            "Open folder",
+                                                        )
+                                                        .clicked()
+                                                        {
+                                                            action = Some((
+                                                                item.id.clone(),
+                                                                "OpenFolder",
+                                                            ));
+                                                        }
+                                                    });
                                                 },
-                                                egui::Button::new(label),
-                                            )
-                                            .clicked()
-                                        {
-                                            action = Some((item.id.clone(), command));
-                                            ui.close_menu();
-                                        }
-                                    }
-                                });
-                            },
-                        );
+                                            );
+                                        });
+                                }
+                            });
+                            ui.add_space(10.0);
+                        }
                     });
-            });
-        ui.painter().set(
-            table_background,
-            gradient_panel(
-                table.response.rect,
-                12.0,
-                PANEL,
-                Color32::from_rgb(17, 20, 27),
-            ),
-        );
-        if !self.library_state.grid || filtered.is_empty() {
-            let r = table.response.rect;
-            let y = r.top() + if r.width() < 900.0 { 36.0 } else { 42.0 };
-            ui.painter().line_segment(
-                [egui::pos2(r.left(), y), egui::pos2(r.right(), y)],
-                Stroke::new(1.0_f32, BORDER),
-            );
-        }
+                return;
+            }
+            let result = self.transfer_rows(ui, &filtered, table_height);
+            clicked = result.clicked;
+            action = result.action;
+            toggled = result.toggled;
+        });
         if filtered.is_empty() {
             let rect = table.response.rect;
             let scale = ((rect.height() - 52.0) / 410.0).clamp(0.45, 1.0);
@@ -1487,56 +1500,110 @@ impl IDGApp {
             && detail_height > 0.0
         {
             ui.add_space(8.0);
-            card().inner_margin(Margin::same(12.0)).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::Label::new(RichText::new(&item.filename).strong().size(15.0))
-                            .truncate(),
-                    )
-                    .on_hover_text(&item.filename);
-                    if icon_button(ui, Icon::Close, "Close details").clicked() {
-                        self.selected_id = None;
-                    }
-                });
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(item.save_path.display().to_string())
-                            .size(12.0)
-                            .color(TEXT_DIM),
-                    )
-                    .truncate(),
-                )
-                .on_hover_text(item.save_path.display().to_string());
-                ui.horizontal(|ui| {
-                    let (label, color) = status_info(&item.status);
-                    ui.colored_label(color, label);
-                    ui.label(format!(
-                        "{} downloaded  ·  {} connections",
-                        fmt_size(item.downloaded_bytes),
-                        item.num_segments
-                    ));
-                    if icon_button(ui, Icon::Folder, "Details open folder").clicked() {
-                        action = Some((item.id.clone(), "OpenFolder"));
-                    }
-                    if ui
-                        .add_enabled(
-                            item.status == Status::Completed,
-                            egui::Button::new("Open file"),
+            Frame::none()
+                .fill(PANEL)
+                .stroke(Stroke::new(1.0_f32, BORDER))
+                .rounding(8.0)
+                .inner_margin(Margin::same(12.0))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        let (icon, color) = file_icon(item);
+                        let (r, _) =
+                            ui.allocate_exact_size(Vec2::splat(24.0), egui::Sense::hover());
+                        draw_icon(ui.painter(), r.shrink(3.0), icon, color);
+                        ui.add_sized(
+                            [(ui.available_width() - 240.0).max(80.0), 28.0],
+                            egui::Label::new(RichText::new(&item.filename).size(15.0).strong())
+                                .halign(egui::Align::Min)
+                                .truncate(),
                         )
-                        .clicked()
-                    {
-                        action = Some((item.id.clone(), "OpenFile"));
-                    }
-                    if icon_button(ui, Icon::Link, "Copy download link").clicked() {
-                        ui.ctx().copy_text(item.url.clone());
+                        .on_hover_text(&item.filename);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if icon_button(ui, Icon::Close, "Close details").clicked() {
+                                self.selected_id = None;
+                            }
+                            if icon_button(ui, Icon::Link, "Copy download link").clicked() {
+                                ui.ctx().copy_text(item.url.clone());
+                            }
+                            if icon_button(ui, Icon::Folder, "Details open folder").clicked() {
+                                action = Some((item.id.clone(), "OpenFolder"));
+                            }
+                            if ui
+                                .add_enabled(
+                                    item.status == Status::Completed,
+                                    egui::Button::new("Open file"),
+                                )
+                                .clicked()
+                            {
+                                action = Some((item.id.clone(), "OpenFile"));
+                            }
+                        });
+                    });
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(item.save_path.display().to_string())
+                                .size(12.0)
+                                .color(TEXT_DIM),
+                        )
+                        .truncate(),
+                    )
+                    .on_hover_text(item.save_path.display().to_string());
+                    ui.add_space(7.0);
+                    let (label, color) = status_info(&item.status);
+                    let values = [
+                        ("STATUS", label.to_owned()),
+                        (
+                            "TRANSFERRED",
+                            format!(
+                                "{} / {}",
+                                fmt_size(item.downloaded_bytes),
+                                item.total_bytes
+                                    .map(fmt_size)
+                                    .unwrap_or_else(|| "Unknown".into())
+                            ),
+                        ),
+                        (
+                            "SPEED",
+                            if item.status.is_active() {
+                                fmt_speed(item.speed_bps)
+                            } else {
+                                "—".into()
+                            },
+                        ),
+                        (
+                            "SEGMENTS",
+                            if item.num_segments == 0 {
+                                "Auto".into()
+                            } else {
+                                item.num_segments.to_string()
+                            },
+                        ),
+                    ];
+                    ui.columns(4, |columns| {
+                        for (index, (title, value)) in values.iter().enumerate() {
+                            columns[index].label(RichText::new(*title).size(10.5).color(TEXT_DIM));
+                            columns[index]
+                                .add(
+                                    egui::Label::new(
+                                        RichText::new(value).size(13.0).color(if index == 0 {
+                                            color
+                                        } else {
+                                            TEXT
+                                        }),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(value);
+                        }
+                    });
+                    if let Some(error) = &item.error {
+                        ui.add(
+                            egui::Label::new(RichText::new(error).size(12.0).color(RED)).truncate(),
+                        )
+                        .on_hover_text(error);
                     }
                 });
-                if let Some(error) = &item.error {
-                    ui.add(egui::Label::new(RichText::new(error).size(12.0).color(RED)).truncate())
-                        .on_hover_text(error);
-                }
-            });
         }
         if let Some((id, checked)) = toggled {
             if checked {
@@ -1572,56 +1639,77 @@ impl IDGApp {
             }
         }
     }
+    fn browser_unavailable(&self, ctx: &egui::Context) -> bool {
+        ctx.data(|d| d.get_temp::<String>(egui::Id::new("idg-api-error")))
+            .is_some()
+            || self
+                .desktop_error
+                .as_ref()
+                .is_some_and(|e| e.starts_with("Browser integration:"))
+            || ctx
+                .data(|d| d.get_temp::<String>(egui::Id::new("idg-extension-error")))
+                .is_some()
+    }
     pub(super) fn status_bar(&self, ui: &mut Ui, items: &[DownloadItem]) {
         ui.horizontal(|ui| {
-            let api_error = ui
-                .ctx()
-                .data(|data| data.get_temp::<String>(egui::Id::new("idg-api-error")));
-            let unavailable = api_error.is_some()
-                || self
-                    .desktop_error
-                    .as_ref()
-                    .is_some_and(|error| error.starts_with("Browser integration:"))
-                || ui
-                    .ctx()
-                    .data(|data| data.get_temp::<String>(egui::Id::new("idg-extension-error")))
-                    .is_some();
-            let color = if unavailable { ORANGE } else { SUCCESS };
-            let (r, _) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
-            ui.painter().circle_filled(r.center(), 5.0, color);
+            let speed: f64 = items
+                .iter()
+                .filter(|i| i.status.is_active())
+                .map(|i| i.speed_bps)
+                .sum();
             ui.label(
-                RichText::new(if unavailable {
-                    "Browser integration unavailable"
-                } else {
-                    "Browser integration ready"
-                })
-                .size(13.0)
-                .color(color),
+                RichText::new(format!("↓ {}", fmt_speed(speed)))
+                    .size(12.0)
+                    .color(ACCENT),
             );
-            ui.add_space(12.0);
             ui.separator();
-            ui.add_space(10.0);
             ui.label(
                 RichText::new(format!(
-                    "{} active downloads",
+                    "{} active",
                     items.iter().filter(|i| i.status.is_active()).count()
                 ))
-                .size(13.0)
+                .size(12.0)
                 .color(TEXT_DIM),
             );
+            if ui.available_width() > 480.0 {
+                ui.label(
+                    RichText::new(format!("·  {} queued", Category::Queued.count(items)))
+                        .size(12.0)
+                        .color(TEXT_DIM),
+                );
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
                     RichText::new(format!("IDG v{APP_VERSION}"))
-                        .size(13.0)
+                        .size(11.0)
                         .color(TEXT_DIM),
                 );
+                if ui.available_width() > 150.0 {
+                    ui.label(
+                        RichText::new(if self.browser_unavailable(ui.ctx()) {
+                            "Integration unavailable"
+                        } else {
+                            "Integration ready"
+                        })
+                        .size(12.0)
+                        .color(if self.browser_unavailable(ui.ctx()) {
+                            ORANGE
+                        } else {
+                            SUCCESS
+                        }),
+                    );
+                }
             });
         });
     }
 }
 
-// A rounded mesh with a continuous vertical material gradient.
-fn gradient_panel(rect: egui::Rect, radius: f32, top: Color32, bottom: Color32) -> egui::Shape {
+pub(super) fn gradient_panel(
+    rect: egui::Rect,
+    radius: f32,
+    top: Color32,
+    bottom: Color32,
+) -> egui::Shape {
     let color = |y: f32| {
         let t = ((y - rect.top()) / rect.height()).clamp(0.0, 1.0);
         let a = top.to_array();

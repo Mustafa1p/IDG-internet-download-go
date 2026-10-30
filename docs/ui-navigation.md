@@ -21,30 +21,33 @@ This inventory maps the implemented Rust desktop interface to its control state 
 | Navigation entry | State | Actual filter |
 | --- | --- | --- |
 | All downloads | `Category::All` | Every download |
-| Downloading | `Category::Downloading` | `Queued`, `Probing`, or `Downloading` |
+| Downloading | `Category::Downloading` | `Probing` or `Downloading` |
+| Queued | `Category::Queued` | `Queued` |
 | Completed | `Category::Completed` | `Completed` |
 | Paused | `Category::Paused` | `Paused` |
 | Failed | `Category::Failed` | `Failed` or `Cancelled` |
 | Videos & audio | `Category::Videos` | File extension categorized by `file_category` |
 | Documents | `Category::Documents` | File extension categorized by `file_category` |
 | Archives | `Category::Archives` | File extension categorized by `file_category` |
+| Programs | `Category::Programs` | Application and installer extensions |
+| Images | `Category::Images` | Image extensions |
 | Other | `Category::Other` | All remaining file extensions |
 
 `file_category` in `src/app/library.rs` recognizes video/audio (`mp4`, `mkv`, `webm`, `avi`, `mov`, `mp3`, `m4a`, `opus`, `flac`, `wav`, `ogg`, `aac`), documents (`pdf`, `doc`, `docx`, `xls`, `xlsx`, `ppt`, `pptx`, `txt`, `csv`, `epub`, `odt`), and archives (`zip`, `rar`, `7z`, `gz`, `tar`, `bz2`, `xz`). Classification uses the filename, not content inspection.
 
 Other sidebar actions:
 
-- **New download:** `open_add` resets `AddDialog`, clears any pending browser request and sets `show_add`.
+- **New download (command bar):** `show_new_download` resets `AddDialog`, clears any pending browser request and sets `show_add`.
 - **Settings:** `open_settings` creates a `SettingsDraft` from `current_settings` and sets `show_settings`.
 - **Download folder:** shows only the action label, without a path subtitle or path tooltip; calls `open_path` with `default_save_dir` to open the real folder in Windows Explorer.
 
 ## Search, filters, statistic cards and display controls
 
-- **Search downloads:** `shell_header` binds the text field to `self.search`. `download_table` applies a trimmed, case-insensitive filename substring search together with `Category::matches`. **Ctrl+F** focuses the search field.
-- **Filter downloads:** the header sliders menu exposes the same nine `Category` values as the sidebar. Selecting one returns from Settings to the library.
-- **Current speed / Active downloads / Completed / Queued:** `library_header` displays live queue statistics. The cards report state; category navigation is provided by the sidebar and filter menu.
-- **Newest first / Oldest first:** `toolbar` updates `self.newest_first`; `download_table` sorts by `DownloadItem::added_at` and reverses for newest first.
-- **List view / Grid view:** `toolbar` changes `library_state.grid`; `download_table` renders the same filtered download collection in rows or cards.
+- **Search downloads:** `shell_header` binds the text field to `self.search`. `download_table` applies a trimmed, case-insensitive filename or source-host substring search together with `Category::matches`. **Ctrl+F** focuses the search field.
+- **Filter downloads:** the header sliders menu exposes the same twelve `Category` values as the sidebar. Selecting one returns from Settings to the library.
+- **Speed overview:** the sidebar shows current speed and recent samples when space permits. The library header shows filtered counts and size, with status filter chips.
+- **Newest first / Oldest first:** `library_views` updates `self.newest_first`; `download_table` sorts by `DownloadItem::added_at` and reverses for newest first.
+- **List view / Grid view:** `library_views` changes `library_state.grid`; `download_table` renders the same filtered download collection in rows or cards.
 - **Empty state:** folder artwork and guidance text only; the Add download button and split menu were removed. Use the sidebar New download action, header menu or Ctrl+N. Empty search results retain their search-specific message.
 
 ## Selection, toolbar, context menus and details

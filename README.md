@@ -12,7 +12,7 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 <br/>
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Mustafa1p/IDG-internet-download-go/release.yml?branch=main&style=for-the-badge&logo=github&label=Build)](https://github.com/Mustafa1p/IDG-internet-download-go/actions)
-[![Release](https://img.shields.io/badge/Latest_Release-v1.6.1-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
+[![Release](https://img.shields.io/badge/Latest_Release-v1.6.2-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078d4?style=for-the-badge&logo=windows)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 
@@ -20,11 +20,11 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 
 ## ⬇️ Download
 
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.6.1.exe">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.6.2.exe">
   <img src="https://img.shields.io/badge/Download%20Installer-Windows%20x64-1976d2?style=for-the-badge&logo=windows&logoColor=white" height="42"/>
 </a>
 &nbsp;&nbsp;
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.6.1.zip">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.6.2.zip">
   <img src="https://img.shields.io/badge/Download%20Extension-Chrome%20%2F%20Edge-F4B400?style=for-the-badge&logo=googlechrome&logoColor=white" height="42"/>
 </a>
 
@@ -64,12 +64,12 @@ source and network; these measurements do not establish universal superiority.
 ## Desktop and download safety
 
 A roomier IDG desktop with neutral dark surfaces, status tabs, readable transfer rows, state-colored progress,
-a live speed overview and selected-file details. New windows start at **1280 x 800**
+a live speed overview and selected-file details. New windows start at **1360 x 860**
 logical points, with Windows display scaling and multi-monitor support.
 
 Downloads now check exact byte ranges and server validators, reject browser-check
 pages, sync output before completion and reserve duplicate filenames without
-replacing existing files. See the [source comparison and before/after screenshots](docs/prism-comparison.md).
+replacing existing files. See the [desktop changes and before/after screenshots](docs/desktop-refresh.md).
 
 ### Optional experimental music backend
 
@@ -83,14 +83,14 @@ is MIT. See [music setup and limitations](docs/music-backend.md).
 
 ## Current desktop
 
-Windows setup: [**x64 (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.1/IDG-Setup-v1.6.1.exe) | [**x86 (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.1/IDG-Setup-v1.6.1-x86.exe).
+Windows setup: [**x64 (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.2/IDG-Setup-v1.6.2.exe) | [**x86 (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.2/IDG-Setup-v1.6.2-x86.exe).
 
 ![IDG Windows 11 Fluent desktop interface](docs/screenshot.png)
 
-The **v1.6.1** interface is implemented directly in Rust/egui. The screenshot
+The **v1.6.2** interface is implemented directly in Rust/egui. The screenshot
 above is captured from the actual app using isolated sample downloads. Status tabs,
 search, list/grid views, multi-selection, download details and Settings are interactive.
-Compare [before](docs/prism-before.png) and [after](docs/prism-after.png).
+Compare [before](docs/desktop-before.png) and [after](docs/desktop-after.png).
 
 | Desktop workflow | Where to find it |
 | --- | --- |
@@ -101,7 +101,7 @@ Compare [before](docs/prism-before.png) and [after](docs/prism-after.png).
 | Settings | Sidebar **Settings** or **Ctrl+,**; save folder, connections, browser integration, startup/tray and updates |
 | New versions | Update popup and banner with release fixes, progress, Update now, Install and Later |
 
-See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md) and [implementation comparison](docs/fluent-redesign-report.md). At smaller window sizes, statistics and details become compact while the same actions remain available. The normal window starts at 1280 x 800 logical points, respects Windows display scaling, and supports resizing and maximize; saved preferences and user files are preserved. Version **1.4.8** adds compact Settings tabs, an optional per-download speed limit (Unlimited by default), bounded speed sampling and batched file writes. It also detects PHP download endpoints when the browser resolves their filename or MIME type later, preserves token-bearing POST downloads from Adsume/SafeFileHosting and equivalent hidden download forms on other sites, and supports direct links on dynamically inserted `button_dm` download buttons. Token downloads stream once without parallel token replays. Chrome/Edge 111 or newer is required. Update the extension and reload existing website tabs after installation.
+See the [complete UI and integration route map](docs/ui-navigation.md) and [verification report](docs/fluent-qa.md) and [implementation comparison](docs/fluent-redesign-report.md). At smaller window sizes, statistics and details become compact while the same actions remain available. The normal window starts at 1360 x 860 logical points, respects Windows display scaling, and supports resizing and maximize; saved preferences and user files are preserved. Version **1.4.8** adds compact Settings tabs, an optional per-download speed limit (Unlimited by default), bounded speed sampling and batched file writes. It also detects PHP download endpoints when the browser resolves their filename or MIME type later, preserves token-bearing POST downloads from Adsume/SafeFileHosting and equivalent hidden download forms on other sites, and supports direct links on dynamically inserted `button_dm` download buttons. Token downloads stream once without parallel token replays. Chrome/Edge 111 or newer is required. Update the extension and reload existing website tabs after installation.
 
 ---
 
@@ -125,11 +125,11 @@ It works the same way as **IDM (Internet Download Manager)** — it splits every
 
 ### Step 1 — Download the installer
 
-Choose [**x64 setup (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.1/IDG-Setup-v1.6.1.exe) or [**x86 setup (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.1/IDG-Setup-v1.6.1-x86.exe).
+Choose [**x64 setup (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.2/IDG-Setup-v1.6.2.exe) or [**x86 setup (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.2/IDG-Setup-v1.6.2-x86.exe).
 
 ### Step 2 — Run the installer
 
-**Windows publisher warning:** The v1.6.1 downloads are unsigned and may
+**Windows publisher warning:** The v1.6.2 downloads are unsigned and may
 trigger “Windows protected your PC” (SmartScreen) or a Smart App Control block.
 Trusted signing requires a verified publisher identity. Release signing support
 is implemented, but a signed release has not yet been published. See
@@ -166,7 +166,7 @@ start a fresh export from Mail.
 
 ### Step 1 — Download the extension
 
-👉 **[Download IDG-extension-v1.4.8.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.6.1.zip)**
+👉 **[Download IDG-extension-v1.4.8.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.6.2.zip)**
 
 ### Step 2 — Extract the ZIP
 
@@ -186,7 +186,7 @@ Use the updated installer, then remove the old extension and load the new `exten
 
 Open the extension popup to see **IDG is connected**, **IDG is ready**, or **IDG is not connected**. To stop IDG on the current website, click **Pause on this website**. Its download overlays disappear immediately and downloads stay with the browser; other websites keep working. Click **Resume on this website** to restore IDG. Site preferences survive browser restarts and apply to all open tabs for that hostname (`www.youtube.com` and `youtube.com` share a preference). The toolbar shows an amber **!** for a paused site, a green check when integration is active and available, or **OFF** when disconnected or disabled. Browser downloads are forwarded automatically on active sites; use the page's YouTube download overlay or the browser context menu for media links. Confirm filenames, formats, and save locations in the desktop app.
 
-If IDG cannot accept a request, the original browser download resumes. YouTube watch pages, Shorts, X/Twitter status videos, Instagram Reels/video posts and TikTok videos are sent to the bundled video downloader, including players that use blob URLs. Paste a post URL into New download or use its Download with IDG button. TikTok formats marked as watermarked are excluded; availability varies by post and region, and embedded creator logos are preserved. Instagram carousels download the first video. Sign in to the source website and use the extension for posts that require your session. Stable 1.4.8 does not export Spotify music. The 1.5.2 preview adds an optional original-service music backend with account setup; see the preview section above. On X, click Download with IDG on the video or paste the post URL into New download; /video/1 selection is preserved. Install both the v1.6.1 desktop app and extension, then reload existing X tabs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
+If IDG cannot accept a request, the original browser download resumes. YouTube watch pages, Shorts, X/Twitter status videos, Instagram Reels/video posts and TikTok videos are sent to the bundled video downloader, including players that use blob URLs. Paste a post URL into New download or use its Download with IDG button. TikTok formats marked as watermarked are excluded; availability varies by post and region, and embedded creator logos are preserved. Instagram carousels download the first video. Sign in to the source website and use the extension for posts that require your session. Stable 1.4.8 does not export Spotify music. The 1.5.2 preview adds an optional original-service music backend with account setup; see the preview section above. On X, click Download with IDG on the video or paste the post URL into New download; /video/1 selection is preserved. Install both the v1.6.2 desktop app and extension, then reload existing X tabs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
 
 For source builds or portable integration, keep `IDG.exe` and `IDG-native.exe` together and run:
 
@@ -337,7 +337,7 @@ The x86 package includes 32-bit IDG, native bridge, yt-dlp, FFmpeg/FFprobe and N
 
 ### Compact window, visible transfers, and build updates
 
-The normal window starts at 1280 x 800 logical points, respects Windows display scaling, preserves usable saved sizes and supports resize/maximize. IDM's official main-window screenshots were used as a compact, table-first reference; IDM does not specify one fixed default window size.
+The normal window starts at 1360 x 860 logical points, respects Windows display scaling, preserves usable saved sizes and supports resize/maximize. IDM's official main-window screenshots were used as a compact, table-first reference; IDM does not specify one fixed default window size.
 
 Browser handoffs switch out of Settings, clear category/search filters, select the new transfer and show IDG. A folder icon with an Open folder tooltip sits at the far right of each download row, after Added, and is also available in the compact details panel; the toolbar can open the default folder without a selection.
 

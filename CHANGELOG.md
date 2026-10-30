@@ -1,3 +1,14 @@
+## 1.6.2 - 2026-10-31
+
+- Rebuild the desktop library around a single command bar, slimmer grouped sidebar and aligned transfer columns.
+- Keep readable 14-point filenames, source hosts and full-width state-colored progress bars.
+- Add separate Queued, Programs and Images navigation; search filenames and source hosts together.
+- Keep active counts separate from queued transfers and reserve inspector actions when filenames are long.
+- Keep Settings and Download folder visible at 800 x 500; adapt secondary columns to available space.
+- Start new windows at 1360 x 860 logical points and preserve saved sizes and Windows DPI behavior.
+- Virtualize list rows and retain list/grid, selection, context menus, keyboard shortcuts and download actions.
+- Add expanded-queue, long-filename and sidebar visibility checks.
+
 ## 1.6.1 - 2026-10-30
 
 - Replace per-batch asynchronous seek/write locking with one bounded, acknowledged disk writer and reusable buffers; use Windows offset writes and best-effort sparse setup.

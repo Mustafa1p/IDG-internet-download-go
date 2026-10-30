@@ -17,7 +17,7 @@ pub(super) fn surface(painter: &egui::Painter, rect: egui::Rect, top: Color32, b
 
 fn chrome_button(ui: &mut Ui, label: &str, kind: u8, height: f32) -> egui::Response {
     let response = ui.add_sized(
-        [44.0, height],
+        [40.0, height],
         egui::Button::new("")
             .fill(Color32::TRANSPARENT)
             .frame(false),
@@ -75,20 +75,38 @@ impl IDGApp {
         } else if drag.drag_started_by(egui::PointerButton::Primary) {
             ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
-        let wide = ctx.screen_rect().width() >= 1100.0;
-        let height = if wide { 44.0 } else { 38.0 };
+        let wide = ctx.screen_rect().width() >= 1050.0;
+        let height = 36.0;
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            let controls = 280.0;
-            let search_width = (ui.available_width() - controls).clamp(90.0, 500.0);
-            ui.add_space((ui.available_width() - controls - search_width).max(4.0));
+            let primary = ui.add_sized(
+                [if wide { 136.0 } else { 36.0 }, 34.0],
+                egui::Button::new(
+                    RichText::new(if wide { "+  New download" } else { "+" })
+                        .size(14.0)
+                        .strong()
+                        .color(TEXT),
+                )
+                .fill(ACCENT)
+                .rounding(7.0),
+            );
+            qa_control(ctx, "New download", primary.rect);
+            if primary.on_hover_text("New download  ·  Ctrl+N").clicked() {
+                self.show_new_download();
+            }
+            if wide && !self.show_settings {
+                self.toolbar(ui);
+            }
+            let controls = 240.0;
+            let search_width = (ui.available_width() - controls).clamp(90.0, 320.0);
+            ui.add_space((ui.available_width() - controls - search_width).max(0.0));
             Frame::none()
                 .fill(Color32::from_rgb(29, 33, 43))
                 .stroke(Stroke::new(1.0_f32, BORDER))
                 .rounding(8.0)
-                .inner_margin(Margin::symmetric(14.0, 9.0))
+                .inner_margin(Margin::symmetric(10.0, 5.0))
                 .show(ui, |ui| {
-                    ui.set_width((search_width - 28.0).max(62.0));
+                    ui.set_width((search_width - 20.0).max(62.0));
                     ui.horizontal(|ui| {
                         let (icon, _) =
                             ui.allocate_exact_size(Vec2::splat(18.0), egui::Sense::hover());
@@ -128,12 +146,15 @@ impl IDGApp {
                 for category in [
                     Category::All,
                     Category::Downloading,
+                    Category::Queued,
                     Category::Completed,
                     Category::Paused,
                     Category::Failed,
                     Category::Videos,
                     Category::Documents,
                     Category::Archives,
+                    Category::Programs,
+                    Category::Images,
                     Category::Other,
                 ] {
                     if ui

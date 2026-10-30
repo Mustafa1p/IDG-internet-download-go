@@ -5,6 +5,7 @@ use egui::{Context, Event, Id, Key, Modifiers, PointerButton, RawInput, Rect};
 pub(super) struct Snapshot {
     pub category: String,
     pub details_open: bool,
+    pub visible_count: usize,
     pub show_settings: bool,
     pub speed_limit_kbps: u64,
     pub show_add: bool,
@@ -44,12 +45,15 @@ fn steps() -> Vec<Step> {
     for label in [
         "All downloads",
         "Downloading",
+        "Queued",
         "Completed",
         "Paused",
         "Failed",
         "Videos & audio",
         "Documents",
         "Archives",
+        "Programs",
+        "Images",
         "Other",
         "All downloads",
     ] {
@@ -60,6 +64,7 @@ fn steps() -> Vec<Step> {
     }
     for (name, control) in [
         ("Filter active", "Filter Active"),
+        ("Filter queued", "Filter Queued"),
         ("Filter paused", "Filter Paused"),
         ("Filter completed", "Filter Completed"),
         ("Filter failed", "Filter Failed"),
@@ -101,6 +106,10 @@ fn steps() -> Vec<Step> {
         ("Leave settings", Action::Click("All downloads")),
         ("Grid view", Action::Click("Grid view")),
         ("List view", Action::Click("List view")),
+        (
+            "Select first row",
+            Action::Click("File name ubuntu-desktop.iso"),
+        ),
         ("Select all downloads", Action::Click("Select all")),
         ("Pause selected downloads", Action::Click("Pause")),
         ("Resume selected downloads", Action::Click("Resume")),
@@ -114,6 +123,7 @@ fn steps() -> Vec<Step> {
         ("Focus search", Action::Key(Key::F, Modifiers::CTRL)),
         ("Search report", Action::Text("report")),
         ("Select search text", Action::Key(Key::A, Modifiers::CTRL)),
+        ("Search by source", Action::Text("example.com")),
         ("Browser download clears search", Action::BrowserHandoff),
         ("Close selected details", Action::Click("Close details")),
         ("Maximize", Action::Click("Maximize")),
@@ -136,6 +146,11 @@ impl PreviewTest {
         if !self.enabled() {
             return;
         }
+        // Self-tests own their synthetic input. Native pointer movement and focus
+        // events must not race a press/release pair while the preview is visible.
+        input.events.clear();
+        input.modifiers = Modifiers::NONE;
+        input.focused = true;
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
         let steps = steps();
         let Some(step) = steps.get(self.step) else {
@@ -228,6 +243,8 @@ impl PreviewTest {
         }
         let okay = match step.name {
             "Filter active" => snapshot.category == "Downloading",
+            "Filter queued" => snapshot.category == "Queued",
+            "Select first row" => snapshot.selection_count == 1 && snapshot.details_open,
             "Filter paused" => snapshot.category == "Paused",
             "Filter completed" => snapshot.category == "Completed",
             "Filter failed" => snapshot.category == "Failed",
@@ -285,6 +302,7 @@ impl PreviewTest {
             "Newest first" => snapshot.newest_first,
             "Focus search" => ctx.memory(|memory| memory.has_focus(Id::new("download-search"))),
             "Search report" | "Select search text" => snapshot.search == "report",
+            "Search by source" => snapshot.search == "example.com" && snapshot.visible_count == 5,
             "Clear search" => snapshot.search.is_empty(),
             "Maximize" => ctx.input(|input| input.viewport().maximized == Some(true)),
             "Restore" => ctx.input(|input| input.viewport().maximized != Some(true)),
@@ -299,6 +317,7 @@ impl PreviewTest {
             "settings": snapshot.show_settings, "add_dialog": snapshot.show_add,
             "grid": snapshot.grid, "selection_count": snapshot.selection_count,
             "search": snapshot.search, "statuses": snapshot.statuses,
+            "speed_limit_kbps": snapshot.speed_limit_kbps,
             "confirm_remove": snapshot.confirm_remove,
             "newest_first": snapshot.newest_first,
             "search_cursor": format!("{:?}", egui::TextEdit::load_state(ctx, Id::new("download-search")).and_then(|state| state.cursor.char_range())),

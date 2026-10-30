@@ -24,6 +24,8 @@ CASES = [
     ("compact-list", 960, 640, 1.0, ["--preview-populated", "--preview-selected"]),
     ("compact-update", 960, 640, 1.0, ["--update-preview"]),
     ("list", 1280, 800, 1.0, ["--preview-populated"]),
+    ("expanded", 1440, 900, 1.0, ["--preview-populated", "--preview-expanded"]),
+    ("long-name-selected", 1280, 800, 1.0, ["--preview-populated", "--preview-selected", "--preview-long-name"]),
     ("selected", 1280, 800, 1.0, ["--preview-populated", "--preview-selected"]),
     ("grid", 1280, 800, 1.0, ["--preview-populated", "--preview-grid"]),
     ("grid-minimum", 800, 500, 1.0, ["--preview-populated", "--preview-grid"]),
@@ -57,6 +59,9 @@ for name, width, height, scale, extra in CASES:
     assert abs(metadata["logical_height"] - height) <= 1.0, (name, metadata)
     assert abs(metadata["pixels_per_point"] - scale) < 0.01, (name, metadata)
     assert metadata["version"] == tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
+    for label in ["Settings", "Download folder", "Other"]:
+        left, top, right, bottom = metadata["controls"][label]
+        assert 0 <= left < right <= width and 0 <= top < bottom <= height, (name, label, metadata["controls"][label])
     results.append({"name": name, "logical_size": [width, height], "scale": scale, "raster": actual})
     print(f"{name}: actual app rendered {actual[0]}x{actual[1]}, scale {scale}: PASS", flush=True)
 (OUTPUT / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")

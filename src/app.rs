@@ -66,12 +66,15 @@ fn update_button(label: &str, secondary: bool) -> egui::Button<'_> {
 enum Category {
     All,
     Downloading,
+    Queued,
     Completed,
     Paused,
     Failed,
     Videos,
     Documents,
     Archives,
+    Programs,
+    Images,
     Other,
 }
 impl Category {
@@ -79,26 +82,32 @@ impl Category {
         match self {
             Self::All => "All downloads",
             Self::Downloading => "Downloading",
+            Self::Queued => "Queued",
             Self::Completed => "Completed",
             Self::Paused => "Paused",
             Self::Failed => "Failed",
             Self::Videos => "Videos & audio",
             Self::Documents => "Documents",
             Self::Archives => "Archives",
+            Self::Programs => "Programs",
+            Self::Images => "Images",
             Self::Other => "Other",
         }
     }
     fn matches(self, i: &DownloadItem) -> bool {
         match self {
             Self::All => true,
-            Self::Downloading => matches!(
-                i.status,
-                Status::Queued | Status::Probing | Status::Downloading
-            ),
+            Self::Downloading => matches!(i.status, Status::Probing | Status::Downloading),
+            Self::Queued => matches!(i.status, Status::Queued),
             Self::Completed => matches!(i.status, Status::Completed),
             Self::Paused => matches!(i.status, Status::Paused),
             Self::Failed => matches!(i.status, Status::Failed | Status::Cancelled),
-            Self::Videos | Self::Documents | Self::Archives | Self::Other => {
+            Self::Videos
+            | Self::Documents
+            | Self::Archives
+            | Self::Programs
+            | Self::Images
+            | Self::Other => {
                 let category = if crate::download::music::source(&i.url).is_some() {
                     Self::Videos
                 } else {
@@ -511,6 +520,115 @@ impl IDGApp {
                         app.library_state.selected_ids.insert(item.id.clone());
                     }
                     items.push(item);
+                }
+            }
+            if std::env::args().any(|argument| argument == "--preview-expanded") {
+                let fixtures = [
+                    (
+                        "Blender Installer.msi",
+                        Status::Downloading,
+                        158_000_000,
+                        412_000_000,
+                        "downloads.example.com",
+                    ),
+                    (
+                        "Conference recording.mp4",
+                        Status::Downloading,
+                        940_000_000,
+                        2_400_000_000,
+                        "media.example.com",
+                    ),
+                    (
+                        "Node.js Setup.msi",
+                        Status::Completed,
+                        31_200_000,
+                        31_200_000,
+                        "releases.example.com",
+                    ),
+                    (
+                        "Design system.pdf",
+                        Status::Completed,
+                        8_400_000,
+                        8_400_000,
+                        "documents.example.com",
+                    ),
+                    (
+                        "Training dataset.tar.gz",
+                        Status::Paused,
+                        2_300_000_000,
+                        6_000_000_000,
+                        "data.example.com",
+                    ),
+                    (
+                        "Studio session.flac",
+                        Status::Completed,
+                        612_000_000,
+                        612_000_000,
+                        "audio.example.com",
+                    ),
+                    (
+                        "Wallpaper collection.7z",
+                        Status::Queued,
+                        0,
+                        940_000_000,
+                        "cdn.example.com",
+                    ),
+                    (
+                        "Developer tools.exe",
+                        Status::Completed,
+                        112_000_000,
+                        112_000_000,
+                        "updates.example.com",
+                    ),
+                    (
+                        "Lecture 08.webm",
+                        Status::Completed,
+                        1_300_000_000,
+                        1_300_000_000,
+                        "courses.example.com",
+                    ),
+                    (
+                        "Studio logo.png",
+                        Status::Completed,
+                        48_000,
+                        48_000,
+                        "releases.example.com",
+                    ),
+                    (
+                        "Project source.zip",
+                        Status::Queued,
+                        0,
+                        17_000_000,
+                        "code.example.com",
+                    ),
+                ];
+                let mut items = app.downloads.lock().unwrap();
+                for (index, (name, status, bytes, total, host)) in fixtures.into_iter().enumerate()
+                {
+                    let mut item = DownloadItem::new(
+                        format!("https://{host}/{name}"),
+                        PathBuf::from(format!("C:/Users/User/Downloads/{name}")),
+                        8,
+                    );
+                    item.status = status;
+                    item.total_bytes = Some(total);
+                    item.downloaded_bytes = bytes;
+                    item.speed_bps = if item.status.is_active() {
+                        1_600_000.0
+                    } else {
+                        0.0
+                    };
+                    item.added_at =
+                        chrono::Utc::now() - chrono::Duration::minutes((index as i64 + 5) * 7);
+                    items.push(item);
+                }
+                app.library_state.preview_activity();
+            }
+            if std::env::args().any(|arg| arg == "--preview-long-name") {
+                let mut items = app.downloads.lock().unwrap();
+                if let Some(item) = items.get_mut(2) {
+                    item.filename="Design assets - a very long project filename with multiple sections and final delivery notes for the complete archive.zip".into();
+                    item.save_path.set_file_name(&item.filename);
                 }
             }
             app.library_state.grid = std::env::args().any(|argument| argument == "--preview-grid");
@@ -1412,38 +1530,36 @@ impl eframe::App for IDGApp {
 
         self.shell_shortcuts(ctx);
         let wide = ctx.screen_rect().width() >= 1100.0;
-        let sidebar_width = if ctx.screen_rect().width() >= 1400.0 {
-            264.0
-        } else if wide {
-            244.0
+        let sidebar_width = if ctx.screen_rect().width() >= 1050.0 {
+            232.0
         } else {
-            190.0
+            196.0
         };
 
         // The sidebar spans the full window, matching the reference's vertical rail.
         egui::SidePanel::left("sidebar")
             .exact_width(sidebar_width)
             .resizable(false)
-            .frame(Frame::none().fill(SIDEBAR).inner_margin(Margin::symmetric(
-                if wide { 18.0 } else { 10.0 },
-                if ctx.screen_rect().height() < 600.0 {
-                    6.0
-                } else {
-                    14.0
-                },
-            )))
+            .frame(
+                Frame::none()
+                    .fill(SIDEBAR)
+                    .inner_margin(Margin::symmetric(16.0, 12.0)),
+            )
             .show(ctx, |ui| {
-                shell::surface(
-                    ui.painter(),
-                    ui.max_rect().expand(18.0),
-                    Color32::from_rgb(27, 30, 40),
-                    SIDEBAR,
-                );
+                let rail = ui.max_rect().expand2(Vec2::new(8.0, 6.0));
+                ui.painter().add(library::gradient_panel(
+                    rail,
+                    12.0,
+                    Color32::from_rgb(31, 33, 49),
+                    Color32::from_rgb(15, 27, 34),
+                ));
+                ui.painter()
+                    .rect_stroke(rail, 12.0, Stroke::new(1.0_f32, BORDER));
                 ui.spacing_mut().item_spacing.y = 3.0;
                 self.sidebar(ui, &items);
             });
         egui::TopBottomPanel::top("window-header")
-            .exact_height(if wide { 60.0 } else { 58.0 })
+            .exact_height(54.0)
             .frame(
                 Frame::none()
                     .fill(PANEL)
@@ -1451,7 +1567,7 @@ impl eframe::App for IDGApp {
             )
             .show(ctx, |ui| self.shell_header(ui, ctx));
         egui::TopBottomPanel::bottom("statusbar")
-            .exact_height(32.0)
+            .exact_height(30.0)
             .frame(
                 Frame::none()
                     .fill(Color32::from_rgb(17, 19, 26))
@@ -1460,9 +1576,9 @@ impl eframe::App for IDGApp {
             .show(ctx, |ui| self.status_bar(ui, &items));
         egui::CentralPanel::default()
             .frame(Frame::none().fill(BG).inner_margin(Margin::same(if wide {
-                24.0
+                18.0
             } else {
-                14.0
+                12.0
             })))
             .show(ctx, |ui| {
                 shell::surface(
@@ -1493,6 +1609,9 @@ impl eframe::App for IDGApp {
             ctx,
             preview_test::Snapshot {
                 details_open: self.selected_id.is_some(),
+                visible_count: ctx
+                    .data(|d| d.get_temp::<usize>(egui::Id::new("qa:visible-downloads")))
+                    .unwrap_or(0),
                 category: self.category.label().into(),
                 show_settings: self.show_settings,
                 speed_limit_kbps: self

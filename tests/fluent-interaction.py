@@ -17,6 +17,6 @@ result = subprocess.run(
 assert result.returncode == 0, result.stderr.decode(errors="replace")
 report = json.loads(REPORT.read_text(encoding="utf-8"))
 assert report["passed"] and not report.get("in_progress", False), report.get("error")
-assert len(report["checks"]) == 48
+assert len(report["checks"]) == 54
 assert all(check["passed"] for check in report["checks"])
-print("Actual app interactions: 48/48 PASS; Settings tabs, speed-limit draft, native minimize/restore and maximize/restore verified.")
+print("Actual app interactions: 54/54 PASS; Settings tabs, speed-limit draft, native minimize/restore and maximize/restore verified.")

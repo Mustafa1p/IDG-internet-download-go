@@ -6,7 +6,7 @@ use std::sync::mpsc::{self, Receiver};
 mod monitor_dpi;
 
 /// Initial client size and recovery size for invalid persisted geometry.
-pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(1280.0, 800.0);
+pub const DEFAULT_WINDOW_SIZE: egui::Vec2 = egui::vec2(1360.0, 860.0);
 /// Smallest supported desktop layout, in egui points.
 pub const MIN_WINDOW_SIZE: egui::Vec2 = egui::vec2(800.0, 500.0);
 

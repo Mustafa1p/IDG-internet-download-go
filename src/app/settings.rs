@@ -236,7 +236,7 @@ impl IDGApp {
                 "pixels_per_point": ctx.pixels_per_point(), "native_pixels_per_point": ctx.native_pixels_per_point(),
                 "image_width": image.width(), "image_height": image.height(),
                 "version": APP_VERSION,
-                "controls": (["Search downloads", "Minimize", "Maximize", "Close", "Settings section", "Save changes", "Reset to defaults"].into_iter().filter_map(|label| {
+                "controls": (["Search downloads", "Minimize", "Maximize", "Close", "Settings", "Download folder", "Other", "Settings section", "Save changes", "Reset to defaults"].into_iter().filter_map(|label| {
                     ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new(format!("qa:{label}"))))
                         .map(|rect| (label, [rect.left(), rect.top(), rect.right(), rect.bottom()]))
                 }).collect::<std::collections::BTreeMap<_, _>>()),
