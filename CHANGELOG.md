@@ -1,3 +1,12 @@
+## 1.6.1 - 2026-10-30
+
+- Replace per-batch asynchronous seek/write locking with one bounded, acknowledged disk writer and reusable buffers; use Windows offset writes and best-effort sparse setup.
+- Queue ranges after HTTP 429/503 connection refusals, preserving at least one slot.
+- Preserve short validated buffers across broken streams and reset the retry budget after productive reconnects.
+- Retain filename protection, exact range/validator checks, cancellation, rate limiting and completion sync.
+- Add a production-engine CLI and reproducible benchmark harness, all raw trials/logs and a same-machine comparison against Prism 1.1.7, aria2c and curl.
+- Measured median throughput: 33.3% above Prism on 2 GiB unlimited localhost; 28.3% above Prism under random drops. Server-limited tests tied; the internet test favored Prism.
+
 ## 1.6.0 - 2026-10-30
 
 - Prism-inspired transfer layout, status filters, readable rows, live speed overview and file inspector.

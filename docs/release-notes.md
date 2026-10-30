@@ -1,20 +1,24 @@
-IDG v1.6.0 - larger desktop and safer downloads
+IDG v1.6.1 - faster local transfers and stronger reconnects
 
-- Prism-inspired native desktop: charcoal surfaces, status tabs, readable filenames, state-colored progress, live speed overview and selected-download details.
-- Larger 1280 x 800 default window; Windows scaling, multi-monitor fixes and compact layouts.
-- Exact Content-Range and server-validator checks prevent mixing bytes from changed files.
-- Reject browser robot checks and unexpected HTML instead of saving them as binary files. Intentional HTML/JSON downloads remain supported.
-- Reserve duplicate destinations atomically with numbered filenames. Flush and sync output before completion.
-- Include pending Spotify browser track/library actions, metadata and media-overlay fixes. Preserve single-use form and mail-export behavior.
+- Bounded disk writer with acknowledged offset writes, buffer reuse and best-effort NTFS/ReFS sparse setup.
+- Connection-limit adaptation: refused ranges queue behind accepted connections instead of exhausting retries.
+- Short received buffers survive interrupted streams; productive reconnects reset the consecutive-failure budget.
+- Preserve byte-range/server-validator checks, existing files, shared speed limits, pause/cancel and durable completion.
 
-Install the matching 1.6.0 desktop installer and Chrome/Edge extension, then reload website tabs.
-Windows x64/x86 installers and portable packages are included, with SHA-256 checksums.
+Same-machine, SHA-256-verified engine benchmarks against Prism 1.1.7:
 
-Experimental music remains opt-in: Spotify pairing/browser actions do not establish working
-full-track audio export. Spotify audio-key access can still fail; other subscription services
-are unverified. Bandcamp was verified in the preceding preview. No YouTube substitutions.
-The optional music runtime requires 64-bit Windows and Python 3.12. See docs/music-backend.md.
+| Scenario | Prism median | IDG median |
+| --- | ---: | ---: |
+| 2 GiB unlimited localhost | 1,287.33 MiB/s | 1,716.14 MiB/s (+33.3%) |
+| 256 MiB with random connection drops | 30.27 MiB/s | 38.85 MiB/s (+28.3%) |
+| Four connections at 2 MiB/s | 7.99 MiB/s | 7.99 MiB/s |
+| Public HTTPS archive | 23.62 MiB/s | 16.14 MiB/s |
 
-See docs/prism-comparison.md for source comparison and real-app before/after screenshots.
-Prism's torrents, FTP, scheduling, localization, dynamic segmentation and persistent crash
-resume are not implemented by this release. No speed/memory superiority is claimed.
+Three trials per engine and scenario on one Windows machine; all successful downloads
+verified by SHA-256. Timing includes startup and file sync. These are scoped engine
+measurements, not a universal internet speed claim. Full method, every trial, logs
+and reproduction commands: https://github.com/Mustafa1p/IDG-internet-download-go/blob/main/docs/benchmarks.md
+
+Windows x64/x86 installers, portable packages and the matching browser extension are included.
+Optional subscription-service music audio remains experimental/unverified as documented
+in the preceding release. No new music-service compatibility is claimed.

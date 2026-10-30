@@ -1,0 +1,172 @@
+{
+  "A": {
+    "curl": {
+      "attempts": 1,
+      "verified": 1,
+      "median_mib_s": 3.9995736829413087,
+      "min_mib_s": 3.9995736829413087,
+      "max_mib_s": 3.9995736829413087,
+      "median_seconds": 256.02728720000596
+    },
+    "aria2c": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 63.03869457896364,
+      "min_mib_s": 63.00553985435001,
+      "max_mib_s": 63.0420011422428,
+      "median_seconds": 16.243991199997254
+    },
+    "Prism": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 62.77527786955411,
+      "min_mib_s": 62.67425309113714,
+      "max_mib_s": 62.81058846923861,
+      "median_seconds": 16.31215399998473
+    },
+    "IDG": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 62.95540883758638,
+      "min_mib_s": 62.948053053649666,
+      "max_mib_s": 63.02438876441219,
+      "median_seconds": 16.265480900008697
+    }
+  },
+  "B": {
+    "curl": {
+      "attempts": 1,
+      "verified": 1,
+      "median_mib_s": 1025.415996943842,
+      "min_mib_s": 1025.415996943842,
+      "max_mib_s": 1025.415996943842,
+      "median_seconds": 1.9972382000123616
+    },
+    "aria2c": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 377.32664806806247,
+      "min_mib_s": 345.8363882493959,
+      "max_mib_s": 378.16445914405745,
+      "median_seconds": 5.42765800000052
+    },
+    "Prism": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 1287.3325658410358,
+      "min_mib_s": 1238.366804617453,
+      "max_mib_s": 1313.780246114906,
+      "median_seconds": 1.5908864999946672
+    },
+    "IDG": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 1716.138607707163,
+      "min_mib_s": 1555.18574331638,
+      "max_mib_s": 1813.6052985636795,
+      "median_seconds": 1.1933767999871634
+    }
+  },
+  "C": {
+    "curl": {
+      "attempts": 1,
+      "verified": 1,
+      "median_mib_s": 1.9995950632535713,
+      "min_mib_s": 1.9995950632535713,
+      "max_mib_s": 1.9995950632535713,
+      "median_seconds": 128.02592119999463
+    },
+    "aria2c": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 7.979353547373579,
+      "min_mib_s": 7.978962045315927,
+      "max_mib_s": 7.979776329174144,
+      "median_seconds": 32.082799499999965
+    },
+    "Prism": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 7.990127747720435,
+      "min_mib_s": 7.987596859600847,
+      "max_mib_s": 7.990337659222044,
+      "median_seconds": 32.039537800010294
+    },
+    "IDG": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 7.991909789718397,
+      "min_mib_s": 7.9907715079276045,
+      "max_mib_s": 7.992363995534643,
+      "median_seconds": 32.03239360000589
+    }
+  },
+  "D": {
+    "curl": {
+      "attempts": 1,
+      "verified": 0,
+      "median_mib_s": null,
+      "min_mib_s": null,
+      "max_mib_s": null,
+      "median_seconds": null
+    },
+    "aria2c": {
+      "attempts": 3,
+      "verified": 0,
+      "median_mib_s": null,
+      "min_mib_s": null,
+      "max_mib_s": null,
+      "median_seconds": null
+    },
+    "Prism": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 30.272013314409463,
+      "min_mib_s": 24.034405100660035,
+      "max_mib_s": 36.185550513173474,
+      "median_seconds": 8.456655899994075
+    },
+    "IDG": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 38.8459570249927,
+      "min_mib_s": 37.86433775754552,
+      "max_mib_s": 39.019750105628184,
+      "median_seconds": 6.590132400015136
+    }
+  },
+  "E": {
+    "curl": {
+      "attempts": 1,
+      "verified": 1,
+      "median_mib_s": 52.478465537262636,
+      "min_mib_s": 52.478465537262636,
+      "max_mib_s": 52.478465537262636,
+      "median_seconds": 1.4521784999815281
+    },
+    "aria2c": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 39.510085207528654,
+      "min_mib_s": 36.58317549862423,
+      "max_mib_s": 40.08070373652988,
+      "median_seconds": 1.928826499992283
+    },
+    "Prism": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 23.61711519796445,
+      "min_mib_s": 21.274357524819933,
+      "max_mib_s": 24.883387635769033,
+      "median_seconds": 3.22681660001399
+    },
+    "IDG": {
+      "attempts": 3,
+      "verified": 3,
+      "median_mib_s": 16.136906413952335,
+      "min_mib_s": 15.267519693469328,
+      "max_mib_s": 17.906655188124375,
+      "median_seconds": 4.722596600011457
+    }
+  }
+}
