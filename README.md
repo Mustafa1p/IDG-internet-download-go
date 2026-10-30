@@ -63,8 +63,7 @@ source and network; these measurements do not establish universal superiority.
 
 ## Desktop and download safety
 
-A roomier desktop inspired by [Prism](https://github.com/FortoGraphy/prism-download-manager):
-neutral dark surfaces, status tabs, readable transfer rows, state-colored progress,
+A roomier IDG desktop with neutral dark surfaces, status tabs, readable transfer rows, state-colored progress,
 a live speed overview and selected-file details. New windows start at **1280 x 800**
 logical points, with Windows display scaling and multi-monitor support.
 

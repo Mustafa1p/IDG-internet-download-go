@@ -9,7 +9,7 @@
 
 ## 1.6.0 - 2026-10-30
 
-- Prism-inspired transfer layout, status filters, readable rows, live speed overview and file inspector.
+- Refreshed transfer layout, status filters, readable rows, live speed overview and file inspector.
 - Larger 1280 x 800 default and pending Windows per-monitor DPI fixes.
 - Exact range/server-validator checks, browser-page rejection and durable completion.
 - Atomic numbered duplicate filenames preserve existing files and simultaneous downloads.
