@@ -329,6 +329,62 @@ mod regression_tests {
     const SIZE: usize = 256 * 1024 + 19;
 
     #[tokio::test]
+    async fn rejected_head_and_range_probes_stream_exact_bytes_without_replaying_get() {
+        for reject_range in [false, true] {
+            let requests = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let seen = requests.clone();
+            let expected: Vec<u8> = (0..SIZE).map(|n| (n % 251) as u8).collect();
+            let bytes = expected.clone();
+            let router = Router::new().route(
+                "/file.zip",
+                axum::routing::any(move |method: Method, headers: HeaderMap| {
+                    let seen = seen.clone();
+                    let bytes = bytes.clone();
+                    async move {
+                        let ranged = headers.contains_key("range");
+                        seen.lock().unwrap().push((method.clone(), ranged));
+                        if method == Method::HEAD || (reject_range && ranged) {
+                            return StatusCode::METHOD_NOT_ALLOWED.into_response();
+                        }
+                        (
+                            [
+                                ("content-type", "application/zip"),
+                                ("accept-ranges", "bytes"),
+                            ],
+                            bytes,
+                        )
+                            .into_response()
+                    }
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file.zip", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("file.zip");
+            let item = crate::download::types::DownloadItem::new(url, path.clone(), 16);
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            tokio::time::timeout(
+                Duration::from_secs(10),
+                start_download(Arc::new(reqwest::Client::new()), downloads.clone(), id),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(std::fs::read(path).unwrap(), expected);
+            assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+            assert_eq!(downloads.lock().unwrap()[0].num_segments, 1);
+            let mut expected_requests = vec![(Method::HEAD, false), (Method::GET, true)];
+            if reject_range {
+                expected_requests.push((Method::GET, false));
+            }
+            assert_eq!(*requests.lock().unwrap(), expected_requests);
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
     async fn connection_refusals_queue_remaining_ranges_without_losing_bytes() {
         let slots = Arc::new(tokio::sync::Semaphore::new(4));
         let rejected = Arc::new(std::sync::atomic::AtomicUsize::new(0));

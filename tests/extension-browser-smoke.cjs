@@ -26,6 +26,19 @@ const assert = require('node:assert/strict');
     assert.equal(requests[0][4], 'token=fixture%2Btoken&filename=fixture.zip');
     assert.equal(browserPosts, 0);
     assert.deepEqual(errors, []);
+    // Site templates can rename the form; the endpoint and hidden fields identify it.
+    for (const id of ['', 'file-download']) {
+      await worker.evaluate(() => { globalThis.fixtureRequests = []; });
+      await context.route('https://renamed.example.org/**', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><form id="${id}" method="POST" action="https://server53.safefilehosting.com/files/download.php"><input type="hidden" name="token" value="fixture+token"><input type="hidden" name="filename" value="fixture.zip"></form><script>document.querySelector('form').submit();</script>` }));
+      const renamedPage = await context.newPage();
+      await renamedPage.goto('https://renamed.example.org/start');
+      await renamedPage.waitForTimeout(300);
+      const captured = await worker.evaluate(() => globalThis.fixtureRequests);
+      assert.equal(captured.length, 1);
+      assert.equal(captured[0][4], 'token=fixture%2Btoken&filename=fixture.zip');
+      assert.equal(browserPosts, 0);
+      await renamedPage.close();
+    }
     await context.route('https://downloads.example.org/**', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><form id="download_form" method="POST" action="https://files.example.org/api/resource"><input type="hidden" name="file_name" value="fixture.7z"><input type="hidden" name="ticket" value="opaque+ticket"><input type="hidden" name="part" value="one"><input type="hidden" name="part" value="two"></form><script>document.getElementById('download_form').requestSubmit();</script>` }));
     await worker.evaluate(() => { globalThis.fixtureRequests = []; });
     const genericPage = await context.newPage();

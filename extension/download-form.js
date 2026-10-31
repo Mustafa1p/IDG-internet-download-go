@@ -1,11 +1,13 @@
 // Validate the final form in the extension's isolated content-script world.
 // Only explicit download forms containing hidden fields may be handed off.
 globalThis.__idgReadDownloadForm = form => {
-  if (form?.tagName !== "FORM" || !/^(?:download[-_]?form|frmDownload)$/i.test(form.id) || form.method.toLowerCase() !== "post") return null;
+  if (form?.tagName !== "FORM" || form.method.toLowerCase() !== "post") return null;
   if (form.enctype && form.enctype !== "application/x-www-form-urlencoded") return null;
   let url;
   try { url = new URL(form.action); } catch { return null; }
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+  const tokenEndpoint = /^[a-z0-9-]+\.safefilehosting\.com$/i.test(url.hostname) && url.pathname === "/files/download.php";
+  if (!tokenEndpoint && !/^(?:download[-_]?form|frmDownload)$/i.test(form.id)) return null;
   const fields = new URLSearchParams();
   for (const input of form.elements) {
     if (input.disabled || !input.name) continue;

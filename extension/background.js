@@ -290,6 +290,7 @@ function musicPageUrl(value) {
 }
 async function sendDownloadRequest(url, filename, referrer, userAgent, postData) {
   if (!validUrl(url)) return { ok: false, error: "Only HTTP and HTTPS links can be sent to IDG." };
+  if (isTokenDownload(url) && (typeof postData !== "string" || !new URLSearchParams(postData).get("token"))) return { ok: false, error: "This download requires a fresh website token. Open the source page and click its download button with the updated IDG extension enabled." };
   const music = musicPageUrl(url);
   if (spotifyPage(url) && !music) return { ok: false, error: "Use a Spotify track, album or playlist link." };
   const youtube = youtubeVideoUrl(url);

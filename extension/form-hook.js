@@ -5,7 +5,13 @@
   const pending = new WeakSet();
   const accepted = new WeakSet();
   function handoff(form) {
-    if (!(form instanceof HTMLFormElement) || !/^(?:download[-_]?form|frmDownload)$/i.test(form.id) || form.method.toLowerCase() !== "post") return false;
+    if (!(form instanceof HTMLFormElement) || form.method.toLowerCase() !== "post") return false;
+    let tokenEndpoint = false;
+    try {
+      const url = new URL(form.action);
+      tokenEndpoint = /^[a-z0-9-]+\.safefilehosting\.com$/i.test(url.hostname) && url.pathname === "/files/download.php";
+    } catch { return false; }
+    if (!tokenEndpoint && !/^(?:download[-_]?form|frmDownload)$/i.test(form.id)) return false;
     if (pending.has(form) || accepted.has(form)) return true;
     pending.add(form);
     const result = event => {

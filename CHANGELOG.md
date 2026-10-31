@@ -1,3 +1,10 @@
+## 1.6.3 - 2026-10-31
+
+- Preserve SafeFileHosting download POST tokens even when the website renames or removes the form ID.
+- Reject bare token-only endpoint URLs with instructions to obtain a fresh download through the browser extension.
+- Fall back to a streaming GET when servers reject HEAD and range probes; reuse the response without a second download request.
+- Add exact-byte transfer, token handling and real-browser form regressions.
+
 ## 1.6.2 - 2026-10-31
 
 - Rebuild the desktop library around a single command bar, slimmer grouped sidebar and aligned transfer columns.

@@ -36,7 +36,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     },
     contextMenus: { onClicked: event('context'), create() {}, removeAll: async () => {} },
   };
-  const context = vm.createContext({ chrome, console, URL, AbortSignal, navigator: { userAgent: 'test-agent' }, fetch: async (url, options) => {
+  const context = vm.createContext({ chrome, console, URL, URLSearchParams, AbortSignal, navigator: { userAgent: 'test-agent' }, fetch: async (url, options) => {
     if (url.endsWith('/extension/heartbeat')) {
       reports.push(JSON.parse(options.body));
       return { ok: online, json: async () => ({ reload, version: '1.3.1' }) };
@@ -562,7 +562,7 @@ test('other websites with explicit hidden download forms preserve all request pa
 });
 
 test('uploads, login inputs, unsupported encoding and ordinary POST forms stay in the browser', async () => {
-  for (const change of [form => { form.id = 'login'; }, form => { form.enctype = 'multipart/form-data'; }, form => {
+  for (const change of [form => { form.id = 'login'; form.action = 'https://files.example.org/login'; }, form => { form.enctype = 'multipart/form-data'; }, form => {
     Object.defineProperty(form, 'elements', { value: [...form.elements, { tagName: 'INPUT', type: 'password', name: 'password', value: 'private' }] });
   }, form => {
     Object.defineProperty(form, 'elements', { value: [...form.elements, { tagName: 'INPUT', type: 'file', name: 'upload', value: '' }] });
@@ -762,5 +762,31 @@ test('Spotify library download-all preserves playlists and the complete Liked So
     assert.equal(request.media_cookies, null);
     assert.equal(request.cookies, null);
     assert.equal(JSON.stringify(request).includes('uid='), false);
+  }
+});
+
+
+test('token-only URLs cannot enter IDG as GET from manual or context-menu handoffs', async () => {
+  const { message, events, calls } = worker();
+  const url = 'https://server53.safefilehosting.com/files/download.php';
+  for (const post_data of [undefined, '', 'filename=fixture.zip']) {
+    const result = await message({ type: 'download', url, post_data });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /fresh website token/);
+  }
+  await events.context({ linkUrl: url }, { url: 'https://adsume.com/' });
+  assert.equal(calls.length, 0);
+});
+
+test('SafeFileHosting forms preserve POST tokens with changed or absent form IDs', async () => {
+  for (const id of ['', 'new-download-form', 'file-download']) {
+    const page = await overlayPage();
+    const fixture = postForm(page);
+    fixture.form.id = id;
+    fixture.form.submit();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(page.sent.length, 1);
+    assert.equal(new URLSearchParams(page.sent[0].post_data).get('token'), 'test+token');
+    assert.equal(fixture.nativeSubmissions, 0);
   }
 });

@@ -114,9 +114,14 @@ mod response_guard_tests {
 /// Returns an error if the network request fails or the server returns a
 /// non-2xx status on both `HEAD` and the fallback `GET`.
 pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
+    anyhow::ensure!(
+        !is_token_download(url),
+        "This download requires a fresh website token. Open the source page and click its download button with the updated IDG browser extension enabled; the download.php URL alone cannot download the file."
+    );
     if is_mail_export(url) {
         return streaming_probe(client, url).await;
     }
+    let mut reuse_response = false;
     let resp = client
         .head(url)
         .header("Accept-Encoding", "identity")
@@ -132,13 +137,33 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
             | StatusCode::BAD_REQUEST
             | StatusCode::FORBIDDEN
     ) {
-        client
+        let response = client
             .get(url)
             .header("Accept-Encoding", "identity")
             .header("Range", "bytes=0-0")
             .send()
             .await
-            .context("fallback GET probe failed")?
+            .context("fallback GET probe failed")?;
+        let response = if matches!(
+            response.status(),
+            StatusCode::METHOD_NOT_ALLOWED
+                | StatusCode::NOT_IMPLEMENTED
+                | StatusCode::BAD_REQUEST
+                | StatusCode::FORBIDDEN
+                | StatusCode::RANGE_NOT_SATISFIABLE
+        ) {
+            drop(response);
+            client
+                .get(url)
+                .header("Accept-Encoding", "identity")
+                .send()
+                .await
+                .context("Streaming GET fallback failed")?
+        } else {
+            response
+        };
+        reuse_response = response.status() == StatusCode::OK;
+        response
     } else {
         resp
     };
@@ -176,7 +201,9 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
 
     // Verify range semantics before spawning workers; advertised support alone
     // can be incorrect on CDNs/proxies. Never write a full response at a range offset.
-    if let Some(size) = content_length.filter(|size| *size > 0) {
+    if reuse_response {
+        accepts_ranges = false;
+    } else if let Some(size) = content_length.filter(|size| *size > 0) {
         if resp.status() == StatusCode::PARTIAL_CONTENT {
             accepts_ranges = headers
                 .get("content-range")
@@ -211,11 +238,26 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
 
     Ok(ProbeResult {
         if_range,
-        response: None,
+        response: reuse_response.then_some(resp),
         content_length,
         accepts_ranges,
         filename,
         final_url,
+    })
+}
+
+/// Token-only endpoints must be submitted through the original browser form.
+pub fn is_token_download(url: &str) -> bool {
+    reqwest::Url::parse(url).is_ok_and(|url| {
+        url.host_str()
+            .and_then(|host| host.strip_suffix(".safefilehosting.com"))
+            .is_some_and(|subdomain| {
+                !subdomain.is_empty()
+                    && subdomain
+                        .bytes()
+                        .all(|c| c.is_ascii_alphanumeric() || c == b'-')
+            })
+            && url.path() == "/files/download.php"
     })
 }
 
@@ -444,6 +486,21 @@ fn percent_decode(s: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn token_only_urls_fail_before_sending_a_probe() {
+        let error = probe(
+            &Client::new(),
+            "https://server53.safefilehosting.com/files/download.php",
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("fresh website token"));
+        assert!(!is_token_download(
+            "https://server53.safefilehosting.com.evil.test/files/download.php"
+        ));
+        assert!(!is_token_download("https://example.com/files/download.php"));
+    }
+
     #[test]
     fn header_names_and_url_encoding() {
         assert_eq!(
