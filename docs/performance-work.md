@@ -191,3 +191,11 @@ Process-time readings varied sharply for both executables. In the cycle batch, D
 The transport-layout example diagnoses inline future sizes without polling requests or touching files. An experiment boxed contended admission timer state, reducing its own future from 240 to 40 bytes, but request/engine futures remained 1456/4536 bytes. That production edit was reverted; no throughput benefit is claimed. Only the diagnostic remains. Results are target/perf-admission-layout-{before,after}.json. The actual timed candidate remains SHA-256 70e9808e29c314f2740c85668f9d5ff0398fd0e1ecaeb7497dacf95acea55786, engine source 7cc7afe.
 
 The new behavior is verified by the failed-before/passed-after TCP-cap, isolated-reset, capacity-recovery, cancellation and form-safety tests. The performance goal remains active; these reliability fixes do not prove that IDG is fastest across sources or hardware.
+
+### Single-use generated GET intent (pre-publication correction)
+
+A new real-wire regression found that method-only capacity eligibility replayed a generated mail export three times after ambiguous connection loss. Generated exports use GET but must be sent only once. Unpublished candidate c855d6f and its local packages were rejected; public v1.6.6 is not affected by this new adaptive-retry regression.
+
+Request specs now retain explicit replay intent across redirects. Generated GET probes and forms cannot be capacity trials or automatic transport retries, including form redirects to GET for 301/302/303. A queued single-use GET waits for an ordinary slot and is sent once after the healthy stream releases capacity. The regression passes for all four export paths and exact response bytes. Logs: target/perf-one-use-get-{reproduction,verification}.log and target/perf-single-use-queue-verification.log.
+
+Both architectures pass 85 app tests plus two native-host tests, nine ignored, and all-target clippy with warnings denied (target/perf-v167-intent-{x64,x86}-{tests,clippy}.log). Earlier 7cc7afe benchmarks do not measure this final intent change. A fresh comparison and new packages are required before release verification.

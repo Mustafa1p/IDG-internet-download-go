@@ -71,6 +71,7 @@ pub struct Spec {
     url: String,
     headers: HeaderMap,
     body: Option<String>,
+    replayable: bool,
 }
 impl Spec {
     pub fn get(url: &str) -> Self {
@@ -79,6 +80,7 @@ impl Spec {
             url: url.into(),
             headers: HeaderMap::new(),
             body: None,
+            replayable: true,
         }
     }
     pub fn form(url: &str, body: String) -> Self {
@@ -87,7 +89,14 @@ impl Spec {
             url: url.into(),
             headers: HeaderMap::new(),
             body: Some(body),
+            replayable: false,
         }
+    }
+    /// Generated/token-bearing GETs must not be used to test capacity or be
+    /// replayed after ambiguous connection loss. Intent survives redirects.
+    pub fn single_use(mut self) -> Self {
+        self.replayable = false;
+        self
     }
     pub fn header(mut self, name: &str, value: impl AsRef<str>) -> Result<Self> {
         self.headers.insert(
@@ -234,7 +243,7 @@ impl RequestContext {
             }
             visited.push((spec.method.clone(), url.clone()));
             let budget = HostBudget::for_url(url.as_str());
-            let allow_probe = matches!(spec.method, Method::GET | Method::HEAD);
+            let allow_probe = spec.replayable && matches!(spec.method, Method::GET | Method::HEAD);
             let (response, permit, elapsed) = loop {
                 // No network deadline runs while another file owns the capacity.
                 let permit = tokio::select! {
@@ -400,6 +409,8 @@ mod tests {
         let transient = Arc::new(AtomicUsize::new(0));
         let permanent_closes = Arc::new(AtomicUsize::new(0));
         let closed = permanent_closes.clone();
+        let single_use = Arc::new(AtomicUsize::new(0));
+        let single = single_use.clone();
         let (release, released) = tokio::sync::watch::channel(false);
         let server = tokio::spawn(async move {
             loop {
@@ -407,6 +418,7 @@ mod tests {
                 let posts = received_posts.clone();
                 let transient = transient.clone();
                 let closed = closed.clone();
+                let single = single.clone();
                 let mut released = released.clone();
                 tokio::spawn(async move {
                     let mut request = Vec::new();
@@ -437,6 +449,12 @@ mod tests {
                         }
                     } else if request.starts_with(b"GET /always-closed ") {
                         closed.fetch_add(1, Ordering::Relaxed);
+                    } else if request.starts_with(b"GET /single-use ") {
+                        single.fetch_add(1, Ordering::Relaxed);
+                        socket
+                            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ndata")
+                            .await
+                            .unwrap();
                     } else {
                         assert!(request.starts_with(b"POST /closed "));
                         posts.fetch_add(1, Ordering::Relaxed);
@@ -526,9 +544,33 @@ mod tests {
             "A waiting form must not be used as a speculative connection probe"
         );
         assert_eq!(posts.load(Ordering::Relaxed), 2);
+        let export_url = format!("{base}/single-use");
+        let mut export =
+            Box::pin(context.send(Spec::get(&export_url).single_use(), Control::default()));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(250), &mut export)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            single_use.load(Ordering::Relaxed),
+            0,
+            "A single-use GET must not probe occupied capacity"
+        );
         release.send(true).unwrap();
         assert_eq!(response.bytes().await.unwrap().as_ref(), b"data");
         drop(permit);
+        let LeasedResponse {
+            response: exported,
+            permit: export_permit,
+        } = tokio::time::timeout(Duration::from_secs(1), export)
+            .await
+            .unwrap()
+            .unwrap()
+            .leased;
+        assert_eq!(exported.bytes().await.unwrap().as_ref(), b"data");
+        drop(export_permit);
+        assert_eq!(single_use.load(Ordering::Relaxed), 1);
         assert_eq!(budget.counts().0, 0);
         let result = tokio::time::timeout(
             Duration::from_secs(1),

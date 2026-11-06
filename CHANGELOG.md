@@ -1,8 +1,8 @@
-## 1.6.7 - 2026-11-06
+## 1.6.7 - 2026-11-07
 
 - Fix password-only URL authentication: an empty username no longer causes data ranges to lose credentials after the initial probe. Preserve explicit authorization overrides and source-origin credential boundaries.
 - Queue downloads when a server repeatedly closes excess TCP connections without HTTP 429/503, rather than exhausting probes while another file occupies the server's connections.
-- Keep quick retries for isolated connection failures and test recovered capacity with at most one GET/HEAD trial at a time. One-use forms are neither replayed nor used to probe capacity.
+- Keep quick retries for isolated connection failures and test recovered capacity with at most one GET/HEAD trial at a time. Single-use generated GET exports and forms are neither replayed nor used to probe capacity, including after form redirects to GET.
 - Fix a queue wake-up case involving a waiting form. Preserve cancellation, validated byte offsets, origin isolation, metadata deadlines and bounded failure when no healthy peers remain.
 - Add real-socket coverage for reset/EOF caps, recovered capacity, malformed HTTP, queued cancellation and form safety. Benchmark reports retain independent CPU-cycle coverage and complete trial evidence.
 

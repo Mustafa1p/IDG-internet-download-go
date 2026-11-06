@@ -366,7 +366,7 @@ pub async fn post_probe(client: &RequestContext, url: &str, body: String) -> Res
 
 async fn streaming_probe(client: &RequestContext, url: &str) -> Result<ProbeResult> {
     let LeasedResponse { response, permit } = client
-        .send(Spec::get(url), Control::default())
+        .send(Spec::get(url).single_use(), Control::default())
         .await
         .context("Email export request failed")?
         .leased;
@@ -535,6 +535,119 @@ fn percent_decode(s: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn generated_get_export_is_not_replayed_after_a_capacity_close() {
+        for redirect in [None, Some(301), Some(302), Some(303)] {
+            single_use_export_case(redirect).await;
+        }
+    }
+
+    async fn single_use_export_case(redirect: Option<u16>) {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let exports = Arc::new(AtomicUsize::new(0));
+        let seen = exports.clone();
+        let submissions = Arc::new(AtomicUsize::new(0));
+        let submitted = submissions.clone();
+        let (release, released) = tokio::sync::watch::channel(false);
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut released = released.clone();
+                let seen = seen.clone();
+                let submitted = submitted.clone();
+                tokio::spawn(async move {
+                    let mut request = Vec::new();
+                    let mut buffer = [0u8; 1024];
+                    while !request.windows(4).any(|v| v == b"\r\n\r\n") {
+                        let count = socket.read(&mut buffer).await.unwrap();
+                        assert!(count > 0 && request.len() < 8192);
+                        request.extend_from_slice(&buffer[..count]);
+                    }
+                    if request.starts_with(b"GET /healthy ") {
+                        socket
+                            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n")
+                            .await
+                            .unwrap();
+                        released.wait_for(|value| *value).await.unwrap();
+                        socket.write_all(b"data").await.unwrap();
+                    } else if request.starts_with(b"POST /submit ") {
+                        let header_end =
+                            request.windows(4).position(|v| v == b"\r\n\r\n").unwrap() + 4;
+                        let length = std::str::from_utf8(&request[..header_end])
+                            .unwrap()
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                name.eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse::<usize>().unwrap())
+                            })
+                            .unwrap();
+                        while request.len() < header_end + length {
+                            let count = socket.read(&mut buffer).await.unwrap();
+                            assert!(count > 0);
+                            request.extend_from_slice(&buffer[..count]);
+                        }
+                        assert_eq!(&request[header_end..header_end + length], b"token=once");
+                        submitted.fetch_add(1, Ordering::Relaxed);
+                        socket.write_all(format!("HTTP/1.1 {} Redirect\r\nLocation: /export\r\nContent-Length: 0\r\n\r\n", redirect.unwrap()).as_bytes()).await.unwrap();
+                    } else if request.starts_with(b"GET /export ") {
+                        seen.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        assert!(request.starts_with(b"GET /prime "));
+                    }
+                });
+            }
+        });
+        let context = RequestContext::new(
+            Arc::new(super::super::http_client().unwrap()),
+            &base,
+            reqwest::header::HeaderMap::new(),
+        )
+        .unwrap();
+        let LeasedResponse { response, permit } = context
+            .send(Spec::get(&format!("{base}/healthy")), Control::default())
+            .await
+            .unwrap()
+            .leased;
+        assert!(
+            context
+                .send(Spec::get(&format!("{base}/prime")), Control::default())
+                .await
+                .is_err()
+        );
+        let export_url = format!("{base}/export");
+        let submit_url = format!("{base}/submit");
+        let result = tokio::time::timeout(std::time::Duration::from_millis(250), async {
+            if redirect.is_some() {
+                post_probe(&context, &submit_url, "token=once".into()).await
+            } else {
+                streaming_probe(&context, &export_url).await
+            }
+        })
+        .await;
+        let attempts = exports.load(Ordering::Relaxed);
+        release.send(true).unwrap();
+        assert_eq!(response.bytes().await.unwrap().as_ref(), b"data");
+        drop(permit);
+        server.abort();
+        assert!(
+            result.is_ok(),
+            "A generated GET export must return its first failure without capacity retries; attempts={attempts}"
+        );
+        assert!(result.unwrap().is_err());
+        assert_eq!(attempts, 1);
+        assert_eq!(
+            submissions.load(Ordering::Relaxed),
+            usize::from(redirect.is_some())
+        );
+    }
     fn context(client: reqwest::Client, url: &str) -> RequestContext {
         RequestContext::new(
             std::sync::Arc::new(client),
