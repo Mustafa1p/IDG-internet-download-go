@@ -225,8 +225,11 @@
     }
   ],
   "limitations": [
-    "Fresh timing comparisons of this corrected default source are pending.",
+    "Fresh comparisons passed 127 exact files; losses remain visible and universal performance superiority is not established.",
     "Packaged GUI/tray/cold-start remains unverified.",
     "No new release or universal performance claim."
-  ]
+  ],
+  "source_revision": "f663941d7e05aa4ce6e2306fe41c5b5f4d508be0",
+  "performance_binary_sha256": "b5ee403db571ac476b29688bc4ee49e95504e7e7d487fab7a9178645ad19720b",
+  "comparison_report": "initial-range-handoff-comparison.json"
 }
