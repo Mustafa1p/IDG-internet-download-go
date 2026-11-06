@@ -163,7 +163,7 @@ impl RequestContext {
             headers.remove(name);
         }
         // Preserve explicit URL authentication, scoped just like browser headers.
-        if !url.username().is_empty()
+        if (!url.username().is_empty() || url.password().is_some())
             && !headers.contains_key("authorization")
             && let Some(value) = client
                 .get(url.clone())
@@ -600,60 +600,74 @@ mod tests {
 
     #[tokio::test]
     async fn url_authentication_stays_scoped_and_automatic_referrer_omits_secrets() {
-        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let captured = seen.clone();
-        let (target, target_server) = serve(Router::new().route(
-            "/target",
-            any(move |headers: HeaderMap| {
-                captured.lock().unwrap().push(headers);
-                async { "payload" }
-            }),
-        ))
-        .await;
-        let (source, source_server) = serve(Router::new().route(
-            "/start",
-            any(move |headers: HeaderMap| {
-                assert_eq!(headers["authorization"], "Basic dXNlcjpwYXNz");
-                let location = format!("{target}/target");
-                async move { (StatusCode::FOUND, [("location", location)]) }
-            }),
-        ))
-        .await;
-        let mut authenticated = Url::parse(&format!("{source}/start?token=source-secret")).unwrap();
-        authenticated.set_username("user").unwrap();
-        authenticated.set_password(Some("pass")).unwrap();
-        let context = RequestContext::new(
-            Arc::new(super::super::http_client().unwrap()),
-            authenticated.as_str(),
-            HeaderMap::new(),
-        )
-        .unwrap();
-        // The second request models a resolved same-origin URL without userinfo.
-        for url in [
-            authenticated.to_string(),
-            format!("{source}/start?token=source-secret"),
+        for (username, password, expected) in [
+            ("", "pass", "Basic OnBhc3M="),
+            ("user", "pass", "Basic dXNlcjpwYXNz"),
+            (
+                "user name",
+                "p@ss:word",
+                "Basic dXNlciBuYW1lOnBAc3M6d29yZA==",
+            ),
         ] {
-            let received = context
-                .send(Spec::get(&url), Control::default())
-                .await
-                .unwrap();
-            assert_eq!(
-                received.leased.response.bytes().await.unwrap().as_ref(),
-                b"payload"
+            let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let captured = seen.clone();
+            let (target, target_server) = serve(Router::new().route(
+                "/target",
+                any(move |headers: HeaderMap| {
+                    captured.lock().unwrap().push(headers);
+                    async { "payload" }
+                }),
+            ))
+            .await;
+            let (source, source_server) = serve(Router::new().route(
+                "/start",
+                any(move |headers: HeaderMap| {
+                    assert_eq!(headers["authorization"], expected);
+                    let location = format!("{target}/target");
+                    async move { (StatusCode::FOUND, [("location", location)]) }
+                }),
+            ))
+            .await;
+            let mut authenticated =
+                Url::parse(&format!("{source}/start?token=source-secret")).unwrap();
+            authenticated.set_username(username).unwrap();
+            authenticated.set_password(Some(password)).unwrap();
+            let context = RequestContext::new(
+                Arc::new(super::super::http_client().unwrap()),
+                authenticated.as_str(),
+                HeaderMap::new(),
+            )
+            .unwrap();
+            // The second request models a resolved same-origin URL without userinfo.
+            for url in [
+                authenticated.to_string(),
+                format!("{source}/start?token=source-secret"),
+            ] {
+                let received = context
+                    .send(Spec::get(&url), Control::default())
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    received.leased.response.bytes().await.unwrap().as_ref(),
+                    b"payload"
+                );
+            }
+            for headers in seen.lock().unwrap().iter() {
+                assert!(!headers.contains_key("authorization"));
+                assert_eq!(headers["referer"], format!("{source}/"));
+            }
+            let secure =
+                Url::parse("https://user:pass@example.test/path?token=secret#fragment").unwrap();
+            assert!(
+                automatic_referer(&secure, &Url::parse("http://example.test/").unwrap()).is_none()
             );
+            assert_eq!(
+                automatic_referer(&secure, &Url::parse("https://example.test/other").unwrap())
+                    .unwrap(),
+                "https://example.test/path?token=secret"
+            );
+            source_server.abort();
+            target_server.abort();
         }
-        for headers in seen.lock().unwrap().iter() {
-            assert!(!headers.contains_key("authorization"));
-            assert_eq!(headers["referer"], format!("{source}/"));
-        }
-        let secure =
-            Url::parse("https://user:pass@example.test/path?token=secret#fragment").unwrap();
-        assert!(automatic_referer(&secure, &Url::parse("http://example.test/").unwrap()).is_none());
-        assert_eq!(
-            automatic_referer(&secure, &Url::parse("https://example.test/other").unwrap()).unwrap(),
-            "https://example.test/path?token=secret"
-        );
-        source_server.abort();
-        target_server.abort();
     }
 }

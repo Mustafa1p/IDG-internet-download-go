@@ -357,6 +357,94 @@ mod regression_tests {
     const SIZE: usize = 256 * 1024 + 19;
 
     #[tokio::test]
+    async fn url_credentials_authenticate_probe_and_all_resolved_ranges() {
+        for (username, password, override_auth, expected) in [
+            ("", Some("pass"), None, "Basic OnBhc3M="),
+            ("user", Some("pass"), None, "Basic dXNlcjpwYXNz"),
+            (
+                "user name",
+                Some("p@ss:word"),
+                None,
+                "Basic dXNlciBuYW1lOnBAc3M6d29yZA==",
+            ),
+            ("user", None, None, "Basic dXNlcjo="),
+            (
+                "user",
+                Some("pass"),
+                Some("Bearer explicit"),
+                "Bearer explicit",
+            ),
+        ] {
+            let accepted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let rejected = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let requests = accepted.clone();
+            let denials = rejected.clone();
+            let router = Router::new().route(
+                "/file",
+                get(move |method: Method, headers: HeaderMap| {
+                    let requests = requests.clone();
+                    let denials = denials.clone();
+                    async move {
+                        if headers
+                            .get("authorization")
+                            .is_none_or(|value| value != expected)
+                        {
+                            denials.fetch_add(1, Ordering::Relaxed);
+                            return StatusCode::UNAUTHORIZED.into_response();
+                        }
+                        requests.fetch_add(1, Ordering::Relaxed);
+                        range_file(method, headers).await
+                    }
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut url =
+                reqwest::Url::parse(&format!("http://{}/file", listener.local_addr().unwrap()))
+                    .unwrap();
+            url.set_username(username).unwrap();
+            url.set_password(password).unwrap();
+            let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let directory = tempfile::tempdir().unwrap();
+            let output = directory.path().join("authenticated.bin");
+            let mut item =
+                crate::download::types::DownloadItem::new(url.to_string(), output.clone(), 4);
+            if let Some(value) = override_auth {
+                item.headers.insert("authorization", value.parse().unwrap());
+            }
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            let result = tokio::time::timeout(
+                Duration::from_secs(5),
+                start_download(
+                    Arc::new(super::super::http_client().unwrap()),
+                    downloads.clone(),
+                    id,
+                ),
+            )
+            .await
+            .unwrap();
+            server.abort();
+            assert!(
+                result.is_ok(),
+                "URL credentials failed (empty username={}): {result:?}; accepted={}, rejected={}",
+                username.is_empty(),
+                accepted.load(Ordering::Relaxed),
+                rejected.load(Ordering::Relaxed)
+            );
+            assert_eq!(rejected.load(Ordering::Relaxed), 0);
+            assert!(
+                accepted.load(Ordering::Relaxed) > 1,
+                "Verify probe and resolved data URLs"
+            );
+            assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+            assert_eq!(
+                std::fs::read(output).unwrap(),
+                (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn authenticated_files_reuse_transport_without_reusing_each_others_headers() {
         struct CountingListener {
             inner: tokio::net::TcpListener,
