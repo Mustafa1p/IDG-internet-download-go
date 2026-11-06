@@ -234,69 +234,80 @@ impl RequestContext {
             }
             visited.push((spec.method.clone(), url.clone()));
             let budget = HostBudget::for_url(url.as_str());
-            // No network deadline runs while another file owns the capacity.
-            let permit = tokio::select! {
-                permit = budget.acquire() => permit,
-                error = control.interrupted() => return Err(error),
-            };
-            control.check()?;
-            let origin = url.origin().ascii_serialization();
-            let mut headers = HeaderMap::new();
-            for (name, value) in &self.headers {
-                if origin == self.origin || cross_origin_safe(name.as_str()) {
-                    headers.append(name.clone(), value.clone());
-                }
-            }
-            for (name, value) in &spec.headers {
-                if origin == spec_origin || cross_origin_safe(name.as_str()) {
-                    headers.insert(name.clone(), value.clone());
-                }
-            }
-            if spec.body.is_none() {
-                headers.remove("content-type");
-                headers.remove("content-length");
-            }
-            if !headers.contains_key("referer")
-                && let Some(prior) = previous.as_ref()
-                && let Some(value) = automatic_referer(prior, &url)
-            {
-                headers.insert("referer", value);
-            }
-            let mut request = self
-                .client
-                .request(spec.method.clone(), url.clone())
-                .headers(headers)
-                .header("accept-encoding", "identity");
-            if let Some(body) = &spec.body {
-                request = request
-                    .header("content-type", "application/x-www-form-urlencoded")
-                    .body(body.clone());
-            }
-            if let Some(timeout) = total_remaining {
-                request = request.timeout(timeout);
-            }
-            let started = tokio::time::Instant::now();
-            let sending = async {
-                let result = match remaining {
-                    Some(timeout) => tokio::time::timeout(timeout, request.send())
-                        .await
-                        .map_err(|_| {
-                            anyhow::anyhow!("Network stalled waiting for response headers")
-                        })?,
-                    None => request.send().await,
+            let allow_probe = matches!(spec.method, Method::GET | Method::HEAD);
+            let (response, permit, elapsed) = loop {
+                // No network deadline runs while another file owns the capacity.
+                let permit = tokio::select! {
+                    permit = budget.acquire_request(allow_probe) => permit,
+                    error = control.interrupted() => return Err(error),
                 };
-                if let Err(error) = &result
-                    && connection_closed(error)
-                {
-                    permit.connection_closed();
+                control.check()?;
+                let origin = url.origin().ascii_serialization();
+                let mut headers = HeaderMap::new();
+                for (name, value) in &self.headers {
+                    if origin == self.origin || cross_origin_safe(name.as_str()) {
+                        headers.append(name.clone(), value.clone());
+                    }
                 }
-                result.context("HTTP request failed")
+                for (name, value) in &spec.headers {
+                    if origin == spec_origin || cross_origin_safe(name.as_str()) {
+                        headers.insert(name.clone(), value.clone());
+                    }
+                }
+                if spec.body.is_none() {
+                    headers.remove("content-type");
+                    headers.remove("content-length");
+                }
+                if !headers.contains_key("referer")
+                    && let Some(prior) = previous.as_ref()
+                    && let Some(value) = automatic_referer(prior, &url)
+                {
+                    headers.insert("referer", value);
+                }
+                let mut request = self
+                    .client
+                    .request(spec.method.clone(), url.clone())
+                    .headers(headers)
+                    .header("accept-encoding", "identity");
+                if let Some(body) = &spec.body {
+                    request = request
+                        .header("content-type", "application/x-www-form-urlencoded")
+                        .body(body.clone());
+                }
+                if let Some(timeout) = total_remaining {
+                    request = request.timeout(timeout);
+                }
+                let started = tokio::time::Instant::now();
+                let sending = async {
+                    let result = match remaining {
+                        Some(timeout) => tokio::time::timeout(timeout, request.send())
+                            .await
+                            .map_err(|_| {
+                                anyhow::anyhow!("Network stalled waiting for response headers")
+                            })?,
+                        None => request.send().await,
+                    };
+                    Ok::<_, anyhow::Error>(result)
+                };
+                let result = tokio::select! {
+                    response = sending => response?,
+                    error = control.interrupted() => return Err(error),
+                };
+                match result {
+                    Ok(response) => break (response, permit, started.elapsed()),
+                    Err(error) => {
+                        let pressure = connection_closed(&error) && permit.connection_closed();
+                        if pressure && allow_probe {
+                            // A confirmed capacity refusal is queue time. GET/HEAD
+                            // can try another admitted connection without burning
+                            // the caller's failure budget; forms are never replayed.
+                            drop(permit);
+                            continue;
+                        }
+                        return Err(error).context("HTTP request failed");
+                    }
+                }
             };
-            let response = tokio::select! {
-                response = sending => response?,
-                error = control.interrupted() => return Err(error),
-            };
-            let elapsed = started.elapsed();
             remaining = remaining.map(|value| value.saturating_sub(elapsed));
             total_remaining = total_remaining.map(|value| value.saturating_sub(elapsed));
             let status = response.status().as_u16();
@@ -386,11 +397,16 @@ mod tests {
         let base = format!("http://{}", listener.local_addr().unwrap());
         let posts = Arc::new(AtomicUsize::new(0));
         let received_posts = posts.clone();
+        let transient = Arc::new(AtomicUsize::new(0));
+        let permanent_closes = Arc::new(AtomicUsize::new(0));
+        let closed = permanent_closes.clone();
         let (release, released) = tokio::sync::watch::channel(false);
         let server = tokio::spawn(async move {
             loop {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let posts = received_posts.clone();
+                let transient = transient.clone();
+                let closed = closed.clone();
                 let mut released = released.clone();
                 tokio::spawn(async move {
                     let mut request = Vec::new();
@@ -412,6 +428,15 @@ mod tests {
                             .write_all(b"invalid HTTP response\r\n")
                             .await
                             .unwrap();
+                    } else if request.starts_with(b"GET /transient ") {
+                        if transient.fetch_add(1, Ordering::Relaxed) > 0 {
+                            socket
+                                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ndata")
+                                .await
+                                .unwrap();
+                        }
+                    } else if request.starts_with(b"GET /always-closed ") {
+                        closed.fetch_add(1, Ordering::Relaxed);
                     } else {
                         assert!(request.starts_with(b"POST /closed "));
                         posts.fetch_add(1, Ordering::Relaxed);
@@ -432,6 +457,33 @@ mod tests {
             .unwrap()
             .leased;
         assert_eq!(budget.counts(), (1, 32));
+        assert!(
+            context
+                .send(Spec::get(&format!("{base}/transient")), Control::default())
+                .await
+                .is_err()
+        );
+        let recovered = tokio::time::timeout(
+            Duration::from_millis(250),
+            context.send(Spec::get(&format!("{base}/transient")), Control::default()),
+        )
+        .await;
+        if recovered.is_err() {
+            release.send(true).unwrap();
+            let _ = response.bytes().await;
+            drop(permit);
+            server.abort();
+            panic!(
+                "An isolated closed connection must not block recovery behind an unrelated healthy stream"
+            );
+        }
+        let LeasedResponse {
+            response: recovered,
+            permit: recovered_permit,
+        } = recovered.unwrap().unwrap().leased;
+        assert_eq!(recovered.bytes().await.unwrap().as_ref(), b"data");
+        drop(recovered_permit);
+        assert_eq!(budget.counts(), (1, 32));
         let error = context
             .send(Spec::get(&format!("{base}/malformed")), Control::default())
             .await
@@ -443,25 +495,55 @@ mod tests {
             (1, 32),
             "Malformed HTTP must not be treated as a connection cap"
         );
+        for attempt in 0..2 {
+            let result = tokio::time::timeout(
+                Duration::from_secs(1),
+                context.send(
+                    Spec::form(&format!("{base}/closed"), format!("token={attempt}")),
+                    Control::default(),
+                ),
+            )
+            .await
+            .unwrap();
+            assert!(result.is_err());
+        }
+        assert_eq!(
+            posts.load(Ordering::Relaxed),
+            2,
+            "A closed form request is never replayed"
+        );
+        assert_eq!(budget.counts(), (1, 1));
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(250),
+                context.send(
+                    Spec::form(&format!("{base}/closed"), "token=waiting".into()),
+                    Control::default(),
+                )
+            )
+            .await
+            .is_err(),
+            "A waiting form must not be used as a speculative connection probe"
+        );
+        assert_eq!(posts.load(Ordering::Relaxed), 2);
+        release.send(true).unwrap();
+        assert_eq!(response.bytes().await.unwrap().as_ref(), b"data");
+        drop(permit);
+        assert_eq!(budget.counts().0, 0);
         let result = tokio::time::timeout(
             Duration::from_secs(1),
             context.send(
-                Spec::form(&format!("{base}/closed"), "token=once".into()),
+                Spec::get(&format!("{base}/always-closed")),
                 Control::default(),
             ),
         )
         .await
         .unwrap();
-        assert!(result.is_err());
-        assert_eq!(
-            posts.load(Ordering::Relaxed),
-            1,
-            "A closed form request is never replayed"
+        assert!(
+            result.is_err(),
+            "Without healthy peers, closed connections remain a bounded failure"
         );
-        release.send(true).unwrap();
-        assert_eq!(response.bytes().await.unwrap().as_ref(), b"data");
-        drop(permit);
-        assert_eq!(budget.counts().0, 0);
+        assert_eq!(permanent_closes.load(Ordering::Relaxed), 1);
         server.abort();
     }
 

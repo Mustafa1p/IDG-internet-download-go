@@ -165,3 +165,15 @@ The shared admission now counts successful response headers separately from pend
 Both physical-reset and clean-EOF tests now queue the second file, then complete both exact files. A third queued file cancels without a server request or output file. Malformed HTTP does not infer a capacity limit, a closed form request is sent once, and lease bookkeeping returns to zero. Full suites pass 83 app tests plus two native-host tests on each Windows architecture; nine external/tool-dependent tests remain ignored. Clippy denies warnings on both architectures, and formatting passes. Logs: target/perf-tcp-cap-{all-closures,cancel-verification,negative-verification,bookkeeping,x64-tests,x86-tests,x64-clippy,x86-clippy}.log.
 
 Throughput verification against the preserved v1.6.6 engine is next. This source has not been packaged or released; do not substitute source test results for a published update.
+
+### Refinement: isolated failures, recovered capacity and waiting forms
+
+A new counterexample rejected the first monotonic TCP-cap prototype: one isolated closed connection caused a valid retry to wait behind an unrelated healthy stream (target/perf-tcp-cap-single-reset-reproduction.log). The candidate was not released. Its executable remains target/perf-idg-f681bee.exe, SHA-256 07bcdea539eb5963a0c8a7e398136949df72334986a40a214e1d882ce5419651.
+
+The refined policy requires repeated closures before inferring transport pressure. It admits at most one speculative GET/HEAD connection at a time, with a 50 ms initial delay and exponential backoff capped at one second. Successful headers prove capacity has recovered. Confirmed capacity closures can requeue an idempotent request without consuming its caller's ordinary failure budget; without healthy peers, failure remains bounded. Explicit HTTP 429/503 retains its existing policy.
+
+Forms neither test extra capacity nor replay after ambiguous connection loss. A form waiting at the FIFO head must not prevent a later safe capacity test from waking. That lost-wakeup case was reproduced (target/perf-tcp-cap-form-head-reproduction.log), then fixed by waking both the FIFO head and oldest eligible safe request when admission state changes.
+
+Real-socket tests cover hard RST/EOF caps, queued cancellation, isolated-reset recovery, two initial closures followed by recovered capacity while the first stream remains open, malformed HTTP, one-use form refusal and waiting-form protection. Gate tests verify one trial in flight, safe recovery behind a waiting form, late successful headers and complete lease cleanup. Full Windows x64/x86 suites pass 84 app tests plus two native-host tests each; nine external/tool-dependent tests remain ignored. Clippy denies warnings on both architectures and formatting passes. Logs: target/perf-tcp-adaptive-{x64,x86}-{tests,clippy}.log and target/perf-tcp-cap-{forms-verification,recovery-verification,adaptive-gate-verification}.log.
+
+The next measurement uses a freshly rebuilt CLI for this refined source; the f681bee binary must not be presented as the new candidate. No new throughput result or release is claimed yet.

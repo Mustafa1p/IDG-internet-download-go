@@ -20,6 +20,8 @@ struct HostWaiter {
     ready: tokio::sync::Notify,
     admitted: std::sync::atomic::AtomicBool,
     responding: std::sync::atomic::AtomicBool,
+    trial: std::sync::atomic::AtomicBool,
+    allow_probe: bool,
 }
 
 #[derive(Debug)]
@@ -27,6 +29,10 @@ struct HostState {
     limit: usize,
     active: usize,
     responding: usize,
+    closed_failures: u8,
+    probing: bool,
+    next_probe: Option<tokio::time::Instant>,
+    probe_backoff: Duration,
     waiting: std::collections::VecDeque<Arc<HostWaiter>>,
 }
 
@@ -50,6 +56,10 @@ impl HostBudget {
                 limit: limit.max(1),
                 active: 0,
                 responding: 0,
+                closed_failures: 0,
+                probing: false,
+                next_probe: None,
+                probe_backoff: Duration::from_millis(50),
                 waiting: std::collections::VecDeque::new(),
             }),
         })
@@ -94,16 +104,54 @@ impl HostBudget {
             waiter.admitted.store(true, Ordering::Release);
             waiter.ready.notify_one();
         }
+        if !state.probing
+            && state.active == state.limit
+            && state.limit < super::connections::MAX_CONNECTIONS
+            && state.responding > 0
+            && state
+                .next_probe
+                .is_some_and(|at| at <= tokio::time::Instant::now())
+            && let Some(index) = state.waiting.iter().position(|waiter| waiter.allow_probe)
+        {
+            // Only an idempotent request may test one extra connection. Forms
+            // retain ordinary FIFO admission until a real slot becomes free.
+            let waiter = state.waiting.remove(index).unwrap();
+            state.active += 1;
+            state.probing = true;
+            state.next_probe = Some(tokio::time::Instant::now() + state.probe_backoff);
+            waiter.trial.store(true, Ordering::Relaxed);
+            waiter.admitted.store(true, Ordering::Release);
+            waiter.ready.notify_one();
+        }
+    }
+
+    fn wake_waiters(state: &HostState) {
+        if let Some(waiter) = state.waiting.front() {
+            waiter.ready.notify_one();
+        }
+        // A form at the FIFO head cannot arm a speculative probe timer. Wake
+        // the oldest safe request too, so failed/cancelled trials can recover
+        // capacity without sending that form or leaving its followers asleep.
+        if let Some(waiter) = state.waiting.iter().find(|waiter| waiter.allow_probe) {
+            waiter.ready.notify_one();
+        }
+    }
+
+    #[cfg(test)]
+    pub async fn acquire(self: &Arc<Self>) -> HostPermit {
+        self.acquire_request(false).await
     }
 
     /// Dropping this future removes even a granted-but-unobserved reservation.
-    pub async fn acquire(self: &Arc<Self>) -> HostPermit {
+    pub async fn acquire_request(self: &Arc<Self>, allow_probe: bool) -> HostPermit {
         let permit = HostPermit {
             budget: self.clone(),
             waiter: Arc::new(HostWaiter {
                 ready: tokio::sync::Notify::new(),
                 admitted: std::sync::atomic::AtomicBool::new(false),
                 responding: std::sync::atomic::AtomicBool::new(false),
+                trial: std::sync::atomic::AtomicBool::new(false),
+                allow_probe,
             }),
         };
         {
@@ -112,7 +160,30 @@ impl HostBudget {
             Self::admit(&mut state);
         }
         while !permit.waiter.admitted.load(Ordering::Acquire) {
-            permit.waiter.ready.notified().await;
+            let next_probe = {
+                let mut state = self.state.lock().unwrap();
+                Self::admit(&mut state);
+                if allow_probe
+                    && !state.probing
+                    && state.responding > 0
+                    && state.active == state.limit
+                    && state.limit < super::connections::MAX_CONNECTIONS
+                {
+                    state.next_probe
+                } else {
+                    None
+                }
+            };
+            if permit.waiter.admitted.load(Ordering::Acquire) {
+                break;
+            }
+            match next_probe {
+                Some(at) => tokio::select! {
+                    _ = permit.waiter.ready.notified() => {},
+                    _ = tokio::time::sleep_until(at) => {},
+                },
+                None => permit.waiter.ready.notified().await,
+            }
         }
         permit
     }
@@ -124,23 +195,46 @@ impl HostPermit {
         let mut state = self.budget.state.lock().unwrap();
         if !self.waiter.responding.swap(true, Ordering::Relaxed) {
             state.responding += 1;
+            state.closed_failures = 0;
             // Already-admitted requests can finish their handshakes after a
             // refusal. Their successful headers prove this capacity exists.
             state.limit = state.limit.max(state.responding);
+            if self.waiter.trial.swap(false, Ordering::Relaxed) {
+                state.probing = false;
+                state.probe_backoff = Duration::from_millis(50);
+                state.next_probe = Some(tokio::time::Instant::now() + state.probe_backoff);
+            }
+            HostBudget::admit(&mut state);
+            HostBudget::wake_waiters(&state);
         }
     }
 
     /// A closed new connection while peers are responding can indicate a TCP
     /// socket cap. Queue later attempts behind those working responses, rather
     /// than exhausting retries while their connections are still occupied.
-    pub fn connection_closed(&self) {
+    pub fn connection_closed(&self) -> bool {
         let mut state = self.budget.state.lock().unwrap();
         let peers = state
             .responding
             .saturating_sub(usize::from(self.waiter.responding.load(Ordering::Relaxed)));
-        if peers > 0 {
-            state.limit = state.limit.min(peers);
+        if peers == 0 {
+            state.closed_failures = 0;
+            return false;
         }
+        state.closed_failures = state.closed_failures.saturating_add(1);
+        if state.next_probe.is_none() && state.closed_failures < 2 {
+            return false;
+        }
+        state.limit = state.limit.min(peers);
+        if self.waiter.trial.load(Ordering::Relaxed) {
+            state.probe_backoff = state
+                .probe_backoff
+                .saturating_mul(2)
+                .min(Duration::from_secs(1));
+        }
+        state.next_probe = Some(tokio::time::Instant::now() + state.probe_backoff);
+        HostBudget::wake_waiters(&state);
+        true
     }
 
     /// Learn from 429/503 only, while preserving all already-admitted bodies.
@@ -153,6 +247,10 @@ impl HostPermit {
                 .active
                 .saturating_sub(usize::from(Arc::ptr_eq(&budget, &self.budget)));
             state.limit = state.limit.min(other_requests.max(1));
+            // Explicit HTTP pressure does not authorize speculative capacity
+            // probes. Its existing retry/admission policy remains in force.
+            state.next_probe = None;
+            state.closed_failures = 0;
         }
         budget
     }
@@ -163,6 +261,9 @@ impl Drop for HostPermit {
         let mut state = self.budget.state.lock().unwrap();
         if self.waiter.admitted.load(Ordering::Relaxed) {
             state.active -= 1;
+            if self.waiter.trial.load(Ordering::Relaxed) {
+                state.probing = false;
+            }
             if self.waiter.responding.load(Ordering::Relaxed) {
                 state.responding -= 1;
             }
@@ -172,6 +273,7 @@ impl Drop for HostPermit {
                 .retain(|waiter| !Arc::ptr_eq(waiter, &self.waiter));
         }
         HostBudget::admit(&mut state);
+        HostBudget::wake_waiters(&state);
     }
 }
 
@@ -250,18 +352,25 @@ mod tests {
         );
         let pending = budget.acquire().await;
         let failed = budget.acquire().await;
-        failed.connection_closed();
+        assert!(
+            !failed.connection_closed(),
+            "One isolated close is not capacity evidence"
+        );
+        assert_eq!(budget.counts(), (3, 4));
+        let repeated = budget.acquire().await;
+        assert!(repeated.connection_closed());
         assert_eq!(
             budget.counts(),
-            (3, 1),
+            (4, 1),
             "Pending requests are not healthy responses"
         );
         pending.response_started();
         assert_eq!(
             budget.counts(),
-            (3, 2),
+            (4, 2),
             "Late successful headers prove capacity"
         );
+        drop(repeated);
         drop(failed);
         drop(pending);
         drop(first);
@@ -270,6 +379,61 @@ mod tests {
         let next = budget.acquire().await;
         drop(next);
         assert_eq!(budget.counts(), (0, 2));
+    }
+
+    #[tokio::test]
+    async fn capacity_trials_are_single_idempotent_requests_and_do_not_send_waiting_forms() {
+        let budget = HostBudget::new(4);
+        let first = budget.acquire().await;
+        let second = budget.acquire().await;
+        first.response_started();
+        second.response_started();
+        for expected in [false, true] {
+            let failed = budget.acquire().await;
+            assert_eq!(failed.connection_closed(), expected);
+            drop(failed);
+        }
+        assert_eq!(budget.counts(), (2, 2));
+        let mut form = Box::pin(budget.acquire_request(false));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(5), &mut form)
+                .await
+                .is_err()
+        );
+        let trial = tokio::time::timeout(Duration::from_secs(1), budget.acquire_request(true))
+            .await
+            .unwrap();
+        assert!(trial.waiter.trial.load(Ordering::Relaxed));
+        assert_eq!(budget.counts(), (3, 2));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(5), &mut form)
+                .await
+                .is_err()
+        );
+        let mut another_trial = Box::pin(budget.acquire_request(true));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(60), &mut another_trial)
+                .await
+                .is_err(),
+            "Only one speculative connection may be in flight"
+        );
+        assert!(trial.connection_closed());
+        drop(trial);
+        let recovered = tokio::time::timeout(Duration::from_secs(1), another_trial)
+            .await
+            .expect("A waiting form must not hide the next safe capacity probe");
+        recovered.response_started();
+        assert_eq!(budget.counts(), (3, 3));
+        drop(recovered);
+        let form = tokio::time::timeout(Duration::from_secs(1), form)
+            .await
+            .unwrap();
+        assert!(!form.waiter.trial.load(Ordering::Relaxed));
+        drop(form);
+        drop(first);
+        drop(second);
+        assert_eq!(budget.counts().0, 0);
+        assert!(!budget.state.lock().unwrap().probing);
     }
 
     #[tokio::test]

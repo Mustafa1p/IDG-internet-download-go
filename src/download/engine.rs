@@ -643,17 +643,18 @@ mod regression_tests {
 
     #[tokio::test]
     async fn concurrent_files_survive_servers_that_close_excess_tcp_connections() {
-        for clean_eof in [false, true] {
-            tcp_connection_cap_case(clean_eof).await;
+        for (clean_eof, recovering) in [(false, false), (true, false), (false, true)] {
+            tcp_connection_cap_case(clean_eof, recovering).await;
         }
     }
 
-    async fn tcp_connection_cap_case(clean_eof: bool) {
+    async fn tcp_connection_cap_case(clean_eof: bool, recovering: bool) {
         struct LimitedListener {
             inner: tokio::net::TcpListener,
             sockets: Arc<tokio::sync::Semaphore>,
             refused: Arc<std::sync::atomic::AtomicUsize>,
             clean_eof: bool,
+            reject_remaining: usize,
         }
         impl axum::serve::Listener for LimitedListener {
             type Io = tokio::io::DuplexStream;
@@ -661,7 +662,14 @@ mod regression_tests {
             async fn accept(&mut self) -> (Self::Io, Self::Addr) {
                 loop {
                     let (mut socket, address) = self.inner.accept().await.unwrap();
-                    let Ok(permit) = self.sockets.clone().try_acquire_owned() else {
+                    let permit =
+                        if self.reject_remaining > 0 && self.sockets.available_permits() <= 28 {
+                            self.reject_remaining -= 1;
+                            None
+                        } else {
+                            self.sockets.clone().try_acquire_owned().ok()
+                        };
+                    let Some(permit) = permit else {
                         self.refused.fetch_add(1, Ordering::Relaxed);
                         if self.clean_eof {
                             use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -693,7 +701,7 @@ mod regression_tests {
                 self.inner.local_addr()
             }
         }
-        let sockets = Arc::new(tokio::sync::Semaphore::new(4));
+        let sockets = Arc::new(tokio::sync::Semaphore::new(if recovering { 32 } else { 4 }));
         let refused = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let ready = Arc::new(tokio::sync::Notify::new());
         let occupied = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -745,6 +753,7 @@ mod regression_tests {
             sockets: sockets.clone(),
             refused: refused.clone(),
             clean_eof,
+            reject_remaining: if recovering { 2 } else { 0 },
         };
         let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let directory = tempfile::tempdir().unwrap();
@@ -784,40 +793,52 @@ mod regression_tests {
         })
         .await
         .expect("All four occupied connections must have healthy responses");
-        assert_eq!(sockets.available_permits(), 0);
-        let second = tokio::spawn(start_download(client.clone(), downloads.clone(), second_id));
-        tokio::time::timeout(Duration::from_secs(2), async {
-            while budget.counts() != (4, 4) {
-                tokio::time::sleep(Duration::from_millis(5)).await;
-            }
-        })
-        .await
-        .expect("A closed excess connection should queue behind healthy responses");
-        let pending = tokio::spawn(start_download(
-            client.clone(),
-            downloads.clone(),
-            cancelled_id,
-        ));
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        cancel.store(true, Ordering::Relaxed);
-        tokio::time::timeout(Duration::from_secs(1), pending)
+        assert_eq!(sockets.available_permits(), if recovering { 28 } else { 0 });
+        let mut second = tokio::spawn(start_download(client.clone(), downloads.clone(), second_id));
+        let early_second = if recovering {
+            tokio::time::timeout(Duration::from_secs(1), &mut second)
+                .await
+                .ok()
+                .map(|joined| joined.unwrap())
+        } else {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                while budget.counts() != (4, 4) {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
             .await
-            .unwrap()
-            .unwrap()
-            .unwrap();
-        assert_eq!(cancelled_hits.load(Ordering::Relaxed), 0);
-        assert!(!cancelled_path.exists());
-        tokio::time::sleep(Duration::from_millis(600)).await;
+            .expect("A closed excess connection should queue behind healthy responses");
+            let pending = tokio::spawn(start_download(
+                client.clone(),
+                downloads.clone(),
+                cancelled_id,
+            ));
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            cancel.store(true, Ordering::Relaxed);
+            tokio::time::timeout(Duration::from_secs(1), pending)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            assert_eq!(cancelled_hits.load(Ordering::Relaxed), 0);
+            assert!(!cancelled_path.exists());
+            tokio::time::sleep(Duration::from_millis(600)).await;
+            None
+        };
+        let recovered_while_busy = early_second.is_some();
         let failed_while_busy = second.is_finished();
         release.send(true).unwrap();
         let first_result = tokio::time::timeout(Duration::from_secs(5), first)
             .await
             .unwrap()
             .unwrap();
-        let second_result = tokio::time::timeout(Duration::from_secs(5), second)
-            .await
-            .unwrap()
-            .unwrap();
+        let second_result = match early_second {
+            Some(result) => result,
+            None => tokio::time::timeout(Duration::from_secs(5), second)
+                .await
+                .unwrap()
+                .unwrap(),
+        };
         drop(client);
         server.abort();
         first_result.unwrap();
@@ -825,10 +846,17 @@ mod regression_tests {
             refused.load(Ordering::Relaxed) > 0,
             "Exercise a closed excess TCP connection"
         );
-        assert!(
-            !failed_while_busy,
-            "A busy peer must not exhaust the second file's probe: {second_result:?}"
-        );
+        if recovering {
+            assert!(
+                recovered_while_busy,
+                "Recovered server capacity must be used before an unrelated stream finishes"
+            );
+        } else {
+            assert!(
+                !failed_while_busy,
+                "A busy peer must not exhaust the second file's probe: {second_result:?}"
+            );
+        }
         second_result.unwrap();
         let expected: Vec<_> = (0..SIZE).map(|n| (n % 251) as u8).collect();
         assert_eq!(std::fs::read(first_path).unwrap(), expected);
@@ -841,7 +869,14 @@ mod regression_tests {
                 .take(2)
                 .all(|item| item.status == Status::Completed)
         );
-        assert_eq!(downloads.lock().unwrap()[2].status, Status::Cancelled);
+        assert_eq!(
+            downloads.lock().unwrap()[2].status,
+            if recovering {
+                Status::Queued
+            } else {
+                Status::Cancelled
+            }
+        );
         assert_eq!(budget.counts().0, 0);
     }
 
