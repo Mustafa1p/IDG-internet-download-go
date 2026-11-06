@@ -53,6 +53,28 @@ Each run has a fresh destination, exact-size/SHA-256 verification, rotated tool 
 
 ## Diagnostics and reproducibility
 
+The current `022d640` pipeline is terminal: all 52 A–D trials and 35 E trials are retained. IDG passed 12/12 local and 7/7 HTTPS transfers; original IDG and Prism also passed all their trials. Curl and aria2c failed their deliberately interrupted D trials. The complete reports are `target/perf-20261106-validation-local-v2-report` and `target/perf-20261106-validation-final-e-report` (raw data, logs, source snapshots and inspected charts).
+
+| Current build workload | IDG | Original IDG | Prism | aria2c | curl |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A, per-connection limit, n=3 (curl n=1) | 62.89 | 62.96 | 62.74 | 62.98 | 4.00 |
+| B, localhost, n=3 (curl n=1) | 1593.21 | 1623.33 | 1228.05 | 364.73 | 832.34 |
+| C, four-connection cap, n=3 (curl n=1) | 7.98 | 7.98 | 7.99 | 7.98 | 2.00 |
+| D, random drops, n=3 (curl n=1) | 42.20 | 38.03 | 35.53 | 0/3 verified | 0/1 verified |
+| E, official Rust HTTPS, n=7 | 47.20 | 15.84 | 25.67 | 42.32 | 50.44 |
+
+Rates are successful medians in MiB/s. This batch supports a large improvement on E versus original IDG, but curl leads E and original IDG is about 1.9% ahead on B. A/C are effectively server-limit ties. The first E candidate transfer took 8.784 seconds, retained in the seven samples; its trace showed a gradual throughput ramp, rather than a silent idle tail. Do not substitute the prior batch where curl was slower or discard this slow sample. The full objective is not achieved.
+
+The report generator now accepts the actual tool set/repeat counts, including preserved baseline binaries and E-only seven-round batches. It rejects incomplete inputs, missing/duplicate trials, mixed transport policies, mixed source files and inconsistent size/hash/timing claims, including under Python optimization. Partial-success medians always show their verified fraction and cannot produce comparison bars. Outputs require a new directory and retain raw data, logs, source snapshots and identity metadata. Eight focused regression tests pass; the original A–E report reproduces unchanged numeric results, and both accepted/rejected seven-round E batches have been exercised. The chart was inspected and its subset labels corrected to avoid clipping. Optional resource tables include measured failed attempts and show counter coverage; missing counters are never zeroes.
+
+Example for a terminal run: `python scripts/benchmark_report.py target/perf-20261106-validation-final-e.json --output target/perf-20261106-validation-final-e-report --scenarios E --idg-label "IDG 022d640"`. Do not run it until `finished_utc` is set and the expected trial count is present.
+
+`scripts/process_metrics.py` provides Windows process-lifetime CPU, peak working-set and peak commit counters from the owned process handle, without a polling thread. A real child allocating 32 MiB and spending CPU verifies the counters remain available after exit; a bad handle verifies errors remain explicit rather than invented zeroes. Both tests pass. These counters are now integrated into the harness via `benchmark_process.py`, outside timing, and label their scope as client-only (excluding child processes and the test server). A reduced-size localhost smoke passed all five clients with correct hashes and no resource-query errors (`target/perf-20261106-harness-resource-smoke.json`); it is an integration check, not a full-size throughput comparison. Earlier A–E results contain no resource counters. The release workflow includes these evidence regressions; hosted execution remains unverified.
+
+Additional independent HTTPS sources are integrated through `scripts/benchmark_sources.py`: pinned official Node 24.11.0 Windows x64 ZIP (36,356,854 bytes) and Python 3.13.0 Windows x64 installer (28,160,096 bytes; download only), preserving Rust E. Publisher metadata and HEAD sizes/range support were checked; a fresh official-metadata check for all three sources passed. Three source-validation tests reject wrong hashes, wrong filenames, duplicate entries and wrong digest algorithms. These are fixed test artifacts, not software-version recommendations. Node/Python transfer measurements are the next step.
+
+`scripts/benchmark_process.py` is the timed-subprocess helper for that integration. Four real subprocess tests cover exact successful output, persistent partial-file/log evidence after failure and forced timeout, explicit fsync failures, and resource queries excluded from transfer timing. Those pass locally; the release workflow includes them. All 17 evidence-tooling tests pass. The engine and its executable remain unchanged from the validated candidate; harness integration occurred after session 30795 terminated.
+
 `idg-get` accepts diagnostic policies `--http1`, `--http2`, `--no-pool`, `--http2-fixed` after the connection count. With no flag it uses the desktop policy. `IDG_TRACE_PROGRESS=1` emits per-second progress; engine logs include negotiated protocol, setup time, active connection limit and queued range count.
 
 The benchmark accepts `--idg-baseline`, `--idg-baseline-mode`, `--idg-mode`, and `--trace-idg`. Every selected mode is retained in commands/metadata. A diagnostic-policy result is not a desktop result unless that policy is also the actual default.
@@ -67,7 +89,7 @@ Primary discussion that motivated a tested connection-policy experiment, not pro
 
 ## Outstanding work and completion audit
 
-The preceding E validation session `28087` is terminal and must not be restarted. The next validation will run A�D and a fresh E batch for the refined build. Runtime checkpoint: `target/performance-active.json`.
+Both prior E session `28087` and the current-candidate pipeline `30795` are terminal; do not restart them. Both JSON outputs of 30795 have `finished_utc` and the expected 52/35 trials. The engine build remains `022d640`; next validation uses the integrated resource harness on official Node/Python hosts. Runtime checkpoint: `target/performance-active.json`.
 
 - Run a larger interleaved E comparison against curl, aria2c, Prism and the preserved original IDG using the actual default policy.
 - Refresh A–D measurements with the selected candidate; confirm peak localhost performance, server-limited throughput, connection caps and fault recovery are preserved.

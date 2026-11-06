@@ -1,5 +1,5 @@
 """Reproduce Prism A-D against the production IDG engine; retain every run.
-Optional E downloads a fixed Rust archive against its publisher's SHA-256.
+Optional E/F/G download fixed Rust/Node/Python artifacts against publisher SHA-256 values.
 
 Build IDG: cargo build --release --example idg-get
 Build the pinned Prism checkout's prism-get example AND prism-testserver binary.
@@ -17,7 +17,9 @@ import shutil
 import socket
 import subprocess
 import time
-import urllib.request
+
+from benchmark_process import measure_client
+from benchmark_sources import HTTPS_SOURCES, verify_sources
 
 ROOT = Path(__file__).resolve().parents[1]
 MIB = 1024 * 1024
@@ -26,10 +28,8 @@ SCENARIOS = {
     "B": (2048 * MIB, 202, 8, []),
     "C": (256 * MIB, 303, 16, ["--throttle", "2M", "--max-conn", "4", "--limit-mode", "503"]),
     "D": (256 * MIB, 404, 16, ["--throttle", "3M", "--drop-prob", "0.02"]),
-    "E": (79909984, 0, 16, []),
 }
-INTERNET_URL = "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz"
-INTERNET_SHA256 = "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb"
+SCENARIOS.update({key: (source["size"], 0, 16, []) for key, source in HTTPS_SOURCES.items()})
 
 
 def digest(path):
@@ -55,10 +55,8 @@ def main():
     p.add_argument("--timeout", type=float, default=600)
     args = p.parse_args()
     assert args.repeats > 0 and args.size_factor > 0
-    assert "E" not in args.scenarios or args.size_factor == 1, "Internet file size is fixed"
-    if "E" in args.scenarios:
-        with urllib.request.urlopen(INTERNET_URL + ".sha256", timeout=30) as response:
-            assert response.read().decode().split()[0] == INTERNET_SHA256, "Official checksum changed"
+    assert not any(s in HTTPS_SOURCES for s in args.scenarios) or args.size_factor == 1, "Internet file sizes are fixed"
+    publisher_references = verify_sources(args.scenarios)
     prism = (args.prism_root / "target/release/examples/prism-get.exe").resolve()
     server = (args.prism_root / "target/release/prism-testserver.exe").resolve()
     binaries = {"curl": Path(shutil.which("curl.exe") or "curl"), "aria2c": args.aria2.resolve(), "Prism": prism, "IDG": args.idg.resolve()}
@@ -77,14 +75,16 @@ def main():
     # uncommitted optimization. A hash alone cannot reconstruct those sources.
     snapshot = work / "source-snapshot"
     snapshot.mkdir()
-    source_paths = [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "examples/idg-get.rs", ROOT / "scripts/benchmark.py", *sorted((ROOT / "src/download").glob("*.rs"))]
+    source_paths = [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "examples/idg-get.rs",
+                    *[ROOT / "scripts" / name for name in ("benchmark.py", "benchmark_process.py", "benchmark_sources.py", "process_metrics.py")],
+                    *sorted((ROOT / "src/download").glob("*.rs"))]
     for source in source_paths:
         destination = snapshot / source.relative_to(ROOT)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
     (snapshot / "working.patch").write_bytes(subprocess.check_output(["git", "diff", "--binary"], cwd=ROOT))
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    result = {"schema": 1, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    result = {"schema": 2, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
               "platform": platform.platform(), "logical_cpus": os.cpu_count(),
               "idg_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "prism_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=args.prism_root, text=True).strip(),
@@ -92,6 +92,10 @@ def main():
               "timing": "Process startup through completed file and external fsync; SHA-256 is outside timed interval; OS caches are not purged",
               "binary_sha256": {k: digest(v) for k, v in binaries.items() if k in args.tools},
               "server_sha256": digest(server), "runs": []}
+    result["publisher_references"] = publisher_references
+    result["workloads"] = {key: dict(size=SCENARIOS[key][0], seed=SCENARIOS[key][1],
+                                    requested_connections=SCENARIOS[key][2], server_options=SCENARIOS[key][3],
+                                    source=HTTPS_SOURCES.get(key)) for key in args.scenarios}
     result["production_sources"] = {str(path.relative_to(ROOT)): digest(path)
         for path in sorted((ROOT / "src/download").glob("*.rs"))}
     result["driver_sha256"] = digest(ROOT / "examples/idg-get.rs")
@@ -123,15 +127,16 @@ def main():
         directory.mkdir()
         server_log = directory / "server.log"
         # Fresh server and destination for every tool, including each repeat.
-        server_command = [str(server), "--port", str(port), "--size", str(size), "--seed", str(seed), *options] if scenario != "E" else []
+        source = HTTPS_SOURCES.get(scenario)
+        server_command = [str(server), "--port", str(port), "--size", str(size), "--seed", str(seed), *options] if source is None else []
         process = None
         if server_command:
             with server_log.open("wb") as log:
                 process = subprocess.Popen(server_command, stdout=log, stderr=log, creationflags=flags)
         try:
-            url = f"http://127.0.0.1:{port}/file/fixture.bin" if scenario != "E" else INTERNET_URL
+            url = source["url"] if source else f"http://127.0.0.1:{port}/file/fixture.bin"
             deadline = time.monotonic() + 45
-            expected = INTERNET_SHA256 if scenario == "E" else None
+            expected = source["sha256"] if source else None
             while expected is None and time.monotonic() < deadline:
                 match = re.search(r"sha256: ([0-9a-f]{64})", server_log.read_text(errors="replace"))
                 if match:
@@ -153,26 +158,15 @@ def main():
                 command = [str(binaries[tool]), "--disable-ipv6=true", "--console-log-level=warn", "--summary-interval=0", f"-x{connections}", f"-s{connections}", "-k1M", "--file-allocation=none", "--allow-overwrite=false", "-d", str(directory), "-o", "download.bin", url]
             else:
                 command = [str(binaries[tool]), "--silent", "--show-error", "--fail", "--location", "--output", str(destination), url]
-            started = time.perf_counter()
-            with (directory / "tool.log").open("wb") as log:
-                try:
-                    completed = subprocess.run(command, stdout=log, stderr=log, timeout=args.timeout, creationflags=flags,
-                        env={**os.environ, "IDG_TRACE_PROGRESS": "1"} if args.trace_idg and tool == "IDG" else None)
-                    code = completed.returncode
-                except subprocess.TimeoutExpired:
-                    code = "timeout"
-            process_seconds = time.perf_counter() - started
             if tool == "Prism":
-                destination = directory / ("fixture.bin" if scenario != "E" else INTERNET_URL.rsplit("/", 1)[1])
+                destination = directory / (url.rsplit("/", 1)[1] if source else "fixture.bin")
+            measurement = measure_client(command, destination, directory / "tool.log", args.timeout,
+                env={**os.environ, "IDG_TRACE_PROGRESS": "1"} if args.trace_idg and tool == "IDG" else None)
+            code = measurement["exit_code"]
+            process_seconds = measurement["process_seconds"]
+            durable_seconds = measurement["durable_seconds"]
+            sync_error = measurement["sync_error"]
             exists = destination.is_file()
-            sync_error = None
-            if exists:
-                try:
-                    with destination.open("r+b") as file:
-                        os.fsync(file.fileno())
-                except OSError as error:
-                    sync_error = str(error)
-            durable_seconds = time.perf_counter() - started
             hash_started = time.perf_counter()
             actual_size = destination.stat().st_size if exists else None
             actual_hash = digest(destination) if exists else None
@@ -183,6 +177,7 @@ def main():
                    "verification_seconds": time.perf_counter() - hash_started,
                    "mib_per_second": size / MIB / durable_seconds if verified else None,
                    "sync_error": sync_error, "command": command, "server_command": server_command,
+                   "resources": measurement["resources"], "source_url": url,
                    "trace_idg": args.trace_idg and tool == "IDG",
                    "candidate_policy": args.idg_mode if tool == "IDG" else args.idg_baseline_mode if tool == "IDG-baseline" else None,
                    "log": str((directory / "tool.log").relative_to(output.parent))}

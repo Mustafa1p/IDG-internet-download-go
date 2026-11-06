@@ -61,6 +61,17 @@ jobs:
         run: python tests/package-version.test.py
       - name: Music profile and completion regressions
         run: python tests/music-bridge.test.py
+      - name: Benchmark evidence regression tests
+        shell: pwsh
+        run: |
+          python tests/benchmark-report.test.py
+          if ($LASTEXITCODE -ne 0) { throw "Benchmark report validation failed" }
+          python tests/process-metrics.test.py
+          if ($LASTEXITCODE -ne 0) { throw "Process resource accounting failed" }
+          python tests/benchmark-process.test.py
+          if ($LASTEXITCODE -ne 0) { throw "Timed process and durability accounting failed" }
+          python tests/benchmark-sources.test.py
+          if ($LASTEXITCODE -ne 0) { throw "Pinned publisher checksum validation failed" }
       - name: Real Edge download-form integration tests
         if: matrix.arch == 'x64'
         shell: pwsh
