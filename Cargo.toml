@@ -31,6 +31,7 @@ anyhow       = "1"
 chrono       = "0.4"
 uuid         = { version = "1", features = ["v4"] }
 futures      = "0.3"
+hyper        = { version = "1", default-features = false, features = ["client", "http1"] }
 bytes        = "1"
 rfd          = "0.14"
 dirs         = "5"

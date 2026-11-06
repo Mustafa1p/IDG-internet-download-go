@@ -642,6 +642,210 @@ mod regression_tests {
     }
 
     #[tokio::test]
+    async fn concurrent_files_survive_servers_that_close_excess_tcp_connections() {
+        for clean_eof in [false, true] {
+            tcp_connection_cap_case(clean_eof).await;
+        }
+    }
+
+    async fn tcp_connection_cap_case(clean_eof: bool) {
+        struct LimitedListener {
+            inner: tokio::net::TcpListener,
+            sockets: Arc<tokio::sync::Semaphore>,
+            refused: Arc<std::sync::atomic::AtomicUsize>,
+            clean_eof: bool,
+        }
+        impl axum::serve::Listener for LimitedListener {
+            type Io = tokio::io::DuplexStream;
+            type Addr = std::net::SocketAddr;
+            async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+                loop {
+                    let (mut socket, address) = self.inner.accept().await.unwrap();
+                    let Ok(permit) = self.sockets.clone().try_acquire_owned() else {
+                        self.refused.fetch_add(1, Ordering::Relaxed);
+                        if self.clean_eof {
+                            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                            tokio::time::timeout(Duration::from_secs(1), async {
+                                let mut request = Vec::new();
+                                let mut buffer = [0u8; 1024];
+                                while !request.windows(4).any(|v| v == b"\r\n\r\n") {
+                                    let count = socket.read(&mut buffer).await.unwrap();
+                                    assert!(count > 0 && request.len() < 8192);
+                                    request.extend_from_slice(&buffer[..count]);
+                                }
+                                socket.shutdown().await.unwrap();
+                            })
+                            .await
+                            .unwrap();
+                        }
+                        drop(socket); // No HTTP 429/503: this is a physical socket cap.
+                        continue;
+                    };
+                    let (server, mut relay) = tokio::io::duplex(64 * 1024);
+                    tokio::spawn(async move {
+                        let _permit = permit;
+                        let _ = tokio::io::copy_bidirectional(&mut socket, &mut relay).await;
+                    });
+                    return (server, address);
+                }
+            }
+            fn local_addr(&self) -> std::io::Result<Self::Addr> {
+                self.inner.local_addr()
+            }
+        }
+        let sockets = Arc::new(tokio::sync::Semaphore::new(4));
+        let refused = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let ready = Arc::new(tokio::sync::Notify::new());
+        let occupied = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cancelled_hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cancellations = cancelled_hits.clone();
+        let (release, released) = tokio::sync::watch::channel(false);
+        let signal = ready.clone();
+        let router = Router::new().route(
+            "/{name}",
+            get(
+                move |axum::extract::Path(name): axum::extract::Path<String>,
+                      method: Method,
+                      headers: HeaderMap| {
+                    let occupied = occupied.clone();
+                    let signal = signal.clone();
+                    let released = released.clone();
+                    let cancellations = cancellations.clone();
+                    async move {
+                        if name == "cancelled" {
+                            cancellations.fetch_add(1, Ordering::Relaxed);
+                        }
+                        let hold = name == "first"
+                            && headers.get("range").is_some_and(|v| v != "bytes=0-0");
+                        let response = range_file(method, headers).await;
+                        if !hold {
+                            return response;
+                        }
+                        if occupied.fetch_add(1, Ordering::Relaxed) == 3 {
+                            signal.notify_one();
+                        }
+                        response.map(|body| {
+                            Body::from_stream(futures::stream::unfold(
+                                (body.into_data_stream(), released),
+                                |(mut stream, mut released)| async move {
+                                    use futures::StreamExt;
+                                    released.wait_for(|value| *value).await.unwrap();
+                                    stream.next().await.map(|chunk| (chunk, (stream, released)))
+                                },
+                            ))
+                        })
+                    }
+                },
+            ),
+        );
+        let inner = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", inner.local_addr().unwrap());
+        let listener = LimitedListener {
+            inner,
+            sockets: sockets.clone(),
+            refused: refused.clone(),
+            clean_eof,
+        };
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let directory = tempfile::tempdir().unwrap();
+        let first_path = directory.path().join("first.bin");
+        let second_path = directory.path().join("second.bin");
+        let first = crate::download::types::DownloadItem::new(
+            format!("{base}/first"),
+            first_path.clone(),
+            4,
+        );
+        let second = crate::download::types::DownloadItem::new(
+            format!("{base}/second"),
+            second_path.clone(),
+            4,
+        );
+        let cancelled_path = directory.path().join("cancelled.bin");
+        let cancelled = crate::download::types::DownloadItem::new(
+            format!("{base}/cancelled"),
+            cancelled_path.clone(),
+            1,
+        );
+        let cancel = cancelled.cancel_flag.clone();
+        let cancelled_id = cancelled.id.clone();
+        let first_id = first.id.clone();
+        let second_id = second.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![first, second, cancelled]));
+        let client = Arc::new(super::super::http_client().unwrap());
+        let budget = super::super::gate::HostBudget::for_url(&base);
+        let first = tokio::spawn(start_download(client.clone(), downloads.clone(), first_id));
+        tokio::time::timeout(Duration::from_secs(3), ready.notified())
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while budget.responding_count() != 4 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("All four occupied connections must have healthy responses");
+        assert_eq!(sockets.available_permits(), 0);
+        let second = tokio::spawn(start_download(client.clone(), downloads.clone(), second_id));
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while budget.counts() != (4, 4) {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("A closed excess connection should queue behind healthy responses");
+        let pending = tokio::spawn(start_download(
+            client.clone(),
+            downloads.clone(),
+            cancelled_id,
+        ));
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        cancel.store(true, Ordering::Relaxed);
+        tokio::time::timeout(Duration::from_secs(1), pending)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(cancelled_hits.load(Ordering::Relaxed), 0);
+        assert!(!cancelled_path.exists());
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let failed_while_busy = second.is_finished();
+        release.send(true).unwrap();
+        let first_result = tokio::time::timeout(Duration::from_secs(5), first)
+            .await
+            .unwrap()
+            .unwrap();
+        let second_result = tokio::time::timeout(Duration::from_secs(5), second)
+            .await
+            .unwrap()
+            .unwrap();
+        drop(client);
+        server.abort();
+        first_result.unwrap();
+        assert!(
+            refused.load(Ordering::Relaxed) > 0,
+            "Exercise a closed excess TCP connection"
+        );
+        assert!(
+            !failed_while_busy,
+            "A busy peer must not exhaust the second file's probe: {second_result:?}"
+        );
+        second_result.unwrap();
+        let expected: Vec<_> = (0..SIZE).map(|n| (n % 251) as u8).collect();
+        assert_eq!(std::fs::read(first_path).unwrap(), expected);
+        assert_eq!(std::fs::read(second_path).unwrap(), expected);
+        assert!(
+            downloads
+                .lock()
+                .unwrap()
+                .iter()
+                .take(2)
+                .all(|item| item.status == Status::Completed)
+        );
+        assert_eq!(downloads.lock().unwrap()[2].status, Status::Cancelled);
+        assert_eq!(budget.counts().0, 0);
+    }
+
+    #[tokio::test]
     async fn paused_resumable_file_releases_capacity_for_another_file() {
         concurrent_file_case(false, true).await;
     }

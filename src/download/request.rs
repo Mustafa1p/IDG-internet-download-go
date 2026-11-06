@@ -142,6 +142,35 @@ fn automatic_referer(prior: &Url, next: &Url) -> Option<HeaderValue> {
     HeaderValue::from_str(referer.as_str()).ok()
 }
 
+/// Distinguish a closed/refused connection from invalid HTTP, DNS, certificate and
+/// configuration errors. Incomplete HTTP/1 headers can be a clean TCP EOF and
+/// need not contain an underlying io::Error.
+fn connection_closed(error: &reqwest::Error) -> bool {
+    let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(error) = cause {
+        if let Some(error) = error.downcast_ref::<hyper::Error>()
+            && (error.is_incomplete_message() || error.is_closed())
+        {
+            return true;
+        }
+        if let Some(error) = error.downcast_ref::<std::io::Error>()
+            && matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::ConnectionRefused
+                    | std::io::ErrorKind::BrokenPipe
+                    | std::io::ErrorKind::NotConnected
+                    | std::io::ErrorKind::UnexpectedEof
+            )
+        {
+            return true;
+        }
+        cause = error.source();
+    }
+    false
+}
+
 impl RequestContext {
     pub fn new(client: Arc<Client>, source: &str, mut headers: HeaderMap) -> Result<Self> {
         let url = Url::parse(source).context("Invalid download URL")?;
@@ -248,15 +277,20 @@ impl RequestContext {
             }
             let started = tokio::time::Instant::now();
             let sending = async {
-                match remaining {
+                let result = match remaining {
                     Some(timeout) => tokio::time::timeout(timeout, request.send())
                         .await
                         .map_err(|_| {
                             anyhow::anyhow!("Network stalled waiting for response headers")
-                        })?
-                        .context("HTTP request failed"),
-                    None => request.send().await.context("HTTP request failed"),
+                        })?,
+                    None => request.send().await,
+                };
+                if let Err(error) = &result
+                    && connection_closed(error)
+                {
+                    permit.connection_closed();
                 }
+                result.context("HTTP request failed")
             };
             let response = tokio::select! {
                 response = sending => response?,
@@ -294,6 +328,8 @@ impl RequestContext {
             }
             if matches!(status, 429 | 503) {
                 permit.refused(response.url().as_str());
+            } else if response.status().is_success() {
+                permit.response_started();
             }
             return Ok(Received {
                 leased: LeasedResponse { response, permit },
@@ -341,6 +377,92 @@ mod tests {
             url,
             tokio::spawn(async move { axum::serve(listener, router).await.unwrap() }),
         )
+    }
+
+    #[tokio::test]
+    async fn malformed_http_does_not_infer_capacity_and_closed_forms_are_not_replayed() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let posts = Arc::new(AtomicUsize::new(0));
+        let received_posts = posts.clone();
+        let (release, released) = tokio::sync::watch::channel(false);
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let posts = received_posts.clone();
+                let mut released = released.clone();
+                tokio::spawn(async move {
+                    let mut request = Vec::new();
+                    let mut buffer = [0u8; 1024];
+                    while !request.windows(4).any(|v| v == b"\r\n\r\n") {
+                        let count = socket.read(&mut buffer).await.unwrap();
+                        assert!(count > 0 && request.len() < 8192);
+                        request.extend_from_slice(&buffer[..count]);
+                    }
+                    if request.starts_with(b"GET /healthy ") {
+                        socket
+                            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n")
+                            .await
+                            .unwrap();
+                        released.wait_for(|value| *value).await.unwrap();
+                        socket.write_all(b"data").await.unwrap();
+                    } else if request.starts_with(b"GET /malformed ") {
+                        socket
+                            .write_all(b"invalid HTTP response\r\n")
+                            .await
+                            .unwrap();
+                    } else {
+                        assert!(request.starts_with(b"POST /closed "));
+                        posts.fetch_add(1, Ordering::Relaxed);
+                    }
+                });
+            }
+        });
+        let budget = HostBudget::for_url(&base);
+        let context = RequestContext::new(
+            Arc::new(super::super::http_client().unwrap()),
+            &base,
+            HeaderMap::new(),
+        )
+        .unwrap();
+        let LeasedResponse { response, permit } = context
+            .send(Spec::get(&format!("{base}/healthy")), Control::default())
+            .await
+            .unwrap()
+            .leased;
+        assert_eq!(budget.counts(), (1, 32));
+        let error = context
+            .send(Spec::get(&format!("{base}/malformed")), Control::default())
+            .await
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("HTTP request failed"));
+        assert_eq!(
+            budget.counts(),
+            (1, 32),
+            "Malformed HTTP must not be treated as a connection cap"
+        );
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            context.send(
+                Spec::form(&format!("{base}/closed"), "token=once".into()),
+                Control::default(),
+            ),
+        )
+        .await
+        .unwrap();
+        assert!(result.is_err());
+        assert_eq!(
+            posts.load(Ordering::Relaxed),
+            1,
+            "A closed form request is never replayed"
+        );
+        release.send(true).unwrap();
+        assert_eq!(response.bytes().await.unwrap().as_ref(), b"data");
+        drop(permit);
+        assert_eq!(budget.counts().0, 0);
+        server.abort();
     }
 
     #[tokio::test]

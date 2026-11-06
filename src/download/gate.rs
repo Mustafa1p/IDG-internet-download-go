@@ -1,4 +1,4 @@
-//! Reduce simultaneous requests after explicit HTTP 429/503 connection refusals.
+//! Share origin capacity and queue requests after server connection pressure.
 use std::{
     sync::{
         Arc,
@@ -19,12 +19,14 @@ pub struct LeasedResponse {
 struct HostWaiter {
     ready: tokio::sync::Notify,
     admitted: std::sync::atomic::AtomicBool,
+    responding: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Debug)]
 struct HostState {
     limit: usize,
     active: usize,
+    responding: usize,
     waiting: std::collections::VecDeque<Arc<HostWaiter>>,
 }
 
@@ -47,6 +49,7 @@ impl HostBudget {
             state: std::sync::Mutex::new(HostState {
                 limit: limit.max(1),
                 active: 0,
+                responding: 0,
                 waiting: std::collections::VecDeque::new(),
             }),
         })
@@ -77,6 +80,11 @@ impl HostBudget {
         (state.active, state.limit)
     }
 
+    #[cfg(test)]
+    pub fn responding_count(&self) -> usize {
+        self.state.lock().unwrap().responding
+    }
+
     fn admit(state: &mut HostState) {
         while state.active < state.limit {
             let Some(waiter) = state.waiting.pop_front() else {
@@ -95,6 +103,7 @@ impl HostBudget {
             waiter: Arc::new(HostWaiter {
                 ready: tokio::sync::Notify::new(),
                 admitted: std::sync::atomic::AtomicBool::new(false),
+                responding: std::sync::atomic::AtomicBool::new(false),
             }),
         };
         {
@@ -110,6 +119,30 @@ impl HostBudget {
 }
 
 impl HostPermit {
+    /// Count only requests that have actually received successful headers.
+    pub fn response_started(&self) {
+        let mut state = self.budget.state.lock().unwrap();
+        if !self.waiter.responding.swap(true, Ordering::Relaxed) {
+            state.responding += 1;
+            // Already-admitted requests can finish their handshakes after a
+            // refusal. Their successful headers prove this capacity exists.
+            state.limit = state.limit.max(state.responding);
+        }
+    }
+
+    /// A closed new connection while peers are responding can indicate a TCP
+    /// socket cap. Queue later attempts behind those working responses, rather
+    /// than exhausting retries while their connections are still occupied.
+    pub fn connection_closed(&self) {
+        let mut state = self.budget.state.lock().unwrap();
+        let peers = state
+            .responding
+            .saturating_sub(usize::from(self.waiter.responding.load(Ordering::Relaxed)));
+        if peers > 0 {
+            state.limit = state.limit.min(peers);
+        }
+    }
+
     /// Learn from 429/503 only, while preserving all already-admitted bodies.
     /// A redirected response can identify a busy origin learned by another file.
     pub fn refused(&self, final_url: &str) -> Arc<HostBudget> {
@@ -130,6 +163,9 @@ impl Drop for HostPermit {
         let mut state = self.budget.state.lock().unwrap();
         if self.waiter.admitted.load(Ordering::Relaxed) {
             state.active -= 1;
+            if self.waiter.responding.load(Ordering::Relaxed) {
+                state.responding -= 1;
+            }
         } else {
             state
                 .waiting
@@ -193,6 +229,48 @@ impl ConnectionGate {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn closed_connections_count_healthy_peers_and_release_their_state() {
+        let budget = HostBudget::new(4);
+        let first = budget.acquire().await;
+        first.connection_closed();
+        assert_eq!(
+            budget.counts(),
+            (1, 4),
+            "No healthy peer means no inferred cap"
+        );
+        first.response_started();
+        first.response_started();
+        first.connection_closed();
+        assert_eq!(
+            budget.counts(),
+            (1, 4),
+            "A request cannot count itself as a peer"
+        );
+        let pending = budget.acquire().await;
+        let failed = budget.acquire().await;
+        failed.connection_closed();
+        assert_eq!(
+            budget.counts(),
+            (3, 1),
+            "Pending requests are not healthy responses"
+        );
+        pending.response_started();
+        assert_eq!(
+            budget.counts(),
+            (3, 2),
+            "Late successful headers prove capacity"
+        );
+        drop(failed);
+        drop(pending);
+        drop(first);
+        assert_eq!(budget.counts(), (0, 2));
+        assert_eq!(budget.state.lock().unwrap().responding, 0);
+        let next = budget.acquire().await;
+        drop(next);
+        assert_eq!(budget.counts(), (0, 2));
+    }
 
     #[tokio::test]
     async fn host_capacity_reduction_waits_for_bodies_and_grants_fifo() {
