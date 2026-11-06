@@ -242,9 +242,10 @@ pub async fn start_download(
     let acknowledged = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let mut initial_response = probe_result.response.take();
     let mut tasks = tokio::task::JoinSet::new();
-    let initial_handoff = (probe_result.initial_range_end.is_some() && seg_count > 1)
-        .then(|| Arc::new(std::sync::atomic::AtomicBool::new(false)));
-    let mut initial_pending = initial_handoff.is_some();
+    // Each original replayable range may yield once. Replacement workers do
+    // not yield again, avoiding repeated cancellation of a persistently slow
+    // endpoint when no smaller useful work remains.
+    let mut handoffs = std::collections::HashMap::new();
     let make_args = |seg_id, start, end, response, initial_permit, handoff| {
         let request = request.clone();
         let url = final_url.clone();
@@ -286,6 +287,11 @@ pub async fn start_download(
         tasks.spawn(async move { (seg_id, run_segment(args, MAX_RETRIES).await) });
     };
     for (seg_id, (start, end)) in segments.into_iter().enumerate() {
+        let handoff = (seg_count > 1 && probe_result.supports_multipart()).then(|| {
+            let flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            handoffs.insert(seg_id, (start, end, flag.clone()));
+            flag
+        });
         spawn(
             &mut tasks,
             make_args(
@@ -294,11 +300,7 @@ pub async fn start_download(
                 end,
                 initial_response.take(),
                 initial_permit.take(),
-                if seg_id == 0 {
-                    initial_handoff.clone()
-                } else {
-                    None
-                },
+                handoff,
             ),
         );
     }
@@ -308,16 +310,14 @@ pub async fn start_download(
     while let Some(result) = tasks.join_next().await {
         let error = match result {
             Ok((seg_id, outcome)) => {
-                if seg_id == 0 {
-                    initial_pending = false;
-                }
+                let owned_range = handoffs.remove(&seg_id);
                 match outcome {
                     Ok(()) => {
-                        if initial_pending && tasks.len() == 1 && bandwidth.rate() == 0 {
-                            initial_handoff
-                                .as_ref()
-                                .unwrap()
-                                .store(true, std::sync::atomic::Ordering::Relaxed);
+                        if tasks.len() == 1
+                            && bandwidth.rate() == 0
+                            && let Some((_, _, flag)) = handoffs.values().next()
+                        {
+                            flag.store(true, std::sync::atomic::Ordering::Relaxed);
                         }
                         continue;
                     }
@@ -325,10 +325,11 @@ pub async fn start_download(
                         let remaining = error
                             .downcast_ref::<super::segment::YieldedRange>()
                             .unwrap();
-                        if seg_id == 0
-                            && Some(remaining.end) == probe_result.initial_range_end
-                            && remaining.start <= remaining.end.saturating_add(1)
-                        {
+                        if owned_range.is_some_and(|(start, end, _)| {
+                            remaining.end == end
+                                && remaining.start >= start
+                                && remaining.start <= end.saturating_add(1)
+                        }) {
                             if !cancel.load(std::sync::atomic::Ordering::Relaxed)
                                 && remaining.start <= remaining.end
                             {
@@ -353,7 +354,7 @@ pub async fn start_download(
                             }
                             continue;
                         }
-                        anyhow::anyhow!("Invalid retained-range handoff")
+                        anyhow::anyhow!("Invalid range handoff")
                     }
                     Err(error) => error,
                 }
@@ -1326,13 +1327,15 @@ mod regression_tests {
             (4, 2 * 1024 * 1024, false, false, 0),
             (4, 4 * 1024 * 1024, false, false, 0),
             (0, 8 * 1024 * 1024 + 19, false, false, 3),
+            (0, 8 * 1024 * 1024 + 19, false, false, 4),
+            (4, 8 * 1024 * 1024, false, false, 4),
         ] {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let url = format!("http://{}/file", listener.local_addr().unwrap());
             let budget = super::super::gate::HostBudget::for_url(&url);
             let ranges = Arc::new(std::sync::Mutex::new(Vec::new()));
             let observed = ranges.clone();
-            let (release, released) = tokio::sync::watch::channel(!hold && action != 3);
+            let (release, released) = tokio::sync::watch::channel(!hold && action < 3);
             let server = tokio::spawn(async move {
                 loop {
                     let (mut socket, _) = listener.accept().await.unwrap();
@@ -1370,16 +1373,18 @@ mod regression_tests {
                         );
                         socket.write_all(header.as_bytes()).await.unwrap();
                         let mut body_start = start;
-                        if first && action == 3 {
-                            body_start = 31 * 1024 + 19;
+                        let stalled =
+                            (first && action == 3) || (start == 2 * 1024 * 1024 && action == 4);
+                        if stalled {
+                            body_start = start + 31 * 1024 + 19;
                             let prefix: Vec<u8> =
-                                (0..body_start).map(|n| (n % 251) as u8).collect();
+                                (start..body_start).map(|n| (n % 251) as u8).collect();
                             socket.write_all(&prefix).await.unwrap();
                         }
-                        if !first && action == 3 {
+                        if !stalled && action >= 3 {
                             tokio::time::sleep(Duration::from_millis(100)).await;
                         }
-                        while !*released.borrow() && (first || action != 3) {
+                        while !*released.borrow() && (stalled || action < 3) {
                             if released.changed().await.is_err() {
                                 return;
                             }
@@ -1458,7 +1463,7 @@ mod regression_tests {
                 }
                 release.send(true).unwrap();
             }
-            if action == 3 {
+            if action >= 3 {
                 let completed = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
                 release.send(true).unwrap();
                 match completed {
@@ -1466,7 +1471,7 @@ mod regression_tests {
                     Err(_) => {
                         task.await.unwrap().unwrap();
                         panic!(
-                            "Idle workers must finish the retained range before its stalled stream is released"
+                            "Idle workers must finish the stalled range before its stream is released"
                         );
                     }
                 }
@@ -1486,12 +1491,18 @@ mod regression_tests {
             assert_eq!(item.downloaded_bytes, length);
             let mut actual = ranges.lock().unwrap().clone();
             assert_eq!(actual[0].0, 0);
-            if action == 3 {
-                actual[0].1 = 31 * 1024 + 19 - 1;
+            if action >= 3 {
+                let stalled_start = if action == 3 { 0 } else { 2 * 1024 * 1024 };
+                let cursor = stalled_start + 31 * 1024 + 19;
+                actual
+                    .iter_mut()
+                    .find(|range| range.0 == stalled_start)
+                    .unwrap()
+                    .1 = cursor - 1;
                 assert!(
                     actual
                         .iter()
-                        .any(|(start, _, validator)| *start == 31 * 1024 + 19 && *validator),
+                        .any(|(start, _, validator)| *start == cursor && *validator),
                     "Handoff must start after the acknowledged short buffer and retain If-Range"
                 );
             }
@@ -1537,7 +1548,7 @@ mod regression_tests {
     }
 
     #[tokio::test]
-    async fn initial_handoff_preserves_validator_cancel_and_pause() {
+    async fn range_handoff_preserves_validator_cancel_and_pause() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         #[derive(Clone, Copy, Debug)]
         enum Mode {
@@ -1547,7 +1558,10 @@ mod regression_tests {
         }
         const LENGTH: u64 = 8 * 1024 * 1024 + 19;
         const PREFIX: u64 = 2 * 1024 * 1024;
-        for mode in [Mode::Changed, Mode::Cancel, Mode::Pause] {
+        for (mode, stalled_start) in [Mode::Changed, Mode::Cancel, Mode::Pause]
+            .into_iter()
+            .flat_map(|mode| [0, PREFIX].map(|start| (mode, start)))
+        {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let url = format!("http://{}/file", listener.local_addr().unwrap());
             let budget = super::super::gate::HostBudget::for_url(&url);
@@ -1582,13 +1596,14 @@ mod regression_tests {
                             .unwrap();
                         let start: u64 = start.parse().unwrap();
                         let end = end.parse::<u64>().unwrap().min(LENGTH - 1);
-                        let first = {
+                        let stalled_end = {
                             let mut ranges = observed.lock().unwrap();
-                            let first = ranges.is_empty();
                             ranges.push((start, end, request.contains(r#"if-range: "fixed""#)));
-                            first
+                            ranges.iter().find(|r| r.0 == stalled_start).map(|r| r.1)
                         };
-                        let handoff = !first && start < PREFIX;
+                        let stalled = start == stalled_start;
+                        let handoff =
+                            stalled_end.is_some_and(|end| start > stalled_start && start <= end);
                         let etag = if handoff && matches!(mode, Mode::Changed) {
                             "changed"
                         } else {
@@ -1602,9 +1617,10 @@ mod regression_tests {
                             return;
                         }
                         let mut body_start = start;
-                        if first {
-                            body_start = 31 * 1024 + 19;
-                            let bytes: Vec<u8> = (0..body_start).map(|n| (n % 251) as u8).collect();
+                        if stalled {
+                            body_start = start + 31 * 1024 + 19;
+                            let bytes: Vec<u8> =
+                                (start..body_start).map(|n| (n % 251) as u8).collect();
                             if socket.write_all(&bytes).await.is_err() {
                                 return;
                             }
@@ -1636,12 +1652,9 @@ mod regression_tests {
             ));
             if !matches!(mode, Mode::Changed) {
                 tokio::time::timeout(Duration::from_secs(2), async {
-                    while !ranges
-                        .lock()
-                        .unwrap()
-                        .iter()
-                        .any(|(start, _, validator)| *start < PREFIX && *validator)
-                    {
+                    while !ranges.lock().unwrap().iter().any(|(start, _, validator)| {
+                        *start == stalled_start + 31 * 1024 + 19 && *validator
+                    }) {
                         tokio::time::sleep(Duration::from_millis(10)).await;
                     }
                 })

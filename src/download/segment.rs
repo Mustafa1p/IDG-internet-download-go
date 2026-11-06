@@ -79,7 +79,7 @@ impl std::error::Error for YieldedRange {}
 
 /// Arguments passed to a single segment worker.
 pub struct SegmentArgs {
-    /// Only a replayable retained initial range may yield to idle siblings.
+    /// Only an original replayable bounded range may yield to idle siblings.
     pub handoff: Option<Arc<AtomicBool>>,
     /// Local capacity already reserved for a retained initial partial response.
     pub initial_permit: Option<tokio::sync::OwnedSemaphorePermit>,

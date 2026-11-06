@@ -1,0 +1,178 @@
+{
+  "source_base": "755dfb1",
+  "scope": "Functional real-socket regression evidence; no new throughput measurement or release claim.",
+  "failure": "A later bounded range delivers 31 KiB + 19 bytes then stalls. Other ranges finish. The prior initial-only handoff cannot complete within 2 seconds until the test releases the old stream.",
+  "fix": "Every original replayable bounded range can cooperatively yield once when it is the last pending range and the bandwidth limit is disabled. Only disk-acknowledged unfinished bytes are reassigned. Replacement ranges never yield again.",
+  "verified_cases": [
+    "Automatic initial and non-initial stalled ranges finish before old stream release",
+    "Explicit four-connection non-initial stalled range finishes before release",
+    "Exact output and non-overlapping planned bytes",
+    "Changed validators on initial and later handoff reject completion",
+    "Initial and later handoff pause releases leases and sends no requests while paused",
+    "Initial and later handoff cancellation drains workers and releases leases",
+    "Full x64/x86 suites: 90 app + 2 native tests passed, nine external tests ignored",
+    "All-target clippy with warnings denied on x64/x86"
+  ],
+  "source_sha256": {
+    "src/download/engine.rs": "d2c36d7b76c2bfb996243ea92656ce0684fb187107b7b73841af582a1acd2321",
+    "src/download/segment.rs": "840b7b295a5189c24e0d7a9e076109e38a5697a28d6aed9bcf8d53eb6afee27a"
+  },
+  "logs": {
+    "target/perf-general-handoff-reproduction.log": {
+      "sha256": "bcfdc88b2f3071c9199bc4d29f8d51e420ae7094b00bd1b96e63d93b7222f4f9",
+      "tail": [
+        "[IDG] starting download id=eb48dd79-ea5c-4d4d-880a-f6fde51c1afe segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] starting download id=648e1e14-398c-440d-8359-abcf13985dd3 segments=1 ranges=2 size=Some(8388627) protocol=HTTP/1.1 setup_ms=16",
+        "[IDG] download complete id=648e1e14-398c-440d-8359-abcf13985dd3 path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmp2wXOhl\\prefix.bin",
+        "[IDG] starting download id=88bdf211-ebc5-44e8-aa76-654c80c3acf1 segments=4 ranges=4 size=Some(2097152) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=88bdf211-ebc5-44e8-aa76-654c80c3acf1 path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpx5eRtT\\prefix.bin",
+        "[IDG] starting download id=bfe57b74-0102-46dd-a73a-ced6eb82dbfa segments=4 ranges=8 size=Some(4194304) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=bfe57b74-0102-46dd-a73a-ced6eb82dbfa path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmp1WdOd9\\prefix.bin",
+        "[IDG] starting download id=86256a53-6fce-4d9c-a3b1-68342e0d85e7 segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=2",
+        "[IDG] download complete id=86256a53-6fce-4d9c-a3b1-68342e0d85e7 path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpEMi4jJ\\prefix.bin",
+        "[IDG] starting download id=7cf128ae-7479-4584-923a-8f4b3ebe340a segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=7cf128ae-7479-4584-923a-8f4b3ebe340a path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpx5C4dr\\prefix.bin",
+        "",
+        "thread 'download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity' (30376) panicked at src\\download\\engine.rs:1471:25:",
+        "Idle workers must finish the stalled range before its stream is released",
+        "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "test download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... FAILED",
+        "",
+        "failures:",
+        "",
+        "failures:",
+        "    download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity",
+        "",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 98 filtered out; finished in 4.28s",
+        "",
+        "error: test failed, to rerun pass `--bin IDG`"
+      ]
+    },
+    "target/perf-general-handoff-verification.log": {
+      "sha256": "8e70aee3ebc391962f62a5dfeeff1e0113722e221d2266ccffcbd717572ed549",
+      "tail": [
+        "[IDG] download complete id=72118510-6ad5-4837-83e9-91810754cd13 path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpxXTkip\\prefix.bin",
+        "[IDG] starting download id=47189584-fa28-4897-8cbc-bc432141faaf segments=1 ranges=2 size=Some(2097153) protocol=HTTP/1.1 setup_ms=16",
+        "[IDG] download complete id=47189584-fa28-4897-8cbc-bc432141faaf path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpOZ3QDa\\prefix.bin",
+        "[IDG] starting download id=c6c28496-c243-4645-a66a-938340b52e5b segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=c6c28496-c243-4645-a66a-938340b52e5b path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpKEngzd\\prefix.bin",
+        "[IDG] starting download id=f0197806-a024-46bb-917d-ceeb7616d4dc segments=1 ranges=2 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] segment 0 retry 0/10 after 0ms: stream read error",
+        "[IDG] download complete id=f0197806-a024-46bb-917d-ceeb7616d4dc path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpPVEQg4\\prefix.bin",
+        "[IDG] starting download id=ab089862-b0c6-4783-80d0-4213814d0206 segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=ab089862-b0c6-4783-80d0-4213814d0206 path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpEC9GtO\\prefix.bin",
+        "[IDG] starting download id=8f30e0d7-00fe-4ecb-ab58-ad137be48122 segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] starting download id=2d3b927b-ed54-46c2-bdd8-5e561236ceee segments=1 ranges=2 size=Some(8388627) protocol=HTTP/1.1 setup_ms=15",
+        "[IDG] download complete id=2d3b927b-ed54-46c2-bdd8-5e561236ceee path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpztvUff\\prefix.bin",
+        "[IDG] starting download id=8c79ec4b-8276-465c-bcb0-dde2a95a548d segments=4 ranges=4 size=Some(2097152) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=8c79ec4b-8276-465c-bcb0-dde2a95a548d path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmplBThZM\\prefix.bin",
+        "[IDG] starting download id=edd432cb-09d3-4d95-a039-05883a6b865a segments=4 ranges=8 size=Some(4194304) protocol=HTTP/1.1 setup_ms=2",
+        "[IDG] download complete id=edd432cb-09d3-4d95-a039-05883a6b865a path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpH8LZtr\\prefix.bin",
+        "[IDG] starting download id=ac9d2c34-4cc2-4141-b7a3-9b06de0f901e segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=ac9d2c34-4cc2-4141-b7a3-9b06de0f901e path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmp3p4kru\\prefix.bin",
+        "[IDG] starting download id=1962b131-3c3f-4708-b5aa-62da2edbdbef segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=1962b131-3c3f-4708-b5aa-62da2edbdbef path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpEHg26W\\prefix.bin",
+        "test download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... ok",
+        "",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 98 filtered out; finished in 3.06s",
+        ""
+      ]
+    },
+    "target/perf-general-handoff-state-verification.log": {
+      "sha256": "eea0e3934b1fbcf0a7151ccc8e5b41a2947c6c2612cbc8f7ff32d984c673cd19",
+      "tail": [
+        "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.19s",
+        "     Running unittests src\\main.rs (target\\debug\\deps\\IDG-04d2efe13aafde34.exe)",
+        "",
+        "running 1 test",
+        "[IDG] starting download id=c6785a3b-1d00-48e7-bb7c-3cf11db2c28a segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=3",
+        "[IDG] starting download id=e745d06f-d834-405c-8078-29dad8fe9d87 segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=15",
+        "[IDG] starting download id=084b442c-f6e7-4e02-85d9-b8db035dbb14 segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=2",
+        "[IDG] starting download id=265b2ceb-8987-4978-a4de-9a02a226b814 segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=16",
+        "[IDG] starting download id=19adcb4a-252c-4681-9f06-9bfc6df34dbd segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=1",
+        "[IDG] download complete id=19adcb4a-252c-4681-9f06-9bfc6df34dbd path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpMAZvOx\\handoff.bin",
+        "[IDG] starting download id=1520f90d-a3c3-405c-b86e-a54e50f456c5 segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=16",
+        "[IDG] download complete id=1520f90d-a3c3-405c-b86e-a54e50f456c5 path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpYI4zyb\\handoff.bin",
+        "test download::engine::regression_tests::range_handoff_preserves_validator_cancel_and_pause ... ok",
+        "",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 98 filtered out; finished in 1.38s",
+        ""
+      ]
+    },
+    "target/perf-general-handoff-x64-tests.log": {
+      "sha256": "7f331a4e88958cf11d2d1208b01b324d36bad34943fc5276971b63da817b5086",
+      "tail": [
+        "test download::probe::tests::retained_partial_headers_are_strict_and_do_not_time_the_file_body ... ok",
+        "test download::engine::regression_tests::concurrent_files_queue_when_another_file_occupies_the_server_slots ... ok",
+        "test download::segment::tests::pause_releases_ranges_at_acknowledged_offsets_but_keeps_one_use_streams ... ok",
+        "test download::request::tests::redirects_release_old_origin_and_exclude_capacity_wait_from_network_time ... ok",
+        "test download::engine::regression_tests::range_handoff_preserves_validator_cancel_and_pause ... ok",
+        "test download::engine::regression_tests::range_download_pauses_resumes_and_preserves_exact_bytes ... ok",
+        "test download::engine::regression_tests::url_credentials_authenticate_probe_and_all_resolved_ranges ... ok",
+        "test download::engine::regression_tests::productive_reconnects_exceed_retry_budget_without_discarding_short_buffers ... ok",
+        "test server::tests::automatic_download_uses_32_ranges_and_falls_back_when_ranges_are_ignored ... ok",
+        "test download::media::tests::expired_media_url_reextracts_once_and_preserves_partial_output ... ok",
+        "test download::engine::regression_tests::concurrent_files_survive_servers_that_close_excess_tcp_connections ... ok",
+        "test download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... ok",
+        "test download::engine::regression_tests::authenticated_files_reuse_transport_without_reusing_each_others_headers ... ok",
+        "test download::segment::tests::idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits ... ok",
+        "",
+        "test result: ok. 90 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 7.59s",
+        "",
+        "     Running unittests src\\native_host.rs (target\\debug\\deps\\IDG_native-2a2662f1ff0c0c14.exe)",
+        "",
+        "running 2 tests",
+        "test update_install::tests::installer_preserves_directory_and_startup_choice_without_shell_parsing ... ok",
+        "test tests::frames_round_trip_and_reject_oversized_messages ... ok",
+        "",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        ""
+      ]
+    },
+    "target/perf-general-handoff-x64-clippy.log": {
+      "sha256": "47f88f98abdd62454c6883c179a8c1d88dfa71ec86a437948f75896ce6c5ddc4",
+      "tail": [
+        "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)",
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.03s"
+      ]
+    },
+    "target/perf-general-handoff-x86-tests.log": {
+      "sha256": "79d59bd0e73756bf66f25910238b6510527703c87235dfcd49bbbcdb1d7ba75d",
+      "tail": [
+        "test download::probe::tests::retained_partial_headers_are_strict_and_do_not_time_the_file_body ... ok",
+        "test download::engine::regression_tests::concurrent_files_queue_when_another_file_occupies_the_server_slots ... ok",
+        "test download::request::tests::redirects_release_old_origin_and_exclude_capacity_wait_from_network_time ... ok",
+        "test download::segment::tests::pause_releases_ranges_at_acknowledged_offsets_but_keeps_one_use_streams ... ok",
+        "test download::engine::regression_tests::range_download_pauses_resumes_and_preserves_exact_bytes ... ok",
+        "test download::engine::regression_tests::url_credentials_authenticate_probe_and_all_resolved_ranges ... ok",
+        "test download::engine::regression_tests::range_handoff_preserves_validator_cancel_and_pause ... ok",
+        "test download::engine::regression_tests::productive_reconnects_exceed_retry_budget_without_discarding_short_buffers ... ok",
+        "test download::media::tests::expired_media_url_reextracts_once_and_preserves_partial_output ... ok",
+        "test server::tests::automatic_download_uses_32_ranges_and_falls_back_when_ranges_are_ignored ... ok",
+        "test download::engine::regression_tests::concurrent_files_survive_servers_that_close_excess_tcp_connections ... ok",
+        "test download::engine::regression_tests::authenticated_files_reuse_transport_without_reusing_each_others_headers ... ok",
+        "test download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... ok",
+        "test download::segment::tests::idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits ... ok",
+        "",
+        "test result: ok. 90 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 7.55s",
+        "",
+        "     Running unittests src\\native_host.rs (target\\i686-pc-windows-msvc\\debug\\deps\\IDG_native-84acbc32972d3e86.exe)",
+        "",
+        "running 2 tests",
+        "test update_install::tests::installer_preserves_directory_and_startup_choice_without_shell_parsing ... ok",
+        "test tests::frames_round_trip_and_reject_oversized_messages ... ok",
+        "",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        ""
+      ]
+    },
+    "target/perf-general-handoff-x86-clippy.log": {
+      "sha256": "47f88f98abdd62454c6883c179a8c1d88dfa71ec86a437948f75896ce6c5ddc4",
+      "tail": [
+        "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)",
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.03s"
+      ]
+    }
+  }
+}
