@@ -27,10 +27,13 @@ def main():
     parser.add_argument("--candidate-policy", choices=["production", "reuse-prefix"], default="production")
     parser.add_argument("--per-connection-mib", type=float, default=0)
     parser.add_argument("--first-range-mib", type=float, default=0)
+    parser.add_argument("--slow-range-start-kib", type=int, default=0,
+                        help="Apply first-range-mib only to a data range starting at this offset")
     args = parser.parse_args()
     rates = (args.latency_ms, args.per_connection_mib, args.first_range_mib)
     if (args.output.exists() or args.repeats < 1 or args.size_kib < 1
             or not 0 <= args.connections <= 32
+            or not 0 <= args.slow_range_start_kib < args.size_kib
             or any(not math.isfinite(value) or value < 0 for value in rates)):
         raise ValueError("Use a new output file, positive repeats/size, 0..32 connections and finite nonnegative delays/rates")
     # A short repeating pattern can hide an offset error by a whole pattern
@@ -80,7 +83,7 @@ def main():
                     self.end_headers()
                     if not head:
                         try:
-                            rate = args.first_range_mib if args.first_range_mib and start == 0 and end > 0 else args.per_connection_mib
+                            rate = args.first_range_mib if args.first_range_mib and start == args.slow_range_start_kib * 1024 and end > start else args.per_connection_mib
                             if rate:
                                 for offset in range(start, end + 1, 32768):
                                     data = CONTENT[offset:min(offset + 32768, end + 1)]

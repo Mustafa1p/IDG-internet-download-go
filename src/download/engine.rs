@@ -846,6 +846,14 @@ mod regression_tests {
                         }
                         let hold = name == "first"
                             && headers.get("range").is_some_and(|v| v != "bytes=0-0");
+                        // Capacity recovery is an ordering guarantee, even
+                        // when a healthy peer takes longer than one second.
+                        if recovering
+                            && name == "second"
+                            && headers.get("range").is_some_and(|v| v == "bytes=0-0")
+                        {
+                            tokio::time::sleep(Duration::from_millis(1100)).await;
+                        }
                         let response = range_file(method, headers).await;
                         if !hold {
                             return response;
@@ -917,7 +925,9 @@ mod regression_tests {
         assert_eq!(sockets.available_permits(), if recovering { 28 } else { 0 });
         let mut second = tokio::spawn(start_download(client.clone(), downloads.clone(), second_id));
         let early_second = if recovering {
-            tokio::time::timeout(Duration::from_secs(1), &mut second)
+            // Keep the first file held throughout: this tests independent
+            // progress, not a one-second throughput requirement on CI.
+            tokio::time::timeout(Duration::from_secs(5), &mut second)
                 .await
                 .ok()
                 .map(|joined| joined.unwrap())

@@ -27,6 +27,7 @@ class EvidenceGuards(unittest.TestCase):
             ("--latency-ms", "-1"), ("--per-connection-mib", "nan"),
             ("--per-connection-mib", "inf"), ("--per-connection-mib", "-1"),
             ("--first-range-mib", "nan"), ("--first-range-mib", "-1"),
+            ("--slow-range-start-kib", "-1"), ("--slow-range-start-kib", "4096"),
             ("--size-kib", "0"), ("--connections", "-1"),
             ("--connections", "33"), ("--repeats", "0"),
         ]:

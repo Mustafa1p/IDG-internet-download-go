@@ -1,0 +1,3447 @@
+{
+  "candidate": {
+    "git_head": "7ef2145e6ea558b8bad25fd71a03fba11e2c4f13",
+    "binary": "target\\perf-idg-7ef2145.exe",
+    "binary_sha256": "667133dee8557d099624ff6189db4d807857a215b64fd78ff11451c3bb8e5121",
+    "source_sha256": {
+      "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+      "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+      "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+      "examples/idg-get.rs": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+      "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+      "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+      "src/download/engine.rs": "d2c36d7b76c2bfb996243ea92656ce0684fb187107b7b73841af582a1acd2321",
+      "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+      "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+      "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+      "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+      "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+      "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+      "src/download/request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+      "src/download/segment.rs": "840b7b295a5189c24e0d7a9e076109e38a5697a28d6aed9bcf8d53eb6afee27a",
+      "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+      "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+    }
+  },
+  "baseline_commit": "f663941d7e05aa4ce6e2306fe41c5b5f4d508be0",
+  "verified_files": 54,
+  "limitations": [
+    "These timings measure 7ef2145, before later test-only capacity-fixture edits.",
+    "Three interleaved repetitions per tool/scenario; retain all outliers.",
+    "Public-source differences do not establish a cause or universal ranking.",
+    "Prism random faults are not seeded by its file seed; D trials do not share identical faults.",
+    "No packaged GUI/tray/cold-start verification for this branch."
+  ],
+  "summary": [
+    {
+      "input": "perf-20261107-general-handoff-4m-80.json",
+      "scenario": "fixture",
+      "tool": "baseline",
+      "trials": 3,
+      "median_durable_seconds": 0.2842479000100866
+    },
+    {
+      "input": "perf-20261107-general-handoff-4m-80.json",
+      "scenario": "fixture",
+      "tool": "candidate",
+      "trials": 3,
+      "median_durable_seconds": 0.2805349000263959
+    },
+    {
+      "input": "perf-20261107-general-handoff-4m-zero.json",
+      "scenario": "fixture",
+      "tool": "baseline",
+      "trials": 3,
+      "median_durable_seconds": 0.037156500038690865
+    },
+    {
+      "input": "perf-20261107-general-handoff-4m-zero.json",
+      "scenario": "fixture",
+      "tool": "candidate",
+      "trials": 3,
+      "median_durable_seconds": 0.03988149994984269
+    },
+    {
+      "input": "perf-20261107-general-handoff-later-auto.json",
+      "scenario": "fixture",
+      "tool": "baseline",
+      "trials": 3,
+      "median_durable_seconds": 2.210801800014451
+    },
+    {
+      "input": "perf-20261107-general-handoff-later-auto.json",
+      "scenario": "fixture",
+      "tool": "candidate",
+      "trials": 3,
+      "median_durable_seconds": 1.5674966000951827
+    },
+    {
+      "input": "perf-20261107-general-handoff-later-manual.json",
+      "scenario": "fixture",
+      "tool": "baseline",
+      "trials": 3,
+      "median_durable_seconds": 2.7076549000339583
+    },
+    {
+      "input": "perf-20261107-general-handoff-later-manual.json",
+      "scenario": "fixture",
+      "tool": "candidate",
+      "trials": 3,
+      "median_durable_seconds": 1.5888177000451833
+    },
+    {
+      "input": "perf-20261107-general-handoff-manual-bd.json",
+      "scenario": "B",
+      "tool": "IDG",
+      "trials": 3,
+      "median_durable_seconds": 1.2517145000165328
+    },
+    {
+      "input": "perf-20261107-general-handoff-manual-bd.json",
+      "scenario": "B",
+      "tool": "IDG-baseline",
+      "trials": 3,
+      "median_durable_seconds": 1.2899607000872493
+    },
+    {
+      "input": "perf-20261107-general-handoff-manual-bd.json",
+      "scenario": "D",
+      "tool": "IDG",
+      "trials": 3,
+      "median_durable_seconds": 6.121112799970433
+    },
+    {
+      "input": "perf-20261107-general-handoff-manual-bd.json",
+      "scenario": "D",
+      "tool": "IDG-baseline",
+      "trials": 3,
+      "median_durable_seconds": 6.054909200058319
+    },
+    {
+      "input": "perf-20261107-general-handoff-public-efg-auto.json",
+      "scenario": "E",
+      "tool": "IDG",
+      "trials": 3,
+      "median_durable_seconds": 1.546913699945435
+    },
+    {
+      "input": "perf-20261107-general-handoff-public-efg-auto.json",
+      "scenario": "E",
+      "tool": "IDG-baseline",
+      "trials": 3,
+      "median_durable_seconds": 1.4722020000917837
+    },
+    {
+      "input": "perf-20261107-general-handoff-public-efg-auto.json",
+      "scenario": "F",
+      "tool": "IDG",
+      "trials": 3,
+      "median_durable_seconds": 0.8528863000683486
+    },
+    {
+      "input": "perf-20261107-general-handoff-public-efg-auto.json",
+      "scenario": "F",
+      "tool": "IDG-baseline",
+      "trials": 3,
+      "median_durable_seconds": 0.869437100016512
+    },
+    {
+      "input": "perf-20261107-general-handoff-public-efg-auto.json",
+      "scenario": "G",
+      "tool": "IDG",
+      "trials": 3,
+      "median_durable_seconds": 1.1137476000003517
+    },
+    {
+      "input": "perf-20261107-general-handoff-public-efg-auto.json",
+      "scenario": "G",
+      "tool": "IDG-baseline",
+      "trials": 3,
+      "median_durable_seconds": 0.9931340999901295
+    }
+  ],
+  "inputs": [
+    {
+      "path": "target/perf-20261107-general-handoff-4m-80.json",
+      "sha256": "0178f592254fee0cde19841983d8c824dee6b4d689f3906971c0dafb590f384d",
+      "evidence": {
+        "configuration": {
+          "baseline": "target\\perf-idg-f663941.exe",
+          "candidate": "target\\perf-idg-7ef2145.exe",
+          "output": "target\\perf-20261107-general-handoff-4m-80.json",
+          "repeats": 3,
+          "latency_ms": 80.0,
+          "size_kib": 4096,
+          "connections": 0,
+          "candidate_policy": "production",
+          "per_connection_mib": 0,
+          "first_range_mib": 0,
+          "slow_range_start_kib": 0
+        },
+        "fixture_sha256": "316c9cfc0ccc1a2074397904c01d1f05d266c9043a7ecf1fbf73661aaac605a3",
+        "content_generator": "SHAKE256(IDG latency fixture v2)",
+        "latency_ms": 80.0,
+        "size": 4194304,
+        "expected_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+        "binaries": {
+          "baseline": "b5ee403db571ac476b29688bc4ee49e95504e7e7d487fab7a9178645ad19720b",
+          "candidate": "667133dee8557d099624ff6189db4d807857a215b64fd78ff11451c3bb8e5121"
+        },
+        "runs": [
+          {
+            "tool": "baseline",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:63873/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-80-files\\1-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.2821407000301406,
+            "durable_seconds": 0.2842479000100866,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16539648,
+              "peak_commit_bytes": 9834496,
+              "page_faults": 5449,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 145912985
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63876/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-80-files\\1-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.27902320004068315,
+            "durable_seconds": 0.2803140999749303,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16560128,
+              "peak_commit_bytes": 9768960,
+              "page_faults": 5469,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 146788543
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63879/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-80-files\\2-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.2796051000477746,
+            "durable_seconds": 0.2817444000393152,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16560128,
+              "peak_commit_bytes": 9740288,
+              "page_faults": 5560,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 145774352
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:63882/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-80-files\\2-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.289523100014776,
+            "durable_seconds": 0.2908659999957308,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16584704,
+              "peak_commit_bytes": 9797632,
+              "page_faults": 5544,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 136043518
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:63887/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-80-files\\3-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.2804517999757081,
+            "durable_seconds": 0.2825802000006661,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16502784,
+              "peak_commit_bytes": 9715712,
+              "page_faults": 5475,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 144803495
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63892/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-80-files\\3-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.27835480007342994,
+            "durable_seconds": 0.2805349000263959,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16584704,
+              "peak_commit_bytes": 9740288,
+              "page_faults": 5603,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 144215496
+            }
+          }
+        ],
+        "finished_utc": "2026-11-06T23:26:14Z"
+      }
+    },
+    {
+      "path": "target/perf-20261107-general-handoff-4m-zero.json",
+      "sha256": "44da5d960f5762471745db15c9564d9604a38e37846fb5e42e6e25c0ecc3c55d",
+      "evidence": {
+        "configuration": {
+          "baseline": "target\\perf-idg-f663941.exe",
+          "candidate": "target\\perf-idg-7ef2145.exe",
+          "output": "target\\perf-20261107-general-handoff-4m-zero.json",
+          "repeats": 3,
+          "latency_ms": 0.0,
+          "size_kib": 4096,
+          "connections": 0,
+          "candidate_policy": "production",
+          "per_connection_mib": 0,
+          "first_range_mib": 0,
+          "slow_range_start_kib": 0
+        },
+        "fixture_sha256": "316c9cfc0ccc1a2074397904c01d1f05d266c9043a7ecf1fbf73661aaac605a3",
+        "content_generator": "SHAKE256(IDG latency fixture v2)",
+        "latency_ms": 0.0,
+        "size": 4194304,
+        "expected_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+        "binaries": {
+          "baseline": "b5ee403db571ac476b29688bc4ee49e95504e7e7d487fab7a9178645ad19720b",
+          "candidate": "667133dee8557d099624ff6189db4d807857a215b64fd78ff11451c3bb8e5121"
+        },
+        "runs": [
+          {
+            "tool": "baseline",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:63847/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-zero-files\\1-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.035865999991074204,
+            "durable_seconds": 0.037156500038690865,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 17285120,
+              "peak_commit_bytes": 11202560,
+              "page_faults": 5591,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 127963836
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63850/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-zero-files\\1-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.03859079990070313,
+            "durable_seconds": 0.03988149994984269,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 17137664,
+              "peak_commit_bytes": 11329536,
+              "page_faults": 5528,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 148964577
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63855/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-zero-files\\2-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.11550670000724494,
+            "durable_seconds": 0.11779099993873388,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 17010688,
+              "peak_commit_bytes": 11358208,
+              "page_faults": 5669,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 144566996
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:63861/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-zero-files\\2-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.03579009999521077,
+            "durable_seconds": 0.03703749994747341,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 17338368,
+              "peak_commit_bytes": 11317248,
+              "page_faults": 5594,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 132827103
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:63865/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-zero-files\\3-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.08331370004452765,
+            "durable_seconds": 0.08463669999036938,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16576512,
+              "peak_commit_bytes": 10817536,
+              "page_faults": 5488,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 137118663
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63870/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-4m-zero-files\\3-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.03715959994588047,
+            "durable_seconds": 0.0398134000133723,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16965632,
+              "peak_commit_bytes": 11005952,
+              "page_faults": 5550,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 130755352
+            }
+          }
+        ],
+        "finished_utc": "2026-11-06T23:26:10Z"
+      }
+    },
+    {
+      "path": "target/perf-20261107-general-handoff-later-auto.json",
+      "sha256": "4844a9ffee4c154296b37362fe707204f9b98a106fab37eb460088b8c43c1844",
+      "evidence": {
+        "configuration": {
+          "baseline": "target\\perf-idg-f663941.exe",
+          "candidate": "target\\perf-idg-7ef2145.exe",
+          "output": "target\\perf-20261107-general-handoff-later-auto.json",
+          "repeats": 3,
+          "latency_ms": 80.0,
+          "size_kib": 8192,
+          "connections": 0,
+          "candidate_policy": "production",
+          "per_connection_mib": 3.0,
+          "first_range_mib": 0.25,
+          "slow_range_start_kib": 2048
+        },
+        "fixture_sha256": "316c9cfc0ccc1a2074397904c01d1f05d266c9043a7ecf1fbf73661aaac605a3",
+        "content_generator": "SHAKE256(IDG latency fixture v2)",
+        "latency_ms": 80.0,
+        "size": 8388608,
+        "expected_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+        "binaries": {
+          "baseline": "b5ee403db571ac476b29688bc4ee49e95504e7e7d487fab7a9178645ad19720b",
+          "candidate": "667133dee8557d099624ff6189db4d807857a215b64fd78ff11451c3bb8e5121"
+        },
+        "runs": [
+          {
+            "tool": "baseline",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:52713/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-auto-files\\1-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 2.270048400037922,
+            "durable_seconds": 2.272265800042078,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 14901248,
+              "peak_commit_bytes": 10735616,
+              "page_faults": 4725,
+              "cpu_user_seconds": 0.0625,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.078125,
+              "cpu_cycles": 236761741
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:20373/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-auto-files\\1-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2392064-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.5667479999829084,
+            "durable_seconds": 1.568076099967584,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15380480,
+              "peak_commit_bytes": 11255808,
+              "page_faults": 4732,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.0625,
+              "cpu_cycles": 226140332
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:20378/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-auto-files\\2-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2392064-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.5652821999974549,
+            "durable_seconds": 1.5674966000951827,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15097856,
+              "peak_commit_bytes": 11247616,
+              "page_faults": 4771,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 229570067
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:20385/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-auto-files\\2-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 2.2086015000240877,
+            "durable_seconds": 2.210801800014451,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15147008,
+              "peak_commit_bytes": 11190272,
+              "page_faults": 4607,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 221620846
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:20393/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-auto-files\\3-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 2.2052179999882355,
+            "durable_seconds": 2.2065725000575185,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15155200,
+              "peak_commit_bytes": 11141120,
+              "page_faults": 4697,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 221574495
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:20402/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-auto-files\\3-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2392064-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.5627872999757528,
+            "durable_seconds": 1.5641147999558598,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15355904,
+              "peak_commit_bytes": 11366400,
+              "page_faults": 4687,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 219252107
+            }
+          }
+        ],
+        "finished_utc": "2026-11-06T23:25:39Z"
+      }
+    },
+    {
+      "path": "target/perf-20261107-general-handoff-later-manual.json",
+      "sha256": "8546ec6ea75880b143a6403cf3aaf39249498eb34c43c020f8dab394657fa52b",
+      "evidence": {
+        "configuration": {
+          "baseline": "target\\perf-idg-f663941.exe",
+          "candidate": "target\\perf-idg-7ef2145.exe",
+          "output": "target\\perf-20261107-general-handoff-later-manual.json",
+          "repeats": 3,
+          "latency_ms": 80.0,
+          "size_kib": 8192,
+          "connections": 4,
+          "candidate_policy": "production",
+          "per_connection_mib": 3.0,
+          "first_range_mib": 0.25,
+          "slow_range_start_kib": 2048
+        },
+        "fixture_sha256": "316c9cfc0ccc1a2074397904c01d1f05d266c9043a7ecf1fbf73661aaac605a3",
+        "content_generator": "SHAKE256(IDG latency fixture v2)",
+        "latency_ms": 80.0,
+        "size": 8388608,
+        "expected_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+        "binaries": {
+          "baseline": "b5ee403db571ac476b29688bc4ee49e95504e7e7d487fab7a9178645ad19720b",
+          "candidate": "667133dee8557d099624ff6189db4d807857a215b64fd78ff11451c3bb8e5121"
+        },
+        "runs": [
+          {
+            "tool": "baseline",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:20443/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-manual-files\\1-baseline\\download.bin",
+              "4"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-0"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=0-524287"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=524288-1048575"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1572864-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1048576-1572863"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 2.450389900011942,
+            "durable_seconds": 2.4517260999418795,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15163392,
+              "peak_commit_bytes": 10907648,
+              "page_faults": 4898,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 215325760
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63808/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-manual-files\\1-candidate\\download.bin",
+              "4"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-0"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1572864-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=524288-1048575"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=0-524287"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1048576-1572863"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2326528-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.587505100062117,
+            "durable_seconds": 1.5888177000451833,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15228928,
+              "peak_commit_bytes": 11063296,
+              "page_faults": 4963,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 218221168
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63818/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-manual-files\\2-candidate\\download.bin",
+              "4"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-0"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1048576-1572863"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=524288-1048575"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=0-524287"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1572864-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2260992-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.611103400005959,
+            "durable_seconds": 1.6124257000628859,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15126528,
+              "peak_commit_bytes": 11005952,
+              "page_faults": 4952,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 220724244
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:63823/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-manual-files\\2-baseline\\download.bin",
+              "4"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-0"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=524288-1048575"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=0-524287"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1048576-1572863"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1572864-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 2.7062863000901416,
+            "durable_seconds": 2.7076549000339583,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15364096,
+              "peak_commit_bytes": 11542528,
+              "page_faults": 4876,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 230339609
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:63832/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-manual-files\\3-baseline\\download.bin",
+              "4"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-0"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=0-524287"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=524288-1048575"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1572864-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1048576-1572863"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 2.998985999962315,
+            "durable_seconds": 3.0003431999357417,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15249408,
+              "peak_commit_bytes": 11063296,
+              "page_faults": 5041,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 243206631
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:63842/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-later-manual-files\\3-candidate\\download.bin",
+              "4"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-0"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=0-524287"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1048576-1572863"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=524288-1048575"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1572864-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2392064-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.5670188999501988,
+            "durable_seconds": 1.568301299936138,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15233024,
+              "peak_commit_bytes": 11325440,
+              "page_faults": 5043,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 225456615
+            }
+          }
+        ],
+        "finished_utc": "2026-11-06T23:26:07Z"
+      }
+    },
+    {
+      "path": "target/perf-20261107-general-handoff-manual-bd.json",
+      "sha256": "2d1c2a9ecd2257f26c7d196fa74394c0cd258d9f141e16dd43d997b43930ce01",
+      "evidence": {
+        "schema": 2,
+        "started_utc": "2026-11-06T23:26:51Z",
+        "platform": "Windows-11-10.0.26300-SP0",
+        "logical_cpus": 32,
+        "idg_commit": "7ef2145e6ea558b8bad25fd71a03fba11e2c4f13",
+        "prism_commit": "c25f3c795c962323982effcb0220fcbbe75ee2a3",
+        "size_factor": 1.0,
+        "repeats": 3,
+        "curl_repeats": 3,
+        "timing": "Process startup through completed file and external fsync; SHA-256 is outside timed interval; OS caches are not purged",
+        "binary_sha256": {
+          "IDG": "667133dee8557d099624ff6189db4d807857a215b64fd78ff11451c3bb8e5121",
+          "IDG-baseline": "b5ee403db571ac476b29688bc4ee49e95504e7e7d487fab7a9178645ad19720b"
+        },
+        "server_sha256": "302bd6ce2f2fe70bcc3ce685b6a6e1f4c71f0eb2cff7f3e696fad5921d45ce4d",
+        "runs": [
+          {
+            "scenario": "B",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 2147483648,
+            "requested_connections": 8,
+            "expected_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_size": 2147483648,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.1937711000209674,
+            "durable_seconds": 1.195113299996592,
+            "verification_seconds": 1.0464025000110269,
+            "mib_per_second": 1713.6450577579883,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:30041/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\000-B-1-IDG\\download.bin",
+              "8"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30041",
+              "--size",
+              "2147483648",
+              "--seed",
+              "202"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 32960512,
+              "peak_commit_bytes": 32931840,
+              "page_faults": 120285,
+              "cpu_user_seconds": 0.65625,
+              "cpu_kernel_seconds": 1.453125,
+              "cpu_total_seconds": 2.109375,
+              "cpu_cycles": 8860061904
+            },
+            "source_url": "http://127.0.0.1:30041/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\000-B-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "B",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 2147483648,
+            "requested_connections": 8,
+            "expected_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_size": 2147483648,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.290796999935992,
+            "durable_seconds": 1.2930965999839827,
+            "verification_seconds": 1.0400889000156894,
+            "mib_per_second": 1583.7950544648932,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:30056/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\001-B-1-IDG-baseline\\download.bin",
+              "8"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30056",
+              "--size",
+              "2147483648",
+              "--seed",
+              "202"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 33505280,
+              "peak_commit_bytes": 33136640,
+              "page_faults": 106386,
+              "cpu_user_seconds": 0.59375,
+              "cpu_kernel_seconds": 1.28125,
+              "cpu_total_seconds": 1.875,
+              "cpu_cycles": 7263427616
+            },
+            "source_url": "http://127.0.0.1:30056/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\001-B-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "B",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 2147483648,
+            "requested_connections": 8,
+            "expected_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_size": 2147483648,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.2375197000801563,
+            "durable_seconds": 1.2389002999989316,
+            "verification_seconds": 1.0610305999871343,
+            "mib_per_second": 1653.0789442877415,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:30070/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\002-B-2-IDG-baseline\\download.bin",
+              "8"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30070",
+              "--size",
+              "2147483648",
+              "--seed",
+              "202"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 33271808,
+              "peak_commit_bytes": 32808960,
+              "page_faults": 101116,
+              "cpu_user_seconds": 0.375,
+              "cpu_kernel_seconds": 1.125,
+              "cpu_total_seconds": 1.5,
+              "cpu_cycles": 7023913347
+            },
+            "source_url": "http://127.0.0.1:30070/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\002-B-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "B",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 2147483648,
+            "requested_connections": 8,
+            "expected_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_size": 2147483648,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.2984441999578848,
+            "durable_seconds": 1.299792499979958,
+            "verification_seconds": 1.0516354000428692,
+            "mib_per_second": 1575.6361111728056,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:30095/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\003-B-2-IDG\\download.bin",
+              "8"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30095",
+              "--size",
+              "2147483648",
+              "--seed",
+              "202"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 32931840,
+              "peak_commit_bytes": 32747520,
+              "page_faults": 107307,
+              "cpu_user_seconds": 0.5625,
+              "cpu_kernel_seconds": 1.296875,
+              "cpu_total_seconds": 1.859375,
+              "cpu_cycles": 6948525695
+            },
+            "source_url": "http://127.0.0.1:30095/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\003-B-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "B",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 2147483648,
+            "requested_connections": 8,
+            "expected_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_size": 2147483648,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.250345699954778,
+            "durable_seconds": 1.2517145000165328,
+            "verification_seconds": 1.0491879000328481,
+            "mib_per_second": 1636.1558486163974,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:30106/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\004-B-3-IDG\\download.bin",
+              "8"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30106",
+              "--size",
+              "2147483648",
+              "--seed",
+              "202"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 33054720,
+              "peak_commit_bytes": 32370688,
+              "page_faults": 118842,
+              "cpu_user_seconds": 0.390625,
+              "cpu_kernel_seconds": 1.21875,
+              "cpu_total_seconds": 1.609375,
+              "cpu_cycles": 7011430112
+            },
+            "source_url": "http://127.0.0.1:30106/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\004-B-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "B",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 2147483648,
+            "requested_connections": 8,
+            "expected_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_sha256": "05fd3e2ed4b4d5e58f0a3ab6d232f787d2eefadabb3c39432b8b14d49db2ca3e",
+            "actual_size": 2147483648,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.2885949000483379,
+            "durable_seconds": 1.2899607000872493,
+            "verification_seconds": 1.052976100007072,
+            "mib_per_second": 1587.6452669150922,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:30121/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\005-B-3-IDG-baseline\\download.bin",
+              "8"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30121",
+              "--size",
+              "2147483648",
+              "--seed",
+              "202"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 33320960,
+              "peak_commit_bytes": 32567296,
+              "page_faults": 104951,
+              "cpu_user_seconds": 0.421875,
+              "cpu_kernel_seconds": 1.140625,
+              "cpu_total_seconds": 1.5625,
+              "cpu_cycles": 6639749733
+            },
+            "source_url": "http://127.0.0.1:30121/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\005-B-3-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "D",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 268435456,
+            "requested_connections": 16,
+            "expected_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_size": 268435456,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 6.119661399978213,
+            "durable_seconds": 6.121112799970433,
+            "verification_seconds": 0.13465679995715618,
+            "mib_per_second": 41.822460778902254,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:30137/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\006-D-1-IDG\\download.bin",
+              "16"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30137",
+              "--size",
+              "268435456",
+              "--seed",
+              "404",
+              "--throttle",
+              "3M",
+              "--drop-prob",
+              "0.02"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 24576000,
+              "peak_commit_bytes": 31240192,
+              "page_faults": 38562,
+              "cpu_user_seconds": 0.0625,
+              "cpu_kernel_seconds": 0.078125,
+              "cpu_total_seconds": 0.140625,
+              "cpu_cycles": 3603533556
+            },
+            "source_url": "http://127.0.0.1:30137/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\006-D-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "D",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 268435456,
+            "requested_connections": 16,
+            "expected_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_size": 268435456,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 6.125370199908502,
+            "durable_seconds": 6.126781299943104,
+            "verification_seconds": 0.13503300002776086,
+            "mib_per_second": 41.78376662512457,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:30521/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\007-D-1-IDG-baseline\\download.bin",
+              "16"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30521",
+              "--size",
+              "268435456",
+              "--seed",
+              "404",
+              "--throttle",
+              "3M",
+              "--drop-prob",
+              "0.02"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 23785472,
+              "peak_commit_bytes": 29749248,
+              "page_faults": 38015,
+              "cpu_user_seconds": 0.921875,
+              "cpu_kernel_seconds": 1.046875,
+              "cpu_total_seconds": 1.96875,
+              "cpu_cycles": 3387353281
+            },
+            "source_url": "http://127.0.0.1:30521/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\007-D-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "D",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 268435456,
+            "requested_connections": 16,
+            "expected_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_size": 268435456,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 6.038390600006096,
+            "durable_seconds": 6.039734399993904,
+            "verification_seconds": 0.1323419000254944,
+            "mib_per_second": 42.38596982017262,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:30889/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\008-D-2-IDG-baseline\\download.bin",
+              "16"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "30889",
+              "--size",
+              "268435456",
+              "--seed",
+              "404",
+              "--throttle",
+              "3M",
+              "--drop-prob",
+              "0.02"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 24743936,
+              "peak_commit_bytes": 31629312,
+              "page_faults": 36477,
+              "cpu_user_seconds": 0.734375,
+              "cpu_kernel_seconds": 0.703125,
+              "cpu_total_seconds": 1.4375,
+              "cpu_cycles": 3309253918
+            },
+            "source_url": "http://127.0.0.1:30889/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\008-D-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "D",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 268435456,
+            "requested_connections": 16,
+            "expected_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_size": 268435456,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 6.0718379999743775,
+            "durable_seconds": 6.073185799992643,
+            "verification_seconds": 0.13400600000750273,
+            "mib_per_second": 42.1525058562032,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:31218/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\009-D-2-IDG\\download.bin",
+              "16"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "31218",
+              "--size",
+              "268435456",
+              "--seed",
+              "404",
+              "--throttle",
+              "3M",
+              "--drop-prob",
+              "0.02"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 23822336,
+              "peak_commit_bytes": 30736384,
+              "page_faults": 38877,
+              "cpu_user_seconds": 0.4375,
+              "cpu_kernel_seconds": 0.53125,
+              "cpu_total_seconds": 0.96875,
+              "cpu_cycles": 3362571674
+            },
+            "source_url": "http://127.0.0.1:31218/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\009-D-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "D",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 268435456,
+            "requested_connections": 16,
+            "expected_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_size": 268435456,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 6.237490699975751,
+            "durable_seconds": 6.238825100008398,
+            "verification_seconds": 0.1314001000719145,
+            "mib_per_second": 41.03336700361345,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "http://127.0.0.1:31564/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\010-D-3-IDG\\download.bin",
+              "16"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "31564",
+              "--size",
+              "268435456",
+              "--seed",
+              "404",
+              "--throttle",
+              "3M",
+              "--drop-prob",
+              "0.02"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 24793088,
+              "peak_commit_bytes": 31657984,
+              "page_faults": 41864,
+              "cpu_user_seconds": 0.6875,
+              "cpu_kernel_seconds": 0.484375,
+              "cpu_total_seconds": 1.171875,
+              "cpu_cycles": 3452205408
+            },
+            "source_url": "http://127.0.0.1:31564/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\010-D-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "D",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 268435456,
+            "requested_connections": 16,
+            "expected_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_sha256": "4940a123f0203206d137d6b4e241a1df37370a8e824be51e3bb40e65dc42af62",
+            "actual_size": 268435456,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 6.052693100064062,
+            "durable_seconds": 6.054909200058319,
+            "verification_seconds": 0.134883499937132,
+            "mib_per_second": 42.27974219622225,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "http://127.0.0.1:31933/file/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-manual-bd-files\\011-D-3-IDG-baseline\\download.bin",
+              "16"
+            ],
+            "server_command": [
+              "C:\\Users\\3D\\.codex\\tmp\\prism-reference-20261030\\target\\release\\prism-testserver.exe",
+              "--port",
+              "31933",
+              "--size",
+              "268435456",
+              "--seed",
+              "404",
+              "--throttle",
+              "3M",
+              "--drop-prob",
+              "0.02"
+            ],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 23965696,
+              "peak_commit_bytes": 30273536,
+              "page_faults": 39082,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 3438030610
+            },
+            "source_url": "http://127.0.0.1:31933/file/fixture.bin",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-manual-bd-files\\011-D-3-IDG-baseline\\tool.log"
+          }
+        ],
+        "publisher_references": {},
+        "connection_overrides": {
+          "IDG": null,
+          "IDG-baseline": null
+        },
+        "workloads": {
+          "B": {
+            "size": 2147483648,
+            "seed": 202,
+            "requested_connections": 8,
+            "server_options": [],
+            "source": null
+          },
+          "D": {
+            "size": 268435456,
+            "seed": 404,
+            "requested_connections": 16,
+            "server_options": [
+              "--throttle",
+              "3M",
+              "--drop-prob",
+              "0.02"
+            ],
+            "source": null
+          }
+        },
+        "production_sources": {
+          "src\\download\\bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+          "src\\download\\connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+          "src\\download\\engine.rs": "d2c36d7b76c2bfb996243ea92656ce0684fb187107b7b73841af582a1acd2321",
+          "src\\download\\gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+          "src\\download\\history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+          "src\\download\\media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+          "src\\download\\mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+          "src\\download\\music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+          "src\\download\\probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+          "src\\download\\request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+          "src\\download\\segment.rs": "840b7b295a5189c24e0d7a9e076109e38a5697a28d6aed9bcf8d53eb6afee27a",
+          "src\\download\\types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+          "src\\download\\writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+        },
+        "driver_sha256": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+        "source_snapshot": "perf-20261107-general-handoff-manual-bd-files\\source-snapshot",
+        "harness_sha256": "835c9ce4a1252a2bc2e4f35fdde9c71df61f376c6b330cf24bef993835873f4f",
+        "tracked_worktree_changes": [
+          "scripts/benchmark_probe_latency.py",
+          "tests/probe-latency.test.py"
+        ],
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "finished_utc": "2026-11-06T23:27:53Z"
+      }
+    },
+    {
+      "path": "target/perf-20261107-general-handoff-public-efg-auto.json",
+      "sha256": "43d1829c1319fb89c36381968cf9469a2fec7a4e422db8ec118e774b39cf3ef4",
+      "evidence": {
+        "schema": 2,
+        "started_utc": "2026-11-06T23:26:23Z",
+        "platform": "Windows-11-10.0.26300-SP0",
+        "logical_cpus": 32,
+        "idg_commit": "7ef2145e6ea558b8bad25fd71a03fba11e2c4f13",
+        "prism_commit": "c25f3c795c962323982effcb0220fcbbe75ee2a3",
+        "size_factor": 1.0,
+        "repeats": 3,
+        "curl_repeats": 3,
+        "timing": "Process startup through completed file and external fsync; SHA-256 is outside timed interval; OS caches are not purged",
+        "binary_sha256": {
+          "IDG": "667133dee8557d099624ff6189db4d807857a215b64fd78ff11451c3bb8e5121",
+          "IDG-baseline": "b5ee403db571ac476b29688bc4ee49e95504e7e7d487fab7a9178645ad19720b"
+        },
+        "server_sha256": "302bd6ce2f2fe70bcc3ce685b6a6e1f4c71f0eb2cff7f3e696fad5921d45ce4d",
+        "runs": [
+          {
+            "scenario": "E",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.5451977000338957,
+            "durable_seconds": 1.546913699945435,
+            "verification_seconds": 0.039559900062158704,
+            "mib_per_second": 49.264609504668876,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\000-E-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 34992128,
+              "peak_commit_bytes": 51326976,
+              "page_faults": 22602,
+              "cpu_user_seconds": 0.203125,
+              "cpu_kernel_seconds": 0.328125,
+              "cpu_total_seconds": 0.53125,
+              "cpu_cycles": 2029385039
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\000-E-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.470848900033161,
+            "durable_seconds": 1.4722020000917837,
+            "verification_seconds": 0.039805499953217804,
+            "mib_per_second": 51.76470305058899,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\001-E-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 38522880,
+              "peak_commit_bytes": 55959552,
+              "page_faults": 22020,
+              "cpu_user_seconds": 0.15625,
+              "cpu_kernel_seconds": 0.25,
+              "cpu_total_seconds": 0.40625,
+              "cpu_cycles": 2043626350
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\001-E-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.7071610999992117,
+            "durable_seconds": 1.7085510999895632,
+            "verification_seconds": 0.038815999985672534,
+            "mib_per_second": 44.60393333608804,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\002-E-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 35688448,
+              "peak_commit_bytes": 50692096,
+              "page_faults": 21497,
+              "cpu_user_seconds": 0.328125,
+              "cpu_kernel_seconds": 0.1875,
+              "cpu_total_seconds": 0.515625,
+              "cpu_cycles": 2174008689
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\002-E-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.4756669000489637,
+            "durable_seconds": 1.477057300042361,
+            "verification_seconds": 0.03914679994340986,
+            "mib_per_second": 51.59454502073059,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\003-E-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 38109184,
+              "peak_commit_bytes": 53727232,
+              "page_faults": 20673,
+              "cpu_user_seconds": 0.21875,
+              "cpu_kernel_seconds": 0.25,
+              "cpu_total_seconds": 0.46875,
+              "cpu_cycles": 2023863856
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\003-E-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.5813017999753356,
+            "durable_seconds": 1.5829813999589533,
+            "verification_seconds": 0.04058699996676296,
+            "mib_per_second": 48.142131908315825,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\004-E-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 34553856,
+              "peak_commit_bytes": 52539392,
+              "page_faults": 23203,
+              "cpu_user_seconds": 0.234375,
+              "cpu_kernel_seconds": 0.28125,
+              "cpu_total_seconds": 0.515625,
+              "cpu_cycles": 1969120704
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\004-E-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.4143474000738934,
+            "durable_seconds": 1.415686700027436,
+            "verification_seconds": 0.03945510007906705,
+            "mib_per_second": 53.83118974258744,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\005-E-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 37498880,
+              "peak_commit_bytes": 54788096,
+              "page_faults": 21572,
+              "cpu_user_seconds": 0.25,
+              "cpu_kernel_seconds": 0.25,
+              "cpu_total_seconds": 0.5,
+              "cpu_cycles": 2135769036
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\005-E-3-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8032821000088006,
+            "durable_seconds": 0.8055395999690518,
+            "verification_seconds": 0.01791150006465614,
+            "mib_per_second": 43.04269819443257,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\006-F-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 26083328,
+              "peak_commit_bytes": 28372992,
+              "page_faults": 13966,
+              "cpu_user_seconds": 0.25,
+              "cpu_kernel_seconds": 0.15625,
+              "cpu_total_seconds": 0.40625,
+              "cpu_cycles": 1047360447
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\006-F-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8680782999144867,
+            "durable_seconds": 0.869437100016512,
+            "verification_seconds": 0.017722300020977855,
+            "mib_per_second": 39.87936319312041,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\007-F-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 27115520,
+              "peak_commit_bytes": 30515200,
+              "page_faults": 14407,
+              "cpu_user_seconds": 0.140625,
+              "cpu_kernel_seconds": 0.078125,
+              "cpu_total_seconds": 0.21875,
+              "cpu_cycles": 1086884633
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\007-F-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8719164000358433,
+            "durable_seconds": 0.8732682999689132,
+            "verification_seconds": 0.018075100029818714,
+            "mib_per_second": 39.70440457573705,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\008-F-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 28295168,
+              "peak_commit_bytes": 30597120,
+              "page_faults": 13654,
+              "cpu_user_seconds": 0.171875,
+              "cpu_kernel_seconds": 0.234375,
+              "cpu_total_seconds": 0.40625,
+              "cpu_cycles": 1004861553
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\008-F-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.9348192000761628,
+            "durable_seconds": 0.9370749000227079,
+            "verification_seconds": 0.018274999922141433,
+            "mib_per_second": 37.000882089885906,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\009-F-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 27918336,
+              "peak_commit_bytes": 30826496,
+              "page_faults": 13048,
+              "cpu_user_seconds": 0.09375,
+              "cpu_kernel_seconds": 0.0625,
+              "cpu_total_seconds": 0.15625,
+              "cpu_cycles": 968444283
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\009-F-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8514688999857754,
+            "durable_seconds": 0.8528863000683486,
+            "verification_seconds": 0.01831690000835806,
+            "mib_per_second": 40.65324754583728,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\010-F-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 27312128,
+              "peak_commit_bytes": 31399936,
+              "page_faults": 13907,
+              "cpu_user_seconds": 0.125,
+              "cpu_kernel_seconds": 0.046875,
+              "cpu_total_seconds": 0.171875,
+              "cpu_cycles": 1024152813
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\010-F-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7404270999832079,
+            "durable_seconds": 0.7417911000084132,
+            "verification_seconds": 0.018310100072994828,
+            "mib_per_second": 46.741728075112505,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\011-F-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 27684864,
+              "peak_commit_bytes": 31465472,
+              "page_faults": 14273,
+              "cpu_user_seconds": 0.1875,
+              "cpu_kernel_seconds": 0.140625,
+              "cpu_total_seconds": 0.328125,
+              "cpu_cycles": 1052490283
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\011-F-3-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.1124736999627203,
+            "durable_seconds": 1.1137476000003517,
+            "verification_seconds": 0.01400710002053529,
+            "mib_per_second": 24.11278848342829,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\012-G-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 22196224,
+              "peak_commit_bytes": 23736320,
+              "page_faults": 11417,
+              "cpu_user_seconds": 0.1875,
+              "cpu_kernel_seconds": 0.078125,
+              "cpu_total_seconds": 0.265625,
+              "cpu_cycles": 883302646
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\012-G-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.9917740999953821,
+            "durable_seconds": 0.9931340999901295,
+            "verification_seconds": 0.014400600106455386,
+            "mib_per_second": 27.0412226334805,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\013-G-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 23273472,
+              "peak_commit_bytes": 23994368,
+              "page_faults": 11369,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.09375,
+              "cpu_total_seconds": 0.140625,
+              "cpu_cycles": 831776280
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\013-G-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.0567371000070125,
+            "durable_seconds": 1.0580818000016734,
+            "verification_seconds": 0.014817900024354458,
+            "mib_per_second": 25.381364940491277,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\014-G-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 22999040,
+              "peak_commit_bytes": 23875584,
+              "page_faults": 11305,
+              "cpu_user_seconds": 0.1875,
+              "cpu_kernel_seconds": 0.0625,
+              "cpu_total_seconds": 0.25,
+              "cpu_cycles": 860510344
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\014-G-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.1645250000292435,
+            "durable_seconds": 1.166865700040944,
+            "verification_seconds": 0.014912100043147802,
+            "mib_per_second": 23.01512530687297,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\015-G-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 22372352,
+              "peak_commit_bytes": 23539712,
+              "page_faults": 11171,
+              "cpu_user_seconds": 0.15625,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.1875,
+              "cpu_cycles": 846062127
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\015-G-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8924455000087619,
+            "durable_seconds": 0.8948219999438152,
+            "verification_seconds": 0.014241899945773184,
+            "mib_per_second": 30.012181533780577,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-7ef2145.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\016-G-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 22179840,
+              "peak_commit_bytes": 23588864,
+              "page_faults": 11118,
+              "cpu_user_seconds": 0.0625,
+              "cpu_kernel_seconds": 0.078125,
+              "cpu_total_seconds": 0.140625,
+              "cpu_cycles": 840530240
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\016-G-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8721795999445021,
+            "durable_seconds": 0.8735458999872208,
+            "verification_seconds": 0.014395900070667267,
+            "mib_per_second": 30.743158777492116,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f663941.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-general-handoff-public-efg-auto-files\\017-G-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 22134784,
+              "peak_commit_bytes": 23887872,
+              "page_faults": 11434,
+              "cpu_user_seconds": 0.078125,
+              "cpu_kernel_seconds": 0.125,
+              "cpu_total_seconds": 0.203125,
+              "cpu_cycles": 884396572
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-general-handoff-public-efg-auto-files\\017-G-3-IDG-baseline\\tool.log"
+          }
+        ],
+        "publisher_references": {
+          "E": {
+            "checksum_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz.sha256",
+            "sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "metadata_sha256": "7f193cade27683b038df566e537c75f58b2630ee582179799be0ccd1259087dc",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          },
+          "F": {
+            "checksum_url": "https://nodejs.org/dist/v24.11.0/SHASUMS256.txt",
+            "sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "metadata_sha256": "ee1afe484a32496fd72c22f02acc80e28e6af559491b46cdfbd1c7a3922c42bd",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          },
+          "G": {
+            "checksum_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe.sigstore",
+            "sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "metadata_sha256": "13c08963683b048dc574418e0c1df136ce584c96105a571f0c68ccc61f4a1b74",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          }
+        },
+        "connection_overrides": {
+          "IDG": 0,
+          "IDG-baseline": 0
+        },
+        "workloads": {
+          "E": {
+            "size": 79909984,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "76.2 MiB public Rust archive over HTTPS",
+              "size": 79909984,
+              "url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+              "checksum_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz.sha256",
+              "checksum_format": "sha256"
+            }
+          },
+          "F": {
+            "size": 36356854,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "34.7 MiB official Node ZIP over HTTPS",
+              "size": 36356854,
+              "url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+              "checksum_url": "https://nodejs.org/dist/v24.11.0/SHASUMS256.txt",
+              "checksum_format": "sha256"
+            }
+          },
+          "G": {
+            "size": 28160096,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "26.9 MiB official Python installer over HTTPS",
+              "size": 28160096,
+              "url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+              "checksum_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe.sigstore",
+              "checksum_format": "sigstore-digest"
+            }
+          }
+        },
+        "production_sources": {
+          "src\\download\\bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+          "src\\download\\connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+          "src\\download\\engine.rs": "d2c36d7b76c2bfb996243ea92656ce0684fb187107b7b73841af582a1acd2321",
+          "src\\download\\gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+          "src\\download\\history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+          "src\\download\\media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+          "src\\download\\mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+          "src\\download\\music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+          "src\\download\\probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+          "src\\download\\request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+          "src\\download\\segment.rs": "840b7b295a5189c24e0d7a9e076109e38a5697a28d6aed9bcf8d53eb6afee27a",
+          "src\\download\\types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+          "src\\download\\writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+        },
+        "driver_sha256": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+        "source_snapshot": "perf-20261107-general-handoff-public-efg-auto-files\\source-snapshot",
+        "harness_sha256": "835c9ce4a1252a2bc2e4f35fdde9c71df61f376c6b330cf24bef993835873f4f",
+        "tracked_worktree_changes": [
+          "scripts/benchmark_probe_latency.py",
+          "tests/probe-latency.test.py"
+        ],
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "finished_utc": "2026-11-06T23:26:45Z"
+      }
+    }
+  ]
+}
