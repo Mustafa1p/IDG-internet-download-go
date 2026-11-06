@@ -6,14 +6,13 @@ import argparse
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 from pathlib import Path
 import threading
 import time
 
 from benchmark_process import measure_client
 
-CONTENT = bytes(range(256)) * 16384
-EXPECTED = hashlib.sha256(CONTENT).hexdigest()
 
 
 def main():
@@ -23,12 +22,24 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--latency-ms", type=float, default=80)
+    parser.add_argument("--size-kib", type=int, default=4096)
+    parser.add_argument("--connections", type=int, default=4)
+    parser.add_argument("--candidate-policy", choices=["production", "reuse-prefix"], default="production")
+    parser.add_argument("--per-connection-mib", type=float, default=0)
+    parser.add_argument("--first-range-mib", type=float, default=0)
     args = parser.parse_args()
-    if args.output.exists() or args.repeats < 1 or args.latency_ms < 0:
-        raise ValueError("Use a new output file and valid repeats/latency")
+    rates = (args.latency_ms, args.per_connection_mib, args.first_range_mib)
+    if (args.output.exists() or args.repeats < 1 or args.size_kib < 1
+            or not 0 <= args.connections <= 32
+            or any(not math.isfinite(value) or value < 0 for value in rates)):
+        raise ValueError("Use a new output file, positive repeats/size, 0..32 connections and finite nonnegative delays/rates")
+    CONTENT = bytes(range(256)) * (args.size_kib * 4)
+    EXPECTED = hashlib.sha256(CONTENT).hexdigest()
     work = args.output.parent / (args.output.stem + "-files")
     work.mkdir(parents=True)
-    result = dict(latency_ms=args.latency_ms, size=len(CONTENT), expected_sha256=EXPECTED,
+    result = dict(configuration={key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
+                  fixture_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                  latency_ms=args.latency_ms, size=len(CONTENT), expected_sha256=EXPECTED,
                   binaries={name: hashlib.sha256(path.read_bytes()).hexdigest()
                             for name, path in [("baseline", args.baseline), ("candidate", args.candidate)]}, runs=[])
     for repeat in range(args.repeats):
@@ -48,6 +59,7 @@ def main():
                     ranged = self.headers.get("Range")
                     if ranged:
                         start, end = map(int, ranged.removeprefix("bytes=").split("-"))
+                        end = min(end, len(CONTENT) - 1)
                     self.send_response(206 if ranged else 200)
                     self.send_header("Content-Type", "application/octet-stream")
                     self.send_header("Content-Length", str(end - start + 1))
@@ -57,7 +69,14 @@ def main():
                         self.send_header("Content-Range", f"bytes {start}-{end}/{len(CONTENT)}")
                     self.end_headers()
                     if not head:
-                        self.wfile.write(CONTENT[start:end + 1])
+                        rate = args.first_range_mib if args.first_range_mib and start == 0 and end > 0 else args.per_connection_mib
+                        if rate:
+                            for offset in range(start, end + 1, 32768):
+                                data = CONTENT[offset:min(offset + 32768, end + 1)]
+                                time.sleep(len(data) / (rate * 1024 * 1024))
+                                self.wfile.write(data)
+                        else:
+                            self.wfile.write(CONTENT[start:end + 1])
 
                 def do_HEAD(self):
                     self.reply(head=True)
@@ -77,7 +96,9 @@ def main():
             destination = directory / "download.bin"
             try:
                 binary = args.baseline if tool == "baseline" else args.candidate
-                command = [str(binary.resolve()), f"http://127.0.0.1:{server.server_port}/fixture.bin", str(destination.resolve()), "4"]
+                command = [str(binary.resolve()), f"http://127.0.0.1:{server.server_port}/fixture.bin", str(destination.resolve()), str(args.connections)]
+                if tool == "candidate" and args.candidate_policy != "production":
+                    command.append("--" + args.candidate_policy)
                 measurement = measure_client(command, destination, directory / "tool.log", 30)
                 actual = hashlib.sha256(destination.read_bytes()).hexdigest() if destination.exists() else None
                 verified = measurement["exit_code"] == 0 and not measurement["sync_error"] and actual == EXPECTED and destination.stat().st_size == len(CONTENT)

@@ -59,6 +59,8 @@ fn terminal(error: anyhow::Error) -> anyhow::Error {
 
 /// Arguments passed to a single segment worker.
 pub struct SegmentArgs {
+    /// Local capacity already reserved for a retained initial partial response.
+    pub initial_permit: Option<tokio::sync::OwnedSemaphorePermit>,
     pub gate: Arc<ConnectionGate>,
     pub if_range: Option<String>,
     pub total_size: Option<u64>,
@@ -109,6 +111,10 @@ async fn run_segment_with_idle_timeout(
 
     loop {
         while args.pause.load(Ordering::Relaxed) {
+            if args.end.is_some() {
+                args.response.take();
+                args.initial_permit.take();
+            }
             anyhow::ensure!(
                 !args.cancel.load(Ordering::Relaxed),
                 "cancelled during pause"
@@ -124,14 +130,24 @@ async fn run_segment_with_idle_timeout(
             return Ok(());
         }
         let response = args.response.take();
-        let streaming_export = super::probe::is_mail_export(&args.url) || response.is_some();
+        let streaming_export =
+            super::probe::is_mail_export(&args.url) || (args.end.is_none() && response.is_some());
         let before = resume_at;
         let timeout = if args.end.is_some() && !streaming_export {
             idle_timeout
         } else {
             Duration::from_secs(300)
         };
-        let result = download_range(&args, resume_at, &mut resume_at, response, timeout).await;
+        let initial_permit = args.initial_permit.take();
+        let result = download_range(
+            &args,
+            resume_at,
+            &mut resume_at,
+            response,
+            initial_permit,
+            timeout,
+        )
+        .await;
 
         match result {
             Ok(()) => return Ok(()),
@@ -197,6 +213,7 @@ async fn download_range(
     start: u64,
     cursor: &mut u64,
     response: Option<LeasedResponse>,
+    initial_permit: Option<tokio::sync::OwnedSemaphorePermit>,
     idle_timeout: Duration,
 ) -> Result<()> {
     let SegmentArgs {
@@ -210,7 +227,7 @@ async fn download_range(
         ..
     } = args;
     let end = *end;
-    let release_on_pause = end.is_some() && response.is_none();
+    let release_on_pause = end.is_some();
     // Build the Range header value.
     let range = match end {
         Some(e) => format!("bytes={start}-{e}"),
@@ -224,7 +241,10 @@ async fn download_range(
             spec = spec.header("if-range", validator)?;
         }
     }
-    let permit = args.gate.acquire(cancel).await?;
+    let permit = match initial_permit {
+        Some(permit) => permit,
+        None => args.gate.acquire(cancel).await?,
+    };
     let LeasedResponse {
         response: resp,
         permit: _host_permit,
@@ -621,6 +641,7 @@ mod tests {
                 let acknowledged = Arc::new(AtomicU64::new(0));
                 let progress = acknowledged.clone();
                 let args = SegmentArgs {
+                    initial_permit: None,
                     gate: Arc::new(ConnectionGate::new(1)),
                     if_range: Some("\"fixed\"".into()),
                     total_size: Some(SIZE),
@@ -862,6 +883,7 @@ mod tests {
                 let acknowledged = Arc::new(AtomicU64::new(0));
                 let progress = acknowledged.clone();
                 let args = SegmentArgs {
+                    initial_permit: None,
                     gate: Arc::new(ConnectionGate::new(1)),
                     if_range: (!export).then(|| "\"fixed\"".into()),
                     total_size: Some(LENGTH),

@@ -26,11 +26,14 @@ pub struct ProbeResult {
     pub if_range: Option<String>,
     /// Reuse a streaming GET when the endpoint cannot be probed safely.
     pub response: Option<LeasedResponse>,
+    /// Inclusive end of a validated initial partial response retained as data.
+    pub initial_range_end: Option<u64>,
     /// Retain learned capacity while this download schedules its range workers.
     pub host_budget: std::sync::Arc<HostBudget>,
     /// File size in bytes, if the server reported `Content-Length`.
     pub content_length: Option<u64>,
-    /// `true` after validating a complete one-byte partial response.
+    /// A complete one-byte response, or retained partial headers whose data
+    /// must still pass the segment worker's byte/validator checks.
     pub accepts_ranges: bool,
     /// Resolved filename (from `Content-Disposition` or URL path).
     pub filename: Option<String>,
@@ -117,6 +120,17 @@ mod response_guard_tests {
 /// Returns an error if the network request fails or the server returns a
 /// non-2xx status on the range probe or fallback full stream.
 pub async fn probe(client: &RequestContext, url: &str) -> Result<ProbeResult> {
+    probe_impl(client, url, false).await
+}
+
+/// Experimental transfer path: keep a bounded initial range as file data.
+pub async fn probe_with_initial_range(client: &RequestContext, url: &str) -> Result<ProbeResult> {
+    probe_impl(client, url, true).await
+}
+
+const INITIAL_RANGE_END: u64 = super::connections::MIN_SEGMENT_BYTES - 1;
+
+async fn probe_impl(client: &RequestContext, url: &str, reuse: bool) -> Result<ProbeResult> {
     anyhow::ensure!(
         !is_token_download(url),
         "This download requires a fresh website token. Open the source page and click its download button with the updated IDG browser extension enabled; the download.php URL alone cannot download the file."
@@ -126,13 +140,16 @@ pub async fn probe(client: &RequestContext, url: &str) -> Result<ProbeResult> {
     }
     // One request establishes metadata and verifies real range semantics. A
     // separate HEAD adds an avoidable round trip and can disagree with GET.
-    let (leased, accepts_ranges) =
-        initial_probe(client, url, std::time::Duration::from_secs(5)).await?;
+    let (leased, accepts_ranges) = if reuse {
+        initial_probe_impl(client, url, std::time::Duration::from_secs(5), true).await?
+    } else {
+        initial_probe(client, url, std::time::Duration::from_secs(5)).await?
+    };
     let LeasedResponse {
         response: resp,
         permit,
     } = leased;
-    let reuse_response = !accepts_ranges;
+    let reuse_response = !accepts_ranges || reuse;
     let resp = resp
         .error_for_status()
         .context("Server rejected download probe")?;
@@ -153,8 +170,13 @@ pub async fn probe(client: &RequestContext, url: &str) -> Result<ProbeResult> {
         .or_else(|| headers.get("last-modified").and_then(|v| v.to_str().ok()))
         .map(str::to_owned);
 
+    let partial = reuse.then(|| initial_range(&headers)).flatten();
     let content_length = if accepts_ranges {
-        range_probe_size(&headers)
+        if reuse {
+            partial.map(|(total, _)| total)
+        } else {
+            range_probe_size(&headers)
+        }
     } else {
         resp.content_length()
     };
@@ -168,6 +190,7 @@ pub async fn probe(client: &RequestContext, url: &str) -> Result<ProbeResult> {
     Ok(ProbeResult {
         http_version,
         if_range,
+        initial_range_end: partial.filter(|_| accepts_ranges).map(|(_, end)| end),
         response: reuse_response.then_some(LeasedResponse {
             response: resp,
             permit,
@@ -188,11 +211,27 @@ async fn initial_probe(
     url: &str,
     deadline: std::time::Duration,
 ) -> Result<(LeasedResponse, bool)> {
+    initial_probe_impl(client, url, deadline, false).await
+}
+
+async fn initial_probe_impl(
+    client: &RequestContext,
+    url: &str,
+    deadline: std::time::Duration,
+    reuse: bool,
+) -> Result<(LeasedResponse, bool)> {
     for attempt in 0..3 {
         let probing = async {
             let received = client
                 .send(
-                    Spec::get(url).header("range", "bytes=0-0")?,
+                    Spec::get(url).header(
+                        "range",
+                        if reuse {
+                            std::borrow::Cow::Owned(format!("bytes=0-{INITIAL_RANGE_END}"))
+                        } else {
+                            std::borrow::Cow::Borrowed("bytes=0-0")
+                        },
+                    )?,
                     Control {
                         network_timeout: Some(deadline),
                         ..Control::default()
@@ -203,6 +242,14 @@ async fn initial_probe(
                 mut response,
                 permit,
             } = received.leased;
+            if reuse && response.status() == StatusCode::PARTIAL_CONTENT {
+                let valid = initial_range(response.headers()).is_some_and(|(_, end)| {
+                    response
+                        .content_length()
+                        .is_none_or(|length| length == end + 1)
+                });
+                return Ok::<_, anyhow::Error>((LeasedResponse { response, permit }, valid));
+            }
             let mut verified = false;
             if response.status() == StatusCode::PARTIAL_CONTENT
                 && range_probe_size(response.headers()).is_some()
@@ -286,6 +333,14 @@ fn range_probe_size(headers: &reqwest::header::HeaderMap) -> Option<u64> {
         .filter(|size| *size > 0)
 }
 
+fn initial_range(headers: &reqwest::header::HeaderMap) -> Option<(u64, u64)> {
+    let value = headers.get("content-range")?.to_str().ok()?.trim();
+    let (end, total) = value.strip_prefix("bytes 0-")?.split_once('/')?;
+    let end = end.parse::<u64>().ok()?;
+    let total = total.parse::<u64>().ok()?.checked_sub(1)?;
+    (end == total.min(INITIAL_RANGE_END)).then_some((total + 1, end))
+}
+
 /// Token-only endpoints must be submitted through the original browser form.
 pub fn is_token_download(url: &str) -> bool {
     reqwest::Url::parse(url).is_ok_and(|url| {
@@ -355,6 +410,7 @@ pub async fn post_probe(client: &RequestContext, url: &str, body: String) -> Res
     Ok(ProbeResult {
         http_version: response.version(),
         if_range: None,
+        initial_range_end: None,
         content_length: response.content_length(),
         accepts_ranges: false,
         filename,
@@ -412,6 +468,7 @@ async fn streaming_probe(client: &RequestContext, url: &str) -> Result<ProbeResu
     Ok(ProbeResult {
         http_version: response.version(),
         if_range: None,
+        initial_range_end: None,
         content_length: response.content_length(),
         accepts_ranges: false,
         filename: Some(filename),
@@ -539,18 +596,24 @@ mod tests {
     #[tokio::test]
     async fn generated_get_export_is_not_replayed_after_a_capacity_close() {
         for redirect in [None, Some(301), Some(302), Some(303)] {
-            single_use_export_case(redirect).await;
+            single_use_export_case(redirect, false).await;
         }
+        single_use_export_case(None, true).await;
     }
 
-    async fn single_use_export_case(redirect: Option<u16>) {
+    async fn single_use_export_case(redirect: Option<u16>, reuse: bool) {
         use std::sync::{
             Arc,
             atomic::{AtomicUsize, Ordering},
         };
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
+        let address = listener.local_addr().unwrap();
+        let base = if reuse {
+            format!("http://mail.hostinger.com:{}", address.port())
+        } else {
+            format!("http://{address}")
+        };
         let exports = Arc::new(AtomicUsize::new(0));
         let seen = exports.clone();
         let submissions = Arc::new(AtomicUsize::new(0));
@@ -597,7 +660,16 @@ mod tests {
                         assert_eq!(&request[header_end..header_end + length], b"token=once");
                         submitted.fetch_add(1, Ordering::Relaxed);
                         socket.write_all(format!("HTTP/1.1 {} Redirect\r\nLocation: /export\r\nContent-Length: 0\r\n\r\n", redirect.unwrap()).as_bytes()).await.unwrap();
-                    } else if request.starts_with(b"GET /export ") {
+                    } else if request.starts_with(b"GET /export ")
+                        || request.starts_with(
+                            b"GET /bridge/api/v3/mailboxes/test/messages/sources/export ",
+                        )
+                    {
+                        assert!(
+                            !String::from_utf8_lossy(&request)
+                                .lines()
+                                .any(|line| line.starts_with("range:"))
+                        );
                         seen.fetch_add(1, Ordering::Relaxed);
                     } else {
                         assert!(request.starts_with(b"GET /prime "));
@@ -606,7 +678,13 @@ mod tests {
             }
         });
         let context = RequestContext::new(
-            Arc::new(super::super::http_client().unwrap()),
+            Arc::new(
+                super::super::http_client_builder()
+                    .no_proxy()
+                    .resolve("mail.hostinger.com", address)
+                    .build()
+                    .unwrap(),
+            ),
             &base,
             reqwest::header::HeaderMap::new(),
         )
@@ -622,11 +700,17 @@ mod tests {
                 .await
                 .is_err()
         );
-        let export_url = format!("{base}/export");
+        let export_url = if reuse {
+            format!("{base}/bridge/api/v3/mailboxes/test/messages/sources/export")
+        } else {
+            format!("{base}/export")
+        };
         let submit_url = format!("{base}/submit");
         let result = tokio::time::timeout(std::time::Duration::from_millis(250), async {
             if redirect.is_some() {
                 post_probe(&context, &submit_url, "token=once".into()).await
+            } else if reuse {
+                probe_with_initial_range(&context, &export_url).await
             } else {
                 streaming_probe(&context, &export_url).await
             }
@@ -817,6 +901,86 @@ mod tests {
         );
         assert_eq!(requests.load(std::sync::atomic::Ordering::Relaxed), 1);
         server.abort();
+    }
+
+    #[tokio::test]
+    async fn retained_partial_headers_are_strict_and_do_not_time_the_file_body() {
+        use axum::{Router, body::Body, response::IntoResponse, routing::get};
+        use std::sync::{Arc, Mutex};
+        for mode in 0..8 {
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let observed = requests.clone();
+            let router = Router::new().route(
+                "/file.bin",
+                get(move |headers: reqwest::header::HeaderMap| {
+                    let observed = observed.clone();
+                    async move {
+                        let range = headers.get("range").map(|v| v.to_str().unwrap().to_owned());
+                        observed.lock().unwrap().push(range.clone());
+                        if range.is_none() || mode == 3 {
+                            return (StatusCode::OK, "complete").into_response();
+                        }
+                        assert_eq!(range.as_deref(), Some("bytes=0-2097151"));
+                        let mut headers = reqwest::header::HeaderMap::new();
+                        if mode != 6 {
+                            headers.insert(
+                                "content-range",
+                                match mode {
+                                    1 => "bytes 1-7/8",
+                                    5 => "bytes 0-0/0",
+                                    7 => "bytes 0-8/8",
+                                    _ => "bytes 0-7/8",
+                                }
+                                .parse()
+                                .unwrap(),
+                            );
+                        }
+                        headers.insert(
+                            "content-length",
+                            if mode == 2 { "9" } else { "8" }.parse().unwrap(),
+                        );
+                        let stream = futures::stream::once(async move {
+                            if mode == 4 {
+                                tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+                            } else if mode == 2 {
+                                // Make the invalid declared length visible in headers
+                                // before Hyper detects the deliberately short body.
+                                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                            }
+                            Ok::<_, std::io::Error>(bytes::Bytes::from_static(b"complete"))
+                        });
+                        (
+                            StatusCode::PARTIAL_CONTENT,
+                            headers,
+                            Body::from_stream(stream),
+                        )
+                            .into_response()
+                    }
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file.bin", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let client = context(super::super::http_client().unwrap(), &url);
+            let (response, verified) =
+                initial_probe_impl(&client, &url, std::time::Duration::from_millis(250), true)
+                    .await
+                    .unwrap();
+            assert_eq!(verified, mode == 0 || mode == 4);
+            assert_eq!(
+                response.response.bytes().await.unwrap().as_ref(),
+                b"complete"
+            );
+            let actual = requests.lock().unwrap();
+            assert_eq!(actual.len(), if matches!(mode, 0 | 3 | 4) { 1 } else { 2 });
+            if actual.len() == 2 {
+                assert_eq!(
+                    actual[1], None,
+                    "Invalid range metadata must fall back to an un-ranged full stream"
+                );
+            }
+            server.abort();
+        }
     }
 
     #[tokio::test]

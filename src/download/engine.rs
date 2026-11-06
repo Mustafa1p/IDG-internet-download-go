@@ -55,6 +55,25 @@ pub async fn start_download(
     downloads: Downloads,
     id: String,
 ) -> Result<()> {
+    start_download_impl(client, downloads, id, false).await
+}
+
+/// Experimental initial-range reuse, kept separate until runtime comparisons pass.
+#[allow(dead_code)]
+pub async fn start_download_with_initial_range(
+    client: Arc<reqwest::Client>,
+    downloads: Downloads,
+    id: String,
+) -> Result<()> {
+    start_download_impl(client, downloads, id, true).await
+}
+
+async fn start_download_impl(
+    client: Arc<reqwest::Client>,
+    downloads: Downloads,
+    id: String,
+    reuse: bool,
+) -> Result<()> {
     // ── Read the configuration from shared state ─────────────────────────────
     let (url, save_path, num_segments, cancel, pause, headers, post_data, bandwidth) = {
         let guard = downloads
@@ -94,6 +113,13 @@ pub async fn start_download(
     let probing = async {
         match post_data {
             Some(body) => super::probe::post_probe(&request, &url, body).await,
+            // Automatic planning keeps at least 2 MiB per connection, so this
+            // prefix cannot be larger than an evenly divided automatic range.
+            // Explicit multi-connection counts can request much smaller pieces;
+            // retaining 2 MiB there regressed capped-server completion time.
+            None if reuse && num_segments <= 1 => {
+                super::probe::probe_with_initial_range(&request, &url).await
+            }
             None => probe(&request, &url).await,
         }
     };
@@ -167,12 +193,11 @@ pub async fn start_download(
     let file = Arc::new(super::writer::DownloadWriter::new(file.into_std().await)?);
 
     // ── Step 3 & 4: Divide and spawn segments ─────────────────────────────────
-    let seg_count = choose_count(
+    let mut seg_count = choose_count(
         num_segments,
         probe_result.content_length,
         probe_result.supports_multipart(),
     );
-    with_item(&downloads, &id, |item| item.num_segments = seg_count);
     // Queue a bounded number of smaller work units behind the connection gate.
     // Fast requests can claim more work instead of waiting on one large tail.
     let range_count = if seg_count > 1 && probe_result.supports_multipart() {
@@ -181,8 +206,41 @@ pub async fn start_download(
     } else {
         seg_count
     };
-    let segments = build_segments(range_count, probe_result.content_length);
+    let segments = if let Some(end) = probe_result.initial_range_end {
+        let remaining = probe_result.content_length.unwrap() - end - 1;
+        let mut ranges = vec![(0, end)];
+        if remaining == 0 {
+            seg_count = 1;
+        } else {
+            seg_count = seg_count.min(remaining.min(32) as usize + 1);
+            let count = if seg_count > 1 {
+                (remaining / MIN_RANGE_BYTES).clamp(
+                    (seg_count - 1) as u64,
+                    (seg_count * RANGES_PER_CONNECTION - 1) as u64,
+                ) as usize
+            } else {
+                1
+            };
+            ranges.extend(
+                build_segments(count, Some(remaining))
+                    .into_iter()
+                    .map(|(start, stop)| (start + end + 1, stop + end + 1)),
+            );
+        }
+        ranges
+    } else {
+        build_segments(range_count, probe_result.content_length)
+    };
+    let range_count = segments.len();
+    with_item(&downloads, &id, |item| item.num_segments = seg_count);
     let gate = Arc::new(super::gate::ConnectionGate::new(seg_count));
+    // The retained response already occupies a server connection. Reserve its
+    // local slot before spawning siblings so they cannot oversubscribe N.
+    let mut initial_permit = if probe_result.initial_range_end.is_some() {
+        Some(gate.acquire(&cancel).await?)
+    } else {
+        None
+    };
     let final_url = probe_result.final_url.clone();
 
     eprintln!(
@@ -209,6 +267,7 @@ pub async fn start_download(
         let id = id.clone();
 
         let args = SegmentArgs {
+            initial_permit: initial_permit.take(),
             gate: gate.clone(),
             if_range: probe_result.if_range.clone(),
             total_size: probe_result.content_length,
@@ -1189,6 +1248,197 @@ mod regression_tests {
         assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
         assert_eq!(downloads.lock().unwrap()[0].downloaded_bytes, 0);
         server.abort();
+    }
+
+    #[tokio::test]
+    async fn retained_initial_range_is_written_once_resumes_and_respects_capacity() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        for (requested, length, interrupt, hold, action) in [
+            (0, 256 * 1024 + 19, false, false, 0),
+            (0, 2 * 1024 * 1024, false, false, 0),
+            (0, 2 * 1024 * 1024 + 1, false, false, 0),
+            (0, 8 * 1024 * 1024 + 19, false, true, 0),
+            (0, 8 * 1024 * 1024 + 19, true, false, 0),
+            (0, 8 * 1024 * 1024 + 19, false, true, 1),
+            (0, 8 * 1024 * 1024 + 19, false, true, 2),
+            (1, 8 * 1024 * 1024 + 19, false, false, 0),
+            (4, 2 * 1024 * 1024, false, false, 0),
+            (4, 4 * 1024 * 1024, false, false, 0),
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file", listener.local_addr().unwrap());
+            let budget = super::super::gate::HostBudget::for_url(&url);
+            let ranges = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let observed = ranges.clone();
+            let (release, released) = tokio::sync::watch::channel(!hold);
+            let server = tokio::spawn(async move {
+                loop {
+                    let (mut socket, _) = listener.accept().await.unwrap();
+                    let observed = observed.clone();
+                    let mut released = released.clone();
+                    tokio::spawn(async move {
+                        let mut request = Vec::new();
+                        loop {
+                            let mut byte = [0];
+                            if socket.read(&mut byte).await.unwrap_or(0) == 0 {
+                                return;
+                            }
+                            request.push(byte[0]);
+                            if request.ends_with(b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        let text = String::from_utf8(request).unwrap();
+                        let value = text
+                            .lines()
+                            .find_map(|line| line.strip_prefix("range: bytes="))
+                            .unwrap();
+                        let (start, end) = value.split_once('-').unwrap();
+                        let start: u64 = start.parse().unwrap();
+                        let end: u64 = end.parse::<u64>().unwrap().min(length - 1);
+                        let first = {
+                            let mut ranges = observed.lock().unwrap();
+                            let first = ranges.is_empty();
+                            ranges.push((start, end, text.contains(r#"if-range: "fixed""#)));
+                            first
+                        };
+                        let header = format!(
+                            "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{end}/{length}\r\nETag: \"fixed\"\r\nConnection: close\r\n\r\n",
+                            end - start + 1
+                        );
+                        socket.write_all(header.as_bytes()).await.unwrap();
+                        while !*released.borrow() {
+                            if released.changed().await.is_err() {
+                                return;
+                            }
+                        }
+                        let stop = if first && interrupt {
+                            31 * 1024 + 19 - 1
+                        } else {
+                            end
+                        };
+                        let bytes: Vec<u8> = (start..=stop).map(|n| (n % 251) as u8).collect();
+                        let _ = socket.write_all(&bytes).await;
+                        if first && interrupt {
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                        }
+                    });
+                }
+            });
+            let directory = tempfile::tempdir().unwrap();
+            let output = directory.path().join("prefix.bin");
+            let item = crate::download::types::DownloadItem::new(url, output.clone(), requested);
+            let paused = item.pause_flag.clone();
+            let cancelled = item.cancel_flag.clone();
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            let state = downloads.clone();
+            let task = tokio::spawn(start_download_with_initial_range(
+                Arc::new(super::super::http_client().unwrap()),
+                state,
+                id,
+            ));
+            if hold {
+                tokio::time::timeout(Duration::from_secs(2), async {
+                    while ranges.lock().unwrap().len() < 4 {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .unwrap();
+                tokio::time::sleep(Duration::from_millis(150)).await;
+                assert_eq!(
+                    ranges.lock().unwrap().len(),
+                    4,
+                    "Retained response must occupy one of the four local slots"
+                );
+                assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
+                if action == 2 {
+                    cancelled.store(true, Ordering::Relaxed);
+                    tokio::time::timeout(Duration::from_secs(1), task)
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(downloads.lock().unwrap()[0].status, Status::Cancelled);
+                    assert_eq!(downloads.lock().unwrap()[0].downloaded_bytes, 0);
+                    assert_eq!(budget.counts().0, 0);
+                    assert_eq!(ranges.lock().unwrap().len(), 4);
+                    server.abort();
+                    continue;
+                }
+                if action == 1 {
+                    paused.store(true, Ordering::Relaxed);
+                    tokio::time::timeout(Duration::from_secs(1), async {
+                        while budget.counts().0 != 0 {
+                            tokio::time::sleep(Duration::from_millis(10)).await;
+                        }
+                    })
+                    .await
+                    .unwrap();
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    assert_eq!(
+                        ranges.lock().unwrap().len(),
+                        4,
+                        "Paused retained ranges must release capacity without sending another request"
+                    );
+                    paused.store(false, Ordering::Relaxed);
+                }
+                release.send(true).unwrap();
+            }
+            tokio::time::timeout(Duration::from_secs(5), task)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                std::fs::read(output).unwrap(),
+                (0..length).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+            );
+            let item = &downloads.lock().unwrap()[0];
+            assert_eq!(item.status, Status::Completed);
+            assert_eq!(item.downloaded_bytes, length);
+            let mut actual = ranges.lock().unwrap().clone();
+            assert_eq!(actual[0].0, 0);
+            if requested > 1 {
+                assert_eq!(
+                    actual[0],
+                    (0, 0, false),
+                    "Explicit multi-connection plans retain the one-byte probe"
+                );
+                actual.remove(0);
+            }
+            if interrupt {
+                let retry = actual
+                    .iter()
+                    .position(|(start, end, validator)| {
+                        *start == 31 * 1024 + 19 && *end == 2 * 1024 * 1024 - 1 && *validator
+                    })
+                    .expect("Initial response must resume at the disk-acknowledged short buffer");
+                actual.remove(retry);
+            }
+            if action == 1 {
+                actual.drain(..4);
+                assert!(actual.iter().all(|(_, _, validator)| *validator));
+            }
+            assert_eq!(budget.counts().0, 0);
+            actual.sort_by_key(|range| range.0);
+            let mut offset = 0;
+            for (start, end, _) in actual {
+                assert_eq!(start, offset, "Every planned byte must occur exactly once");
+                offset = end + 1;
+            }
+            assert_eq!(offset, length);
+            if requested <= 1 && length <= 2 * 1024 * 1024 {
+                assert_eq!(
+                    ranges.lock().unwrap().len(),
+                    1,
+                    "A complete initial response needs no metadata-only or data replay request"
+                );
+                assert_eq!(item.num_segments, 1);
+            }
+            server.abort();
+        }
     }
 
     #[tokio::test]

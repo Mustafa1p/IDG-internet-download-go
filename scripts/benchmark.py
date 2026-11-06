@@ -43,7 +43,7 @@ def main():
     p.add_argument("--aria2", type=Path, required=True)
     p.add_argument("--idg", type=Path, default=ROOT / "target/release/examples/idg-get.exe")
     p.add_argument("--idg-baseline-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed"], default="production", help="Diagnostic policy for a preserved IDG CLI that supports it")
-    p.add_argument("--idg-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed"], default="production", help="Candidate CLI diagnostic policy; production is the actual desktop policy")
+    p.add_argument("--idg-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed", "reuse-prefix"], default="production", help="Candidate CLI diagnostic policy; production is the actual desktop policy")
     p.add_argument("--idg-baseline", type=Path, help="Preserved IDG executable for interleaved before/after comparisons")
     p.add_argument("--idg-connections", type=int, choices=range(33), metavar="0..32", help="Diagnostic candidate override; 0 tests the app's automatic connection policy")
     p.add_argument("--idg-baseline-connections", type=int, choices=range(33), metavar="0..32", help="Diagnostic baseline override; recorded separately from the standard workload")

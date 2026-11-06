@@ -1,0 +1,329 @@
+{
+  "scope": "Unreleased diagnostic prototypes; production default and public v1.6.7 unchanged. Fixed alternating-order trials, exact size/SHA-256 verification, no overlapping local builds or artifact downloads.",
+  "accepted": false,
+  "next_action": "Cooperatively hand off unfinished initial-range bytes when sibling work finishes, after flushing and acknowledging its cursor; preserve validators and single-use exclusions.",
+  "batches": [
+    {
+      "variant": "unrestricted",
+      "name": "4m-latency80",
+      "path": "target\\perf-20261107-prefix-4m-latency80.json",
+      "sha256": "c9ef3e8c58497ea6777b57e54fc27c6c34e54fd0f04174ca05ba86283fbca4d1",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "5cedec13f5d2853bec43a0e727b18e509314deb338d8e971c3f483b7ceaeb50b"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 5,
+          "median_seconds": 0.28195609990507364,
+          "requests": [
+            9
+          ]
+        },
+        "candidate": {
+          "trials": 5,
+          "median_seconds": 0.20140520005952567,
+          "requests": [
+            5
+          ]
+        }
+      }
+    },
+    {
+      "variant": "unrestricted",
+      "name": "256k-latency80",
+      "path": "target\\perf-20261107-prefix-256k-latency80.json",
+      "sha256": "9e7ca6e7c852b935e8a9fac2f4d5a9e5dbf42689546b7ab5891fb9b6f539fc7a",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "5cedec13f5d2853bec43a0e727b18e509314deb338d8e971c3f483b7ceaeb50b"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 5,
+          "median_seconds": 0.19657799997366965,
+          "requests": [
+            5
+          ]
+        },
+        "candidate": {
+          "trials": 5,
+          "median_seconds": 0.11645199998747557,
+          "requests": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "variant": "unrestricted",
+      "name": "2m-latency80",
+      "path": "target\\perf-20261107-prefix-2m-latency80.json",
+      "sha256": "f61be33c1daa210ecb7b0e4980949c3154a11337da20ad47faa279eea6caaaa8",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "5cedec13f5d2853bec43a0e727b18e509314deb338d8e971c3f483b7ceaeb50b"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 5,
+          "median_seconds": 0.19864069996401668,
+          "requests": [
+            5
+          ]
+        },
+        "candidate": {
+          "trials": 5,
+          "median_seconds": 0.11616350000258535,
+          "requests": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "variant": "unrestricted",
+      "name": "4m-capped3-latency80",
+      "path": "target\\perf-20261107-prefix-4m-capped3-latency80.json",
+      "sha256": "1003ca25891e2b88da7594fe6d763953eaa0bb56048198784e4d07304955535c",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "5cedec13f5d2853bec43a0e727b18e509314deb338d8e971c3f483b7ceaeb50b"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 3,
+          "median_seconds": 0.6227951999753714,
+          "requests": [
+            9
+          ]
+        },
+        "candidate": {
+          "trials": 3,
+          "median_seconds": 0.798549999948591,
+          "requests": [
+            5
+          ]
+        }
+      }
+    },
+    {
+      "variant": "automatic-only",
+      "name": "auto-2m-latency80",
+      "path": "target\\perf-20261107-prefix-auto-2m-latency80.json",
+      "sha256": "e692603aca31c5463c1630b274765f67ce1745c005fe68a6463061c1a21f8361",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "d3bf9960ca58539ca27408011f73625079e78bde7bad0b251f979f4c280273be"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 5,
+          "median_seconds": 0.19952510006260127,
+          "requests": [
+            2
+          ]
+        },
+        "candidate": {
+          "trials": 5,
+          "median_seconds": 0.12053710001055151,
+          "requests": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "variant": "automatic-only",
+      "name": "auto-4m-latency80",
+      "path": "target\\perf-20261107-prefix-auto-4m-latency80.json",
+      "sha256": "01fff8ba6eff0f0bed73363bfe54fe70349193fabea034c6464913f861f26c50",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "d3bf9960ca58539ca27408011f73625079e78bde7bad0b251f979f4c280273be"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 5,
+          "median_seconds": 0.44438440003432333,
+          "requests": [
+            9
+          ]
+        },
+        "candidate": {
+          "trials": 5,
+          "median_seconds": 0.28134139999747276,
+          "requests": [
+            5
+          ]
+        }
+      }
+    },
+    {
+      "variant": "automatic-only",
+      "name": "auto-4m-capped3-latency80",
+      "path": "target\\perf-20261107-prefix-auto-4m-capped3-latency80.json",
+      "sha256": "5cd8094654cf19a68f53d208a7b2fbda2800adf49a8d50c3d71ca2275d36862a",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "d3bf9960ca58539ca27408011f73625079e78bde7bad0b251f979f4c280273be"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 3,
+          "median_seconds": 1.12411209999118,
+          "requests": [
+            9
+          ]
+        },
+        "candidate": {
+          "trials": 3,
+          "median_seconds": 1.0464518000371754,
+          "requests": [
+            5
+          ]
+        }
+      }
+    },
+    {
+      "variant": "automatic-only",
+      "name": "auto-8m-straggler025-latency80",
+      "path": "target\\perf-20261107-prefix-auto-8m-straggler025-latency80.json",
+      "sha256": "6608ff30865b5938a1552750425d3effc0f6e1323ebf6f81068d67a109c32408",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "d3bf9960ca58539ca27408011f73625079e78bde7bad0b251f979f4c280273be"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 3,
+          "median_seconds": 2.2037789000896737,
+          "requests": [
+            17
+          ]
+        },
+        "candidate": {
+          "trials": 3,
+          "median_seconds": 8.139649899909273,
+          "requests": [
+            13
+          ]
+        }
+      }
+    },
+    {
+      "variant": "automatic-only",
+      "name": "recorded-auto-4m-latency80",
+      "path": "target\\perf-20261107-prefix-recorded-auto-4m-latency80.json",
+      "sha256": "ba4dd447e6ec9c6d907f6d0cd6e023eb897e1e598d2bca2b40dbc268ccb3da3e",
+      "configuration": {
+        "baseline": "target\\perf-idg-f8cd699.exe",
+        "candidate": "target\\perf-idg-prefix-auto-prototype.exe",
+        "output": "target\\perf-20261107-prefix-recorded-auto-4m-latency80.json",
+        "repeats": 3,
+        "latency_ms": 80.0,
+        "size_kib": 4096,
+        "connections": 0,
+        "candidate_policy": "reuse-prefix",
+        "per_connection_mib": 0,
+        "first_range_mib": 0
+      },
+      "fixture_sha256": "977a0c5290f1e374bf348fdde7caa087b83e9260e3f6b5d0bea6103fcfb19089",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "d3bf9960ca58539ca27408011f73625079e78bde7bad0b251f979f4c280273be"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 3,
+          "median_seconds": 0.44478069990873337,
+          "requests": [
+            9
+          ]
+        },
+        "candidate": {
+          "trials": 3,
+          "median_seconds": 0.2859887999948114,
+          "requests": [
+            5
+          ]
+        }
+      }
+    },
+    {
+      "variant": "automatic-only",
+      "name": "recorded-auto-8m-straggler025-latency80",
+      "path": "target\\perf-20261107-prefix-recorded-auto-8m-straggler025-latency80.json",
+      "sha256": "3030dd3a5dc8e47745062f64885a3a9ac91fc81eda9a4efb1475b02ae80603ff",
+      "configuration": {
+        "baseline": "target\\perf-idg-f8cd699.exe",
+        "candidate": "target\\perf-idg-prefix-auto-prototype.exe",
+        "output": "target\\perf-20261107-prefix-recorded-auto-8m-straggler025-latency80.json",
+        "repeats": 3,
+        "latency_ms": 80.0,
+        "size_kib": 8192,
+        "connections": 0,
+        "candidate_policy": "reuse-prefix",
+        "per_connection_mib": 3.0,
+        "first_range_mib": 0.25
+      },
+      "fixture_sha256": "977a0c5290f1e374bf348fdde7caa087b83e9260e3f6b5d0bea6103fcfb19089",
+      "binaries": {
+        "baseline": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+        "candidate": "d3bf9960ca58539ca27408011f73625079e78bde7bad0b251f979f4c280273be"
+      },
+      "summary": {
+        "baseline": {
+          "trials": 3,
+          "median_seconds": 2.2056518000317737,
+          "requests": [
+            17
+          ]
+        },
+        "candidate": {
+          "trials": 3,
+          "median_seconds": 8.141426999936812,
+          "requests": [
+            13
+          ]
+        }
+      }
+    }
+  ],
+  "verified_files": 80,
+  "identities": {
+    "unrestricted": {
+      "base_revision": "f8cd6998a8ec49bb951b58f36f2d207a5aa35e4e",
+      "working_patch_sha256": "ee0a53584cd590b42214b89bde0d1916b02fc490c42a694915f968b9517d86c2",
+      "binary_sha256": "5cedec13f5d2853bec43a0e727b18e509314deb338d8e971c3f483b7ceaeb50b",
+      "note": "Experimental diagnostic --reuse-prefix, not the released/default transfer policy. CLI diagnostic help and benchmark choice text changed after build; transfer source unchanged."
+    },
+    "automatic-only": {
+      "base_revision": "f8cd6998a8ec49bb951b58f36f2d207a5aa35e4e",
+      "working_patch_sha256": "ffe1c1603b30d6e4ba90746db8301030804a0dc9a91b3ae3d38636e6e2417dd2",
+      "binary_sha256": "d3bf9960ca58539ca27408011f73625079e78bde7bad0b251f979f4c280273be",
+      "policy": "--reuse-prefix only for requested count 0 or 1; explicit multi-connection downloads retain the production path",
+      "released": false
+    }
+  },
+  "verification": {
+    "windows_x64": {
+      "app_tests": 87,
+      "native_tests": 2,
+      "ignored": 9,
+      "clippy": "passed with warnings denied"
+    },
+    "windows_x86": {
+      "app_tests": 87,
+      "native_tests": 2,
+      "ignored": 9,
+      "clippy": "passed with warnings denied"
+    },
+    "evidence_tool_tests": 20,
+    "limitations": [
+      "Rejected diagnostic prototypes; not production or release performance claims.",
+      "Measured executables predate equivalent shared-constant and header-format cleanup.",
+      "Packaged GUI/tray/cold-start not verified."
+    ]
+  }
+}

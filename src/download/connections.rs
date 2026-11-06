@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 pub const MAX_CONNECTIONS: usize = 32;
-const MIN_SEGMENT_BYTES: u64 = 2 * 1024 * 1024;
+pub(super) const MIN_SEGMENT_BYTES: u64 = 2 * 1024 * 1024;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ConnectionSettings {
