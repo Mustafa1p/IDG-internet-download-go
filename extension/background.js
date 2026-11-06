@@ -66,11 +66,14 @@ function siteStatus(url) {
 }
 async function updateTabBadge(tab) {
   if (tab?.id == null) return;
-  const paused = isSitePaused(tab.url);
-  const ready = interceptEnabled && (serverOnline || installed);
-  await chrome.action.setBadgeText({ tabId: tab.id, text: paused ? "!" : ready ? "✓" : "OFF" });
-  await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: paused ? "#c48118" : ready ? "#16865b" : "#dc5662" });
-  await chrome.action.setTitle({ tabId: tab.id, title: paused ? `IDG: Paused on ${siteHost(tab.url)}` : ready ? "IDG: Active on this site" : "IDG: Not connected or disabled" });
+  // Tabs can disappear between the event/query and any of these API calls.
+  try {
+    const paused = isSitePaused(tab.url);
+    const ready = interceptEnabled && (serverOnline || installed);
+    await chrome.action.setBadgeText({ tabId: tab.id, text: paused ? "!" : ready ? "✓" : "OFF" });
+    await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: paused ? "#c48118" : ready ? "#16865b" : "#dc5662" });
+    await chrome.action.setTitle({ tabId: tab.id, title: paused ? `IDG: Paused on ${siteHost(tab.url)}` : ready ? "IDG: Active on this site" : "IDG: Not connected or disabled" });
+  } catch { /* A closed tab has no badge to update. */ }
 }
 async function refreshSiteTabs() {
   const tabs = await chrome.tabs.query({});
@@ -82,7 +85,7 @@ async function refreshSiteTabs() {
   }));
 }
 chrome.tabs.onUpdated.addListener((id, change, tab) => {
-  if (change.url || change.status === "loading") void settingsReady.then(() => updateTabBadge(tab));
+  if (change.url || change.status === "loading") void settingsReady.then(() => updateTabBadge(tab)).catch(() => {});
 });
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   await settingsReady;

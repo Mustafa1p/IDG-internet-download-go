@@ -41,6 +41,20 @@ pub(super) struct PreviewTest {
 }
 
 fn steps() -> Vec<Step> {
+    if std::env::args().any(|arg| arg == "--preview-media") {
+        return [
+            ("Media dialog visible", Action::Click("Media file type")),
+            ("Choose MP3", Action::Click("MP3 audio")),
+            ("Reopen file type", Action::Click("Media file type")),
+            ("Choose MP4", Action::Click("MP4 video")),
+            ("Open video quality", Action::Click("Video quality")),
+            ("Choose 480p", Action::Click("Up to 480p")),
+            ("Media footer visible", Action::Click("Cancel download")),
+        ]
+        .into_iter()
+        .map(|(name, action)| Step { name, action })
+        .collect();
+    }
     let mut steps = Vec::new();
     for label in [
         "All downloads",
@@ -242,6 +256,21 @@ impl PreviewTest {
             return;
         }
         let okay = match step.name {
+            "Media dialog visible" | "Reopen file type" | "Open video quality" => snapshot.show_add,
+            "Choose MP3" => {
+                ctx.data(|d| d.get_temp::<String>(Id::new("qa:media-format")))
+                    .as_deref()
+                    == Some("mp3")
+            }
+            "Choose MP4" => {
+                ctx.data(|d| d.get_temp::<String>(Id::new("qa:media-format")))
+                    .as_deref()
+                    == Some("mp4")
+            }
+            "Choose 480p" => {
+                ctx.data(|d| d.get_temp::<u32>(Id::new("qa:media-height"))) == Some(480)
+            }
+            "Media footer visible" => !snapshot.show_add,
             "Filter active" => snapshot.category == "Downloading",
             "Filter queued" => snapshot.category == "Queued",
             "Select first row" => snapshot.selection_count == 1 && snapshot.details_open,

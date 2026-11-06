@@ -1,10 +1,11 @@
-IDG v1.6.3 - download probe and token form fixes
+IDG v1.6.4 - stable download dialog and smoother YouTube integration
 
-- Fix SafeFileHosting form detection when the website changes or removes its form ID, preserving the token-bearing POST.
-- Prevent bare download.php URLs from being handed off as GET requests. Existing failed entries need a fresh download from the original website.
-- Add a streaming GET fallback for servers that reject HEAD and range probes with HTTP 405 or other unsupported-probe responses. The accepted stream is reused, avoiding another request.
-- Retain browser-page checks, one-use POST handling and verified parallel range downloads.
+- Fix the download dialog collapsing after changing video format or quality. Give it a stable scrolling height and separate, clearly labeled format and quality rows with a blue section heading.
+- Handle tabs closing during background badge updates without unhandled promise errors.
+- Stop adding download controls to YouTube homepage hover previews. Coalesce scroll positioning, skip unchanged overlay styles, and ignore unrelated feed mutations.
+- Retry video extraction once after transient CDN/network errors (including HTTP 403/410), retaining partial files and selected quality. Add bounded retry backoff and fail visibly rather than skip unavailable video fragments.
+- Add regressions for closed tabs, homepage churn/navigation, expired video URLs, persistent 403 failures, and real format/quality clicks at 100%, 125%, 150% and 200% UI scales.
 
-Install the matching desktop app and browser extension, then reload the source website before downloading again. A pasted SafeFileHosting endpoint URL alone does not contain the required file token.
+Install both the desktop app and matching extension, then reload existing website tabs. This package's extension ID is blmjnmockbofpnipcniflmalfmiaolcj. The reported background/*.svg URLs reference omiebabagdcfedkhfmjlndcpocnafcpb, a different extension ID; this package contains no such SVG assets. If those messages persist after reloading, check the extension with that ID for an older or conflicting installation.
 
-Windows x64/x86 installers, portable packages and the matching browser extension are included.
+Authenticated, restricted, or expired source links can still be refused by the website. A persistent refusal remains a visible error after bounded retries. Windows x64/x86 installers, portable packages, extension ZIP and SHA-256 checksums are included.

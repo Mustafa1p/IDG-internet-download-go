@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, music = false, reload = false, diskVersion = "1.3.1", items = [], pausedSites = [], tabs = [], postDownloads = true } = {}) {
+function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, music = false, reload = false, diskVersion = "1.3.1", items = [], pausedSites = [], tabs = [], postDownloads = true, closedBadge = false } = {}) {
   const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
@@ -21,7 +21,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     management: { getSelf: async () => ({ installType: 'development' }) },
     alarms: { onAlarm: event('alarm'), create() {} },
     storage: { local: { get: async () => ({ interceptEnabled: enabled, statusOnlyPopup: migrated, pausedSites }), set: async value => calls.push(['settings', value]) } },
-    action: { setBadgeText: async value => reports.push(['badge', value]), setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
+    action: { setBadgeText: async value => { if (closedBadge) throw new Error('No tab with id: ' + value.tabId); reports.push(['badge', value]); }, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
     tabs: { query: async () => tabs, get: async id => tabs.find(tab => tab.id === id), sendMessage: async (id, message) => reports.push(['tab', id, message]), onUpdated: event('tabUpdated'), onActivated: event('tabActivated') },
     cookies: { getAll: async () => [{ name: 'session', value: 'test-cookie' }] },
     webRequest: { onBeforeSendHeaders: event('requestHeaders'), onBeforeRequest: event('beforeRequest') },
@@ -789,4 +789,22 @@ test('SafeFileHosting forms preserve POST tokens with changed or absent form IDs
     assert.equal(new URLSearchParams(page.sent[0].post_data).get('token'), 'test+token');
     assert.equal(fixture.nativeSubmissions, 0);
   }
+});
+
+test('closing tabs during badge updates never produces an unhandled rejection', async () => {
+  const { events, context } = worker({ closedBadge: true, tabs: [{ id: 453381607, url: 'https://youtube.com/' }] });
+  await vm.runInContext('updateTabBadge({ id: 453381607 })', context);
+  events.tabUpdated(453381607, { status: 'loading' }, { id: 453381607 });
+  await events.tabActivated({ tabId: 453381607 });
+  await new Promise(resolve => setImmediate(resolve));
+});
+
+test('YouTube homepage hover previews never hand off expiring CDN URLs', async () => {
+  const page = await overlayPage();
+  page.location.pathname = '/'; page.location.href = 'https://www.youtube.com/';
+  page.navigate();
+  assert.equal(page.parent.children.length, 0);
+  page.location.pathname = '/watch'; page.location.href = 'https://www.youtube.com/watch?v=KE0aEBW2syw';
+  page.navigate();
+  assert.equal(page.parent.children.length, 1);
 });

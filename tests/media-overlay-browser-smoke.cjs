@@ -5,9 +5,11 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
   const context = await chromium.launchPersistentContext(path.resolve(`target/browser-check/media-${Date.now()}`), {
     executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true,
     viewport: { width: 1000, height: 700 },
-    args: [`--disable-extensions-except=${path.resolve('extension')}`, `--load-extension=${path.resolve('extension')}`, '--no-first-run'],
+    args: [`--disable-extensions-except=${path.resolve(process.env.IDG_TEST_EXTENSION || 'extension')}`, `--load-extension=${path.resolve(process.env.IDG_TEST_EXTENSION || 'extension')}`, '--no-first-run'],
   });
   try {
+    const svgRequests = [];
+    context.on('request', request => { if (/chrome-extension:.*\/background\/\d+\.svg/.test(request.url())) svgRequests.push(request.url()); });
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
     await worker.evaluate(async () => {
       await settingsReady;
@@ -65,6 +67,48 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
       await page.close();
       console.log(`PASS ${name}: natural click above clipped/player-blocked content and hostile button CSS; scroll visibility, removed-control recovery, SPA navigation, dismissal and visible desktop errors.`);
     }
+    // Rapid homepage preview churn must not create controls or scan the entire
+    // document on unrelated link/title mutations.
+    const home = await context.newPage();
+    await home.addInitScript(() => {
+      window.idgMediaScans = 0;
+      const query = Document.prototype.querySelectorAll;
+      Document.prototype.querySelectorAll = function(selector) {
+        if (selector === 'video,audio') window.idgMediaScans++;
+        return query.call(this, selector);
+      };
+    });
+    await home.goto('https://www.youtube.com/');
+    await home.waitForTimeout(1000);
+    assert.equal(await home.locator('[data-idg-overlay]').count(), 0);
+    const initialScans = await home.evaluate(() => window.idgMediaScans);
+    await home.evaluate(async () => {
+      const link = document.createElement('a'); document.body.appendChild(link);
+      for (let i = 0; i < 60; i++) {
+        link.href = '/watch?v=' + i; link.textContent = 'Recommendation ' + i;
+        await new Promise(requestAnimationFrame);
+      }
+    });
+    assert.ok(await home.evaluate(() => window.idgMediaScans) - initialScans <= 1, 'Unrelated feed changes must not trigger document scans');
+    await home.evaluate(() => {
+      history.pushState({}, '', '/watch?v=KE0aEBW2syw');
+      document.dispatchEvent(new Event('yt-navigate-finish'));
+    });
+    await home.getByRole('button', { name: 'Download this media with IDG' }).waitFor();
+    await home.evaluate(() => { history.pushState({}, '', '/'); document.dispatchEvent(new Event('yt-navigate-finish')); });
+    await home.getByRole('button', { name: 'Download this media with IDG' }).waitFor({state:'detached'});
+    await home.close();
+    const rejected = await worker.evaluate(async () => {
+      const errors = []; const handler = event => { errors.push(event.reason?.message); event.preventDefault(); };
+      self.addEventListener('unhandledrejection', handler);
+      await updateTabBadge({id: 2147483600, url:'https://www.youtube.com/'});
+      await new Promise(resolve => setTimeout(resolve, 100));
+      self.removeEventListener('unhandledrejection', handler);
+      return errors;
+    });
+    assert.deepEqual(rejected, []);
+    assert.deepEqual(svgRequests, []);
+    console.log('PASS YouTube homepage: no hover-preview overlay, no full scans for 60 feed mutations, watch/home navigation, closed-tab badge race.');
     if (process.env.IDG_TEST_LIVE_DESKTOP === '1') {
       const health = await (await fetch('http://127.0.0.1:17843/health')).json();
       assert.equal(health.capabilities.music, true);

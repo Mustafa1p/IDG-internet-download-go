@@ -69,9 +69,12 @@
   let spotifyRowCount = 0;
   let spotifyPlayback = { page: null, identity: null, track: null, identityTrack: null, sawPrimaryPlayer: false, staleHint: false, stalePlayerTrack: null, hintUsed: false };
   let pageMusicTarget = null, pageMusicHost = null;
+  function youtubeHost() {
+    return ["www.youtube.com", "youtube.com", "m.youtube.com", "music.youtube.com", "www.youtube-nocookie.com"].includes(location.hostname);
+  }
   function youtubePage() {
     try {
-      if (!["www.youtube.com", "youtube.com", "m.youtube.com", "music.youtube.com", "www.youtube-nocookie.com"].includes(location.hostname)) return false;
+      if (!youtubeHost()) return false;
       return (location.pathname === "/watch" && /^[A-Za-z0-9_-]{11}$/.test(new URL(location.href).searchParams.get("v") || "")) || /^\/(shorts|live|embed)\/[A-Za-z0-9_-]{11}/.test(location.pathname);
     } catch { return false; }
   }
@@ -356,6 +359,11 @@
     activeOverlays.delete(state);
     if (buttons.get(state.media) === state) buttons.delete(state.media);
   }
+  function overlayStyle(host, name, value) {
+    if (host.style.getPropertyValue(name) !== value || host.style.getPropertyPriority(name) !== "important") {
+      host.style.setProperty(name, value, "important");
+    }
+  }
   function placeOverlay(state) {
     if (!document.body || !state.media.getBoundingClientRect) return;
     if (!siteEnabled || state.media.isConnected === false) { removeOverlay(state); return; }
@@ -375,8 +383,8 @@
         }
       }
     }
-    host.style.setProperty("display", visible ? "inline-flex" : "none", "important");
-    host.style.setProperty("visibility", visible ? "visible" : "hidden", "important");
+    overlayStyle(host, "display", visible ? "inline-flex" : "none");
+    overlayStyle(host, "visibility", visible ? "visible" : "hidden");
     if (!visible) return;
     const buttonWidth = row ? 34 : Math.min(190, music ? width - 24 : Math.max(100, rect.width - 12));
     let left = music ? width - buttonWidth - 16 : Math.max(8, Math.min(rect.right - buttonWidth - 6, width - buttonWidth - 8));
@@ -387,8 +395,8 @@
       left = (menuRect?.width ? menuRect.left : rect.right - (row.kind === 'library' ? 44 : 4)) - buttonWidth - 6;
       top = rect.top + (rect.height - 34) / 2;
     }
-    for (const [name, value] of Object.entries({ position: "fixed", inset: "auto", left: `${left}px`, top: `${top}px`, right: "auto", bottom: "auto", margin: "0", width: `${buttonWidth}px`, maxWidth: "calc(100vw - 16px)", pointerEvents: "auto" })) {
-      host.style.setProperty(name, value, "important");
+    for (const [name, value] of Object.entries({ position: "fixed", inset: "auto", left: `${left}px`, top: `${top}px`, right: "auto", bottom: "auto", margin: "0px", width: `${buttonWidth}px`, "max-width": "calc(100vw - 16px)", "pointer-events": "auto" })) {
+      overlayStyle(host, name, value);
     }
   }
   function refreshOverlayPositions() {
@@ -399,6 +407,13 @@
   }
   function attach(media) {
     if (!siteEnabled) return;
+    // Homepage hover previews are recycled continuously and have no watch URL.
+    // Never hand a preview's short-lived CDN URL to the desktop downloader.
+    if (youtubeHost() && !youtubePage()) {
+      const previous = buttons.get(media);
+      if (previous) removeOverlay(previous);
+      return;
+    }
     // Music services can play without an HTML audio/video element. Use one page action.
     if (musicSite() && media !== pageMusicTarget && !spotifyRows.has(media)) return;
     if (!media.parentElement) return;
@@ -610,8 +625,15 @@
     scan(document);
     document.addEventListener("yt-navigate-finish", () => scan(document));
     window.addEventListener?.("popstate", () => scan(document));
-    window.addEventListener?.("scroll", refreshOverlayPositions, { passive: true, capture: true });
-    window.addEventListener?.("resize", refreshOverlayPositions, { passive: true });
+    let positionPending = false;
+    const requestPositions = () => {
+      if (positionPending) return;
+      if (typeof requestAnimationFrame !== "function") { refreshOverlayPositions(); return; }
+      positionPending = true;
+      requestAnimationFrame(() => { positionPending = false; refreshOverlayPositions(); });
+    };
+    window.addEventListener?.("scroll", requestPositions, { passive: true, capture: true });
+    window.addEventListener?.("resize", requestPositions, { passive: true });
     document.addEventListener("fullscreenchange", () => {
       for (const state of activeOverlays) {
         if (state.overlay.showPopover) {
@@ -636,6 +658,17 @@
       requestAnimationFrame(() => { scanPending = false; scan(document); });
     };
     new MutationObserver(mutations => {
+      // Music rows need text/link changes; ordinary players only need media
+      // insertion/removal/source changes. Ignore unrelated feed DOM churn.
+      if (!musicSite()) {
+        const containsMedia = node => node.nodeType === 1 &&
+          !node.hasAttribute?.("data-idg-overlay") &&
+          (node.matches?.("video,audio") || node.querySelector?.("video,audio"));
+        if (mutations.some(mutation =>
+          (mutation.type === "attributes" && mutation.attributeName === "src" && mutation.target?.matches?.("video,audio,source")) ||
+          [...(mutation.addedNodes || []), ...(mutation.removedNodes || [])].some(containsMedia))) requestScan();
+        return;
+      }
       if (mutations.some(mutation => mutation.type === "attributes" || mutation.type === "characterData" || mutation.removedNodes?.length ||
           [...mutation.addedNodes].some(node => node.nodeType === 1 && !node.hasAttribute("data-idg-overlay") && node.tagName !== "BUTTON"))) requestScan();
     }).observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["src", "href", "data-uri", "data-track-uri", "data-idg-spotify-uri", "aria-rowindex", "aria-current", "data-playing"] });

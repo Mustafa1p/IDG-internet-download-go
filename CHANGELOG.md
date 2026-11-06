@@ -1,3 +1,11 @@
+## 1.6.4 - 2026-11-06
+
+- Fix zero-height video download dialogs and separate format/quality controls.
+- Catch closed-tab badge races; avoid YouTube homepage preview overlays and unrelated DOM rescans.
+- Coalesce overlay positioning and avoid rewriting unchanged styles.
+- Re-extract transiently failed video links once with partial files and format selections preserved; abort on missing fragments instead of producing incomplete media.
+- Add process recovery, persistent-403, real-browser feed churn and scaled desktop interaction checks.
+
 ## 1.6.3 - 2026-10-31
 
 - Preserve SafeFileHosting download POST tokens even when the website renames or removes the form ID.

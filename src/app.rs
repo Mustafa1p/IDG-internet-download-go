@@ -639,6 +639,12 @@ impl IDGApp {
             if std::env::args().any(|argument| argument == "--ui-preview") {
                 app.show_settings = false;
             }
+            if std::env::args().any(|argument| argument == "--preview-media") {
+                app.show_settings = false;
+                app.dialog.url = "https://www.youtube.com/watch?v=KE0aEBW2syw".into();
+                app.dialog.filename = "Sample video.mp4".into();
+                app.show_add = true;
+            }
             if std::env::args().any(|argument| argument == "--preview-add") {
                 app.show_settings = false;
                 app.dialog.url = "https://example.com/download.zip".into();
@@ -734,7 +740,7 @@ impl IDGApp {
             self.dialog.media_info = None;
             self.dialog.media_error = None;
             self.dialog.media_rx = None;
-            if !canonical.is_empty() {
+            if !canonical.is_empty() && !crate::settings_preview() {
                 self.inspect_media(ctx);
             }
         }
@@ -763,10 +769,11 @@ impl IDGApp {
 
         egui::Window::new("New download")
             .open(&mut dialog_open)
-            .default_height(0.0)
-            .min_height(0.0)
-            .vscroll(media::video_url(&self.dialog.url).is_some())
-            .max_height((ctx.screen_rect().height() - 90.0).max(300.0))
+            // A zero-height non-shrinking scroll area collapses on combo changes.
+            .default_height(440.0)
+            .min_height((ctx.screen_rect().height() - 130.0).clamp(180.0, 340.0))
+            .vscroll(true)
+            .max_height((ctx.screen_rect().height() - 100.0).max(180.0))
             .resizable(false)
             .collapsible(false)
             .default_width(540.0)
@@ -823,41 +830,7 @@ impl IDGApp {
                     }
                 }
                 if media::video_url(&self.dialog.url).is_some() {
-                    ui.separator();
-                    ui.label(RichText::new("Video · choose what to save").strong());
-                    let old_format = self.dialog.media_options.format;
-                    ui.horizontal(|ui| {
-                        ui.label("File type");
-                        egui::ComboBox::from_id_salt("youtube-format")
-                            .selected_text(self.dialog.media_options.format.label())
-                            .show_ui(ui, |ui| { for format in MediaFormat::ALL { ui.selectable_value(&mut self.dialog.media_options.format, format, format.label()); } });
-                        if matches!(self.dialog.media_options.format, MediaFormat::Wav | MediaFormat::Flac) {
-                            ui.label("Lossless conversion (source quality)");
-                        } else if self.dialog.media_options.format.audio() {
-                            ui.label("Audio quality");
-                            let selected = self.dialog.media_options.audio_bitrate.map(|b| format!("{b} kbps")).unwrap_or_else(|| "Best available".into());
-                            egui::ComboBox::from_id_salt("audio-quality").selected_text(selected).show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.dialog.media_options.audio_bitrate, None, "Best available");
-                                for rate in [320, 256, 192, 128, 96] { ui.selectable_value(&mut self.dialog.media_options.audio_bitrate, Some(rate), format!("{rate} kbps")); }
-                            });
-                        } else {
-                            ui.label("Video quality");
-                            let selected = self.dialog.media_options.height.map(|h|format!("Up to {h}p")).unwrap_or_else(||"Best available".into());
-                            egui::ComboBox::from_id_salt("video-quality").selected_text(selected).show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.dialog.media_options.height, None, "Best available");
-                                let heights = self.dialog.media_info.as_ref().map(|info|info.heights.clone()).unwrap_or_else(||vec![2160,1440,1080,720,480,360,240,144]);
-                                for height in heights { ui.selectable_value(&mut self.dialog.media_options.height, Some(height), format!("Up to {height}p")); }
-                            });
-                        }
-                    });
-                    if old_format != self.dialog.media_options.format {
-                        let name = PathBuf::from(&self.dialog.filename).with_extension(self.dialog.media_options.format.extension());
-                        self.dialog.filename = name.to_string_lossy().into_owned();
-                    }
-                    if self.dialog.media_rx.is_some() { ui.horizontal(|ui| { ui.spinner(); ui.label("Checking available video qualities…"); }); }
-                    if let Some(error) = &self.dialog.media_error { ui.colored_label(ORANGE, error); if ui.button("Retry format check").clicked() { self.inspect_media(ctx); } }
-                    ui.label(RichText::new("Video includes audio. MP3 and other audio types are converted; quality is limited by the source.").size(11.0).color(TEXT_DIM));
-                    ui.separator();
+                    self.video_options_ui(ui, ctx);
                 }
 
                 ui.horizontal(|ui| {
@@ -910,7 +883,9 @@ impl IDGApp {
 
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(" Cancel ").clicked() {
+                        let cancel = ui.button(" Cancel ");
+                        qa_control(ctx, "Cancel download", cancel.rect);
+                        if cancel.clicked() {
                             should_close = true;
                         }
                         let can = reqwest::Url::parse(self.dialog.url.trim())
@@ -973,6 +948,17 @@ impl IDGApp {
                 });
             });
 
+        #[cfg(debug_assertions)]
+        ctx.data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new("qa:media-format"),
+                self.dialog.media_options.format.extension().to_owned(),
+            );
+            d.insert_temp(
+                egui::Id::new("qa:media-height"),
+                self.dialog.media_options.height.unwrap_or(0),
+            );
+        });
         should_close |= !dialog_open;
         // Close AFTER the window borrow is released.
         if should_close {
@@ -984,6 +970,118 @@ impl IDGApp {
                 task.abort();
             }
         }
+    }
+
+    fn video_options_ui(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        ui.separator();
+        ui.label(
+            RichText::new("Video & audio")
+                .size(18.0)
+                .strong()
+                .color(ACCENT),
+        );
+        let old_format = self.dialog.media_options.format;
+        ui.horizontal(|ui| {
+            ui.label("File type");
+            let format_combo = egui::ComboBox::from_id_salt("youtube-format")
+                .width(170.0)
+                .selected_text(self.dialog.media_options.format.label())
+                .show_ui(ui, |ui| {
+                    for format in MediaFormat::ALL {
+                        let choice = ui.selectable_value(
+                            &mut self.dialog.media_options.format,
+                            format,
+                            format.label(),
+                        );
+                        qa_control(ctx, format.label(), choice.rect);
+                    }
+                });
+            qa_control(ctx, "Media file type", format_combo.response.rect);
+        });
+        ui.horizontal(|ui| {
+            if matches!(
+                self.dialog.media_options.format,
+                MediaFormat::Wav | MediaFormat::Flac
+            ) {
+                ui.label("Lossless conversion (source quality)");
+            } else if self.dialog.media_options.format.audio() {
+                ui.label("Audio quality");
+                let selected = self
+                    .dialog
+                    .media_options
+                    .audio_bitrate
+                    .map(|b| format!("{b} kbps"))
+                    .unwrap_or_else(|| "Best available".into());
+                egui::ComboBox::from_id_salt("audio-quality")
+                    .selected_text(selected)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.dialog.media_options.audio_bitrate,
+                            None,
+                            "Best available",
+                        );
+                        for rate in [320, 256, 192, 128, 96] {
+                            ui.selectable_value(
+                                &mut self.dialog.media_options.audio_bitrate,
+                                Some(rate),
+                                format!("{rate} kbps"),
+                            );
+                        }
+                    });
+            } else {
+                ui.label("Video quality");
+                let selected = self
+                    .dialog
+                    .media_options
+                    .height
+                    .map(|h| format!("Up to {h}p"))
+                    .unwrap_or_else(|| "Best available".into());
+                let quality_combo = egui::ComboBox::from_id_salt("video-quality")
+                    .width(170.0)
+                    .selected_text(selected)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.dialog.media_options.height,
+                            None,
+                            "Best available",
+                        );
+                        let heights = self
+                            .dialog
+                            .media_info
+                            .as_ref()
+                            .map(|info| info.heights.clone())
+                            .unwrap_or_else(|| vec![2160, 1440, 1080, 720, 480, 360, 240, 144]);
+                        for height in heights {
+                            let choice = ui.selectable_value(
+                                &mut self.dialog.media_options.height,
+                                Some(height),
+                                format!("Up to {height}p"),
+                            );
+                            qa_control(ctx, &format!("Up to {height}p"), choice.rect);
+                        }
+                    });
+                qa_control(ctx, "Video quality", quality_combo.response.rect);
+            }
+        });
+        if old_format != self.dialog.media_options.format {
+            let name = PathBuf::from(&self.dialog.filename)
+                .with_extension(self.dialog.media_options.format.extension());
+            self.dialog.filename = name.to_string_lossy().into_owned();
+        }
+        if self.dialog.media_rx.is_some() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("Checking available video qualities…");
+            });
+        }
+        if let Some(error) = &self.dialog.media_error {
+            ui.colored_label(ORANGE, error);
+            if ui.button("Retry format check").clicked() {
+                self.inspect_media(ctx);
+            }
+        }
+        ui.label(RichText::new("Video includes audio. MP3 and other audio types are converted; quality is limited by the source.").size(11.0).color(TEXT_DIM));
+        ui.separator();
     }
 
     fn inspect_media(&mut self, ctx: &egui::Context) {

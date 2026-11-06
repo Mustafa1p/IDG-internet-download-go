@@ -456,6 +456,14 @@ fn command(
         "3",
         "--fragment-retries",
         "3",
+        // Do not silently finish a video after omitting failed fragments.
+        "--abort-on-unavailable-fragments",
+        "--extractor-retries",
+        "3",
+        "--retry-sleep",
+        "http:exp=1:8",
+        "--retry-sleep",
+        "fragment:exp=1:8",
         "--progress-delta",
         "0.25",
     ]);
@@ -520,6 +528,45 @@ pub async fn download(downloads: Downloads, id: String) -> Result<()> {
 }
 
 async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -> Result<()> {
+    let result = download_attempt(downloads.clone(), id.clone(), tools.clone()).await;
+    if let Err(error) = &result
+        && refreshable_media_error(&error.to_string())
+    {
+        let cancelled = downloads
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|item| item.id == id)
+            .is_none_or(|item| item.cancel_flag.load(Ordering::Relaxed));
+        if !cancelled {
+            // A CDN URL may expire after extraction. Run the extractor again,
+            // retaining yt-dlp's partial files and the user's format selection.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            return download_attempt(downloads, id, tools).await;
+        }
+    }
+    result
+}
+
+fn refreshable_media_error(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    [
+        "http error 403",
+        "http error 410",
+        "http error 429",
+        "http error 500",
+        "http error 502",
+        "http error 503",
+        "http error 504",
+        "timed out",
+        "connection reset",
+        "remote end closed",
+    ]
+    .iter()
+    .any(|reason| message.contains(reason))
+}
+
+async fn download_attempt(downloads: Downloads, id: String, tools: PathBuf) -> Result<()> {
     let item = downloads
         .lock()
         .unwrap()
@@ -633,6 +680,13 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
             .or_else(|| errors.back())
             .map(String::as_str)
             .unwrap_or("Video download failed");
+        // Fragment-abort messages can hide the preceding HTTP cause. Preserve
+        // that cause so bounded re-extraction also handles expired fragments.
+        if let Some(cause) = errors.iter().find(|line| refreshable_media_error(line))
+            && cause != message
+        {
+            bail!("{message}\n{cause}");
+        }
         bail!("{message}");
     }
     let reported_file =
@@ -656,6 +710,83 @@ async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn expired_media_url_reextracts_once_and_preserves_partial_output() {
+        let directory = tempfile::tempdir().unwrap();
+        let tools = directory.path().join("tools");
+        std::fs::create_dir(&tools).unwrap();
+        let compiled = std::process::Command::new("rustc")
+            .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/media-retry.rs"))
+            .arg("--crate-name")
+            .arg("media_retry_fixture")
+            .arg("-o")
+            .arg(tools.join("yt-dlp.exe"))
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        for name in ["ffmpeg.exe", "ffprobe.exe", "deno.exe"] {
+            std::fs::write(tools.join(name), []).unwrap();
+        }
+        let output = directory.path().join("recovered.mp4");
+        let mut item = super::super::types::DownloadItem::new(
+            "https://www.youtube.com/watch?v=KE0aEBW2syw".into(),
+            output.clone(),
+            0,
+        );
+        item.media_options.height = Some(480);
+        let id = item.id.clone();
+        let downloads = Arc::new(Mutex::new(vec![item]));
+        download_with_tools(downloads.clone(), id, tools.clone())
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(tools.join("attempts")).unwrap(),
+            "2"
+        );
+        assert_eq!(std::fs::read(output).unwrap(), b"retained partial bytes");
+        assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+        std::fs::remove_file(tools.join("attempts")).unwrap();
+        std::fs::write(tools.join("always-fail"), []).unwrap();
+        let output = directory.path().join("still-forbidden.mp4");
+        let mut item = super::super::types::DownloadItem::new(
+            "https://www.youtube.com/watch?v=KE0aEBW2syw".into(),
+            output.clone(),
+            0,
+        );
+        item.media_options.height = Some(480);
+        let id = item.id.clone();
+        let downloads = Arc::new(Mutex::new(vec![item]));
+        let error = download_with_tools(downloads.clone(), id, tools.clone())
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("403"));
+        assert_eq!(
+            std::fs::read_to_string(tools.join("attempts")).unwrap(),
+            "2"
+        );
+        assert!(!output.exists());
+        assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
+    }
+
+    #[test]
+    fn recovery_is_limited_to_transient_media_failures() {
+        assert!(refreshable_media_error("ERROR: HTTP Error 403: Forbidden"));
+        assert!(refreshable_media_error("Connection reset by peer"));
+        for message in [
+            "Sign in to confirm your age",
+            "Requested format is not available",
+            "A file with this name already exists",
+            "Video unavailable",
+        ] {
+            assert!(!refreshable_media_error(message));
+        }
+    }
+
     #[test]
     fn social_urls_and_watermark_selection_stay_scoped_to_supported_sources() {
         for (input, expected) in [
@@ -1002,7 +1133,9 @@ mod tests {
     #[ignore = "Live YouTube format, conversion, and media probe test"]
     async fn supplied_video_supports_selected_video_quality_and_mp3() {
         let tools = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/tools");
-        let url = "https://www.youtube.com/watch?v=5TBlPQrcweQ";
+        let test_url = std::env::var("IDG_MEDIA_TEST_URL")
+            .unwrap_or_else(|_| "https://www.youtube.com/watch?v=5TBlPQrcweQ".into());
+        let url = test_url.as_str();
         let info = inspect_with_tools(url, None, &tools).await.unwrap();
         println!("Available video qualities: {:?}", info.heights);
         assert!(!info.heights.is_empty());
