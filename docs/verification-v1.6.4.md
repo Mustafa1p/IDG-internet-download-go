@@ -1,4 +1,4 @@
-# v1.6.4 verification
+# v1.6.4 / v1.6.5 verification
 
 Run from the repository root on Windows:
 
@@ -27,3 +27,5 @@ Rust tests include a real subprocess fixture that fails with HTTP 403 on the fir
 Live YouTube tests use bundled tools and probe actual MP4/MP3/WebM outputs for expected media streams and a 480p cap. Network success is dependent on source availability and is not a guarantee for restricted videos or all computers. Live social/account-dependent checks are separate ignored tests; they are not claimed by the normal suite.
 
 The SVG paths reported by the user reference extension `omiebabagdcfedkhfmjlndcpocnafcpb`. This repository builds `blmjnmockbofpnipcniflmalfmiaolcj` and contains no `background/*.svg` assets. Its package must not request those resources; persistent errors from the other ID require checking that installed extension separately.
+
+The first v1.6.4 hosted packaging run failed because the upstream pinned FFmpeg release returned 404. v1.6.5 uses byte-identical mirrored archives with unchanged SHA-256 checksums. The verification commands apply to both versions.

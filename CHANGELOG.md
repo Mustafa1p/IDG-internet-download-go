@@ -1,3 +1,8 @@
+## 1.6.5 - 2026-11-06
+
+- Include all v1.6.4 dialog, extension performance and media recovery fixes; v1.6.4 packaging was blocked before app assets were published.
+- Preserve the original checksum-pinned x64/x86 FFmpeg archives in repository release storage after their upstream nightly release was removed. Keep upstream URLs and license/source references in the manifests.
+
 ## 1.6.4 - 2026-11-06
 
 - Fix zero-height video download dialogs and separate format/quality controls.

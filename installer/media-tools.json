@@ -15,12 +15,13 @@
     {
       "name": "ffmpeg",
       "tag": "autobuild-2026-10-18-17-17",
-      "url": "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2026-10-18-17-17/ffmpeg-N-127654-g7045cc9b80-win64-gpl-shared.zip",
+      "url": "https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/media-tools-2026-10-18/ffmpeg-N-127654-g7045cc9b80-win64-gpl-shared.zip",
       "sha256": "bc0a49e622f9cec9cae04d2e7add8fdad8293889dcd39bf4db60daeaf64c7a36",
       "format": "zip-bin",
       "licenses": [
         "https://raw.githubusercontent.com/FFmpeg/FFmpeg/7045cc9b80/COPYING.GPLv3"
-      ]
+      ],
+      "upstream_url": "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2026-10-18-17-17/ffmpeg-N-127654-g7045cc9b80-win64-gpl-shared.zip"
     },
     {
       "name": "deno",

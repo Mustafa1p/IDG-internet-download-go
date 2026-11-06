@@ -15,12 +15,13 @@
     {
       "name": "ffmpeg",
       "tag": "autobuild-2026-10-18-17-17",
-      "url": "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2026-10-18-17-17/ffmpeg-N-127654-g7045cc9b80-win32-gpl-shared.zip",
+      "url": "https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/media-tools-2026-10-18/ffmpeg-N-127654-g7045cc9b80-win32-gpl-shared.zip",
       "sha256": "305561bc06fc3dfabd38dd91ade1c54d66c962bee42a437f9ad19d5988114461",
       "format": "zip-bin",
       "licenses": [
         "https://raw.githubusercontent.com/FFmpeg/FFmpeg/7045cc9b80/COPYING.GPLv3"
-      ]
+      ],
+      "upstream_url": "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2026-10-18-17-17/ffmpeg-N-127654-g7045cc9b80-win32-gpl-shared.zip"
     },
     {
       "name": "node",
