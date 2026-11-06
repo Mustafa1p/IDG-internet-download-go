@@ -1,12 +1,13 @@
-IDG v1.6.5 - stable download dialog and smoother YouTube integration
+IDG v1.6.6 - reliable concurrent downloads and scoped authentication
 
-- Fix the download dialog collapsing after changing video format or quality. Give it a stable scrolling height and separate, clearly labeled format and quality rows with a blue section heading.
-- Handle tabs closing during background badge updates without unhandled promise errors.
-- Stop adding download controls to YouTube homepage hover previews. Coalesce scroll positioning, skip unchanged overlay styles, and ignore unrelated feed mutations.
-- Retry video extraction once after transient CDN/network errors (including HTTP 403/410), retaining partial files and selected quality. Add bounded retry backoff and fail visibly rather than skip unavailable video fragments.
-- Preserve the original checksum-verified x64/x86 FFmpeg archives in repository release storage after upstream removed the pinned nightly build.
-- Add regressions for closed tabs, homepage churn/navigation, expired video URLs, persistent 403 failures, and real format/quality clicks at 100%, 125%, 150% and 200% UI scales.
+- Recover stalled and interrupted range requests from disk-acknowledged offsets, keeping short buffers and partial files. Stop promptly on permanent authorization, range-validation and disk errors.
+- Share server capacity fairly between files. Pausing a resumable download frees connections for other files; one-use form exports keep their accepted stream without replaying the form.
+- Keep captured credentials on their source origin across redirects. Reuse connections across authenticated files without sharing their headers. Preserve form redirect methods and updater integrity checks.
+- Replace the redundant metadata round trip with one validated GET probe and queue bounded smaller ranges for available workers.
+- Expand real-socket and Windows regression coverage, retaining complete benchmark evidence and failures. Throughput varies by server and workload; no universal speed claim is made.
 
-Install both the desktop app and matching extension, then reload existing website tabs. This package's extension ID is blmjnmockbofpnipcniflmalfmiaolcj. The reported background/*.svg URLs reference omiebabagdcfedkhfmjlndcpocnafcpb, a different extension ID; this package contains no such SVG assets. If those messages persist after reloading, check the extension with that ID for an older or conflicting installation.
+Includes the v1.6.5 fixes for the format/quality dialog, closed-tab background errors, YouTube homepage preview churn, and bounded video URL refresh after transient CDN failures.
 
-Authenticated, restricted, or expired source links can still be refused by the website. A persistent refusal remains a visible error after bounded retries. Windows x64/x86 installers, portable packages, extension ZIP and SHA-256 checksums are included.
+Install the matching desktop app and extension, then reload existing website tabs. This package's extension ID is blmjnmockbofpnipcniflmalfmiaolcj. The reported background/*.svg URLs reference omiebabagdcfedkhfmjlndcpocnafcpb, a different extension ID; this package contains no such SVG assets.
+
+Persistent website refusals remain visible errors after bounded retries. Windows x64/x86 installers, portable packages, extension ZIP and SHA-256 checksums are included.

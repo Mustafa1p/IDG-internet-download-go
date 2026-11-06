@@ -1,14 +1,16 @@
 """Click real egui format/quality controls at representative window sizes/scales."""
 import json
+import os
 import subprocess
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
+binary = Path(os.environ.get("IDG_UI_BINARY", str(root / "target/debug/IDG.exe"))).resolve()
 report = root / "target/fluent-qa/interactive.json"
 results = []
 for width, height, scale in [(800, 500, 1), (800, 500, 1.25), (800, 500, 1.5), (800, 500, 2), (1280, 800, 1)]:
     report.unlink(missing_ok=True)
-    result = subprocess.run([str(root / "target/debug/IDG.exe"), "--ui-preview", "--ui-preview-hold",
+    result = subprocess.run([str(binary), "--ui-preview", "--ui-preview-hold",
         "--preview-media", "--preview-self-test", f"--settings-preview-size={width}x{height}",
         f"--preview-scale={scale}"], cwd=root, capture_output=True, timeout=40,
         creationflags=subprocess.CREATE_NO_WINDOW)

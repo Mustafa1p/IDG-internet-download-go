@@ -1,3 +1,11 @@
+## 1.6.6 - 2026-11-06
+
+- Recover stalled and interrupted range requests from disk-acknowledged offsets, keeping short buffers and partial files. Stop promptly on permanent authorization, range-validation and disk errors.
+- Share server capacity fairly between files. Pausing a resumable download frees connections for other files; one-use form exports keep their accepted stream without replaying the form.
+- Keep captured credentials on their source origin across redirects. Reuse connections across authenticated files without sharing their headers. Preserve form redirect methods and updater integrity checks.
+- Replace the redundant metadata round trip with one validated GET probe and queue bounded smaller ranges for available workers.
+- Expand real-socket and Windows regression coverage, retaining complete benchmark evidence and failures. Throughput varies by server and workload; no universal speed claim is made.
+
 ## 1.6.5 - 2026-11-06
 
 - Include all v1.6.4 dialog, extension performance and media recovery fixes; v1.6.4 packaging was blocked before app assets were published.
