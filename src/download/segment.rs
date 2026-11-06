@@ -395,10 +395,13 @@ async fn download_range(
                     write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
                     return Err(PausedRange.into());
                 }
-                if let Some(mut remaining) = pending_handoff(args, *cursor) {
+                if pending_handoff(args, *cursor).is_some() {
                     write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
-                    remaining.start = *cursor;
-                    return Err(remaining.into());
+                    // Buffered bytes may leave only a tiny tail. Keep its valid
+                    // response rather than adding another request round trip.
+                    if let Some(remaining) = pending_handoff(args, *cursor) {
+                        return Err(remaining.into());
+                    }
                 }
                 if network_stalled(&mut last_network, pause, idle_timeout) {
                     // Resume only after every validated short buffer is written.
@@ -510,7 +513,11 @@ async fn download_range(
 fn pending_handoff(args: &SegmentArgs, cursor: u64) -> Option<YieldedRange> {
     let flag = args.handoff.as_ref()?;
     let end = args.end?;
-    (flag.load(Ordering::Relaxed) && args.bandwidth.rate() == 0)
+    // At most 64 KiB offers little work to redistribute. Normal inactivity
+    // recovery still applies if this valid response actually stalls.
+    (end.saturating_sub(cursor).saturating_add(1) > 64 * 1024
+        && flag.load(Ordering::Relaxed)
+        && args.bandwidth.rate() == 0)
         .then_some(YieldedRange { start: cursor, end })
 }
 
@@ -702,7 +709,9 @@ mod tests {
                 let acknowledged = Arc::new(AtomicU64::new(0));
                 let progress = acknowledged.clone();
                 let args = SegmentArgs {
-                    handoff: None,
+                    // A handoff request must not disable normal inactivity
+                    // recovery for a small, genuinely stalled response.
+                    handoff: (fault == Fault::StalledBody).then(|| Arc::new(AtomicBool::new(true))),
                     initial_permit: None,
                     gate: Arc::new(ConnectionGate::new(1)),
                     if_range: Some("\"fixed\"".into()),

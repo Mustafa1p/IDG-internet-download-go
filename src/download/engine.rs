@@ -1343,6 +1343,7 @@ mod regression_tests {
             (0, 8 * 1024 * 1024 + 19, false, false, 3),
             (0, 8 * 1024 * 1024 + 19, false, false, 4),
             (4, 8 * 1024 * 1024, false, false, 4),
+            (0, 8 * 1024 * 1024 + 19, false, false, 5),
         ] {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let url = format!("http://{}/file", listener.local_addr().unwrap());
@@ -1381,6 +1382,17 @@ mod regression_tests {
                             ranges.push((start, end, text.contains(r#"if-range: "fixed""#)));
                             first
                         };
+                        if action == 5
+                            && start > 2 * 1024 * 1024
+                            && observed
+                                .lock()
+                                .unwrap()
+                                .iter()
+                                .any(|r| r.0 == 2 * 1024 * 1024 && start <= r.1)
+                        {
+                            socket.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+                            return;
+                        }
                         let header = format!(
                             "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{end}/{length}\r\nETag: \"fixed\"\r\nConnection: close\r\n\r\n",
                             end - start + 1
@@ -1388,14 +1400,18 @@ mod regression_tests {
                         socket.write_all(header.as_bytes()).await.unwrap();
                         let mut body_start = start;
                         let stalled =
-                            (first && action == 3) || (start == 2 * 1024 * 1024 && action == 4);
+                            (first && action == 3) || (start == 2 * 1024 * 1024 && action >= 4);
                         if stalled {
-                            body_start = start + 31 * 1024 + 19;
+                            body_start = if action == 5 {
+                                end + 1 - 40 * 1024
+                            } else {
+                                start + 31 * 1024 + 19
+                            };
                             let prefix: Vec<u8> =
                                 (start..body_start).map(|n| (n % 251) as u8).collect();
                             socket.write_all(&prefix).await.unwrap();
                         }
-                        if !stalled && action >= 3 {
+                        if !stalled && (action == 3 || action == 4) {
                             tokio::time::sleep(Duration::from_millis(100)).await;
                         }
                         while !*released.borrow() && (stalled || action < 3) {
@@ -1477,7 +1493,26 @@ mod regression_tests {
                 }
                 release.send(true).unwrap();
             }
-            if action >= 3 {
+            if action == 5 {
+                tokio::time::timeout(Duration::from_secs(2), async {
+                    while downloads.lock().unwrap()[0].downloaded_bytes < length - 40 * 1024
+                        && !task.is_finished()
+                    {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .unwrap();
+                // Let idle workers consider handoff while a nearly complete
+                // valid response remains available. Reopening it is refused.
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                let prematurely_finished = task.is_finished();
+                release.send(true).unwrap();
+                task.await.unwrap().expect(
+                    "Keep the valid nearly complete stream instead of reopening its tiny tail",
+                );
+                assert!(!prematurely_finished);
+            } else if action >= 3 {
                 let completed = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
                 release.send(true).unwrap();
                 match completed {
@@ -1505,7 +1540,7 @@ mod regression_tests {
             assert_eq!(item.downloaded_bytes, length);
             let mut actual = ranges.lock().unwrap().clone();
             assert_eq!(actual[0].0, 0);
-            if action >= 3 {
+            if action == 3 || action == 4 {
                 let stalled_start = if action == 3 { 0 } else { 2 * 1024 * 1024 };
                 let cursor = stalled_start + 31 * 1024 + 19;
                 actual
