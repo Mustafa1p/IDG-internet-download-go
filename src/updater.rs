@@ -43,16 +43,17 @@ pub async fn check_for_update(
     client: &reqwest::Client,
     current: &str,
 ) -> Result<Option<UpdateInfo>> {
-    let release: GhRelease = client
-        .get(RELEASES_API)
-        .header("User-Agent", "IDG-update-checker")
-        .header("Cache-Control", "no-cache")
-        .timeout(std::time::Duration::from_secs(20))
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
+    let leased = crate::download::request::public_get(
+        client,
+        RELEASES_API,
+        &[
+            ("user-agent", "IDG-update-checker"),
+            ("cache-control", "no-cache"),
+        ],
+        std::time::Duration::from_secs(20),
+    )
+    .await?;
+    let release: GhRelease = leased.response.error_for_status()?.json().await?;
     update_from_release(release, current)
 }
 
@@ -175,12 +176,14 @@ pub async fn prepare_update(
     let installer = directory
         .path()
         .join(format!("IDG-Setup-v{}.exe", info.version));
-    let response = client
-        .get(&info.installer_url)
-        .timeout(std::time::Duration::from_secs(900))
-        .send()
-        .await?
-        .error_for_status()?;
+    let leased = crate::download::request::public_get(
+        client,
+        &info.installer_url,
+        &[],
+        std::time::Duration::from_secs(900),
+    )
+    .await?;
+    let response = leased.response.error_for_status()?;
     let mut stream = response.bytes_stream();
     let mut file = tokio::fs::File::create(&installer).await?;
     let mut hasher = Sha256::new();
@@ -361,15 +364,20 @@ mod tests {
     #[tokio::test]
     #[ignore = "Run immediately after publishing this source build"]
     async fn published_same_version_build_is_detected_without_a_repeat_offer() {
-        let client = reqwest::Client::new();
-        let json: serde_json::Value = client
-            .get(RELEASES_API)
-            .header("User-Agent", "IDG-update-checker")
-            .header("Cache-Control", "no-cache")
-            .timeout(std::time::Duration::from_secs(20))
-            .send()
-            .await
-            .unwrap()
+        let client = crate::download::http_client().unwrap();
+        let leased = crate::download::request::public_get(
+            &client,
+            RELEASES_API,
+            &[
+                ("user-agent", "IDG-update-checker"),
+                ("cache-control", "no-cache"),
+            ],
+            std::time::Duration::from_secs(20),
+        )
+        .await
+        .unwrap();
+        let json: serde_json::Value = leased
+            .response
             .error_for_status()
             .unwrap()
             .json()
@@ -414,16 +422,34 @@ mod tests {
             .await
             .unwrap();
         });
+        let redirect_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let redirect_address = redirect_listener.local_addr().unwrap();
+        let redirect_task = tokio::spawn(async move {
+            axum::serve(
+                redirect_listener,
+                Router::new().route(
+                    "/download",
+                    get(move || async move {
+                        (
+                            axum::http::StatusCode::FOUND,
+                            [("location", format!("http://{address}/setup"))],
+                        )
+                    }),
+                ),
+            )
+            .await
+            .unwrap();
+        });
         let mut info = UpdateInfo {
             version: "1.3.0".into(),
             release_notes: String::new(),
             release_url: String::new(),
-            installer_url: format!("http://{address}/setup"),
+            installer_url: format!("http://{redirect_address}/download"),
             sha256: format!("{:x}", Sha256::digest(b"test installer")),
             size: 14,
         };
         let (progress, _) = tokio::sync::watch::channel(0.0);
-        let client = reqwest::Client::new();
+        let client = crate::download::http_client().unwrap();
         let ready = prepare_update(&client, &info, progress.clone())
             .await
             .unwrap();
@@ -437,5 +463,6 @@ mod tests {
         info.size = 15;
         assert!(prepare_update(&client, &info, progress).await.is_err());
         task.abort();
+        redirect_task.abort();
     }
 }

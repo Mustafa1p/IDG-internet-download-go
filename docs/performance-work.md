@@ -125,3 +125,13 @@ Concurrent-file and pause failures are now reproduced and fixed as described abo
 - Audit/refine remaining slow tails using retained traces. Consider lower-overhead initial probing and adaptive scheduling only when measurements justify them.
 - Validate final packaged artifacts and any published update before claiming release completion. Do not publish an unstable prototype.
 - The full objective is unproven; keep the goal active. A winner in one small exploratory batch is not completion.
+
+## Origin-scoped authenticated requests (unreleased)
+
+Two local origins and dummy credentials reproduced a forwarding bug: after a redirect, Authorization and Cookie reached the second origin on four data requests each; X-CSRF-Token reached it on the probe and four data requests. The original failure is retained in `target/perf-origin-credentials-reproduction.log`. No real credentials were used.
+
+`download/request.rs` now executes each redirect explicitly over the shared transport. Captured credentials remain bound to the source origin; same-origin requests retain them, and cross-origin probe/data requests omit them. Independent files retain separate headers while reusing the same connection pool. Each redirect releases the prior origin lease before waiting for the next origin. Admission wait does not consume network deadlines. Cancellation, pause and invalid redirects release capacity. The updater uses the same redirect path with its existing body deadlines.
+
+Runtime regressions verify exact file bytes, credential isolation, explicit browser User-Agent/referrer, URL Basic authentication, and automatic referrer sanitization. Two authenticated files use one TCP connection instead of two without exchanging their headers. POST 301/302/303 redirects switch to GET; 307/308 preserve the form body. Loops, missing Location and non-HTTP targets fail without replaying the original form request. Updater cross-origin redirects retain size/checksum checks and body timeouts.
+
+Both Windows x64 and x86 passed 79 app tests plus two native-host tests (81 each), with nine external/tool-dependent tests explicitly ignored. Both passed all-target clippy with warnings denied; formatting passed. Logs: `target/perf-scoped-http-tests.log`, `target/perf-scoped-http-x86-tests.log`, and corresponding clippy logs. These checks validate the source, not a packaged/deployed release. Earlier performance measurements precede this change; rebuild and measure the finalized binary before making performance claims. Public stable remains v1.6.5.

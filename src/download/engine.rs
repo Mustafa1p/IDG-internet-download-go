@@ -88,21 +88,13 @@ pub async fn start_download(
 
     // ── Step 1: Probe ─────────────────────────────────────────────────────────
     let setup_started = std::time::Instant::now();
-    let client = if headers.is_empty() {
-        client
-    } else {
-        Arc::new(
-            super::http_client_builder()
-                .default_headers(headers)
-                .build()?,
-        )
-    };
+    let request = Arc::new(super::request::RequestContext::new(client, &url, headers)?);
     with_item(&downloads, &id, |i| i.status = Status::Probing);
 
     let probing = async {
         match post_data {
-            Some(body) => super::probe::post_probe(&client, &url, body).await,
-            None => probe(&client, &url).await,
+            Some(body) => super::probe::post_probe(&request, &url, body).await,
+            None => probe(&request, &url).await,
         }
     };
     let mut probe_result = tokio::select! {
@@ -207,7 +199,7 @@ pub async fn start_download(
     let mut initial_response = probe_result.response.take();
     let mut tasks = tokio::task::JoinSet::new();
     for (seg_id, (start, end)) in segments.into_iter().enumerate() {
-        let client = client.clone();
+        let request = request.clone();
         let url = final_url.clone();
         let file = file.clone();
         let cancel = cancel.clone();
@@ -222,7 +214,7 @@ pub async fn start_download(
             total_size: probe_result.content_length,
             bandwidth: bandwidth.clone(),
             response: initial_response.take(),
-            client: client.clone(),
+            request,
             id: seg_id,
             url,
             start,
@@ -363,6 +355,196 @@ mod regression_tests {
     use std::time::Duration;
 
     const SIZE: usize = 256 * 1024 + 19;
+
+    #[tokio::test]
+    async fn authenticated_files_reuse_transport_without_reusing_each_others_headers() {
+        struct CountingListener {
+            inner: tokio::net::TcpListener,
+            accepted: Arc<std::sync::atomic::AtomicUsize>,
+        }
+        impl axum::serve::Listener for CountingListener {
+            type Io = tokio::net::TcpStream;
+            type Addr = std::net::SocketAddr;
+            async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+                let connection = self.inner.accept().await.unwrap();
+                self.accepted.fetch_add(1, Ordering::Relaxed);
+                connection
+            }
+            fn local_addr(&self) -> std::io::Result<Self::Addr> {
+                self.inner.local_addr()
+            }
+        }
+        for shared in [false, true] {
+            let accepted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let seen = requests.clone();
+            let router = Router::new().route(
+                "/{name}",
+                get(
+                    move |axum::extract::Path(name): axum::extract::Path<String>,
+                          method: Method,
+                          headers: HeaderMap| {
+                        assert_eq!(
+                            headers["authorization"].to_str().unwrap(),
+                            format!("Bearer {name}")
+                        );
+                        assert_eq!(
+                            headers["cookie"].to_str().unwrap(),
+                            format!("session={name}")
+                        );
+                        seen.fetch_add(1, Ordering::Relaxed);
+                        range_file(method, headers)
+                    },
+                ),
+            );
+            let inner = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let base = format!("http://{}", inner.local_addr().unwrap());
+            let listener = CountingListener {
+                inner,
+                accepted: accepted.clone(),
+            };
+            let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let directory = tempfile::tempdir().unwrap();
+            let shared_client = Arc::new(super::super::http_client().unwrap());
+            for name in ["first", "second"] {
+                let output = directory.path().join(format!("{name}.bin"));
+                let mut item = crate::download::types::DownloadItem::new(
+                    format!("{base}/{name}"),
+                    output.clone(),
+                    1,
+                );
+                item.headers
+                    .insert("authorization", format!("Bearer {name}").parse().unwrap());
+                item.headers
+                    .insert("cookie", format!("session={name}").parse().unwrap());
+                let id = item.id.clone();
+                let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+                let client = if shared {
+                    shared_client.clone()
+                } else {
+                    Arc::new(super::super::http_client().unwrap())
+                };
+                start_download(client, downloads.clone(), id).await.unwrap();
+                assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+                assert_eq!(
+                    std::fs::read(output).unwrap(),
+                    (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+                );
+            }
+            assert_eq!(requests.load(Ordering::Relaxed), 4);
+            assert_eq!(accepted.load(Ordering::Relaxed), if shared { 1 } else { 2 });
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn redirects_keep_credentials_on_the_source_origin_and_preserve_file_bytes() {
+        for cross_origin in [true, false] {
+            let received = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let seen = received.clone();
+            let file = get(move |method: Method, headers: HeaderMap| {
+                seen.lock().unwrap().push(headers.clone());
+                range_file(method, headers)
+            });
+            let target_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let target = format!("http://{}/file", target_listener.local_addr().unwrap());
+            let target_router = Router::new().route("/file", file.clone());
+            let target_server =
+                tokio::spawn(
+                    async move { axum::serve(target_listener, target_router).await.unwrap() },
+                );
+            let location = if cross_origin {
+                target
+            } else {
+                "/file".to_owned()
+            };
+            let source_hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let hits = source_hits.clone();
+            let source_router = Router::new().route("/file", file).route(
+                "/redirect",
+                get(move |headers: HeaderMap| {
+                    hits.fetch_add(1, Ordering::Relaxed);
+                    assert_eq!(headers["authorization"], "Bearer source-only");
+                    assert_eq!(headers["cookie"], "session=source-only");
+                    assert_eq!(headers["x-csrf-token"], "csrf-source-only");
+                    let location = location.clone();
+                    async move { (StatusCode::TEMPORARY_REDIRECT, [("location", location)]) }
+                }),
+            );
+            let source_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/redirect", source_listener.local_addr().unwrap());
+            let source_server =
+                tokio::spawn(
+                    async move { axum::serve(source_listener, source_router).await.unwrap() },
+                );
+            let directory = tempfile::tempdir().unwrap();
+            let output = directory.path().join("redirect.bin");
+            let mut item = crate::download::types::DownloadItem::new(url, output.clone(), 4);
+            for (name, value) in [
+                ("authorization", "Bearer source-only"),
+                ("cookie", "session=source-only"),
+                ("x-csrf-token", "csrf-source-only"),
+                ("user-agent", "IDG-redirect-test"),
+                ("referer", "https://example.test/source-page"),
+            ] {
+                item.headers.insert(
+                    reqwest::header::HeaderName::from_static(name),
+                    value.parse().unwrap(),
+                );
+            }
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            let result = start_download(
+                Arc::new(super::super::http_client().unwrap()),
+                downloads.clone(),
+                id,
+            )
+            .await;
+            source_server.abort();
+            target_server.abort();
+            result.unwrap();
+            assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+            assert_eq!(
+                std::fs::read(output).unwrap(),
+                (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+            );
+            assert_eq!(source_hits.load(Ordering::Relaxed), 1);
+            let received = received.lock().unwrap();
+            assert!(
+                received.len() > 1,
+                "Verify both the probe and data range requests"
+            );
+            if cross_origin {
+                let leaks: Vec<_> = ["authorization", "cookie", "x-csrf-token"]
+                    .into_iter()
+                    .map(|name| {
+                        (
+                            name,
+                            received
+                                .iter()
+                                .filter(|headers| headers.contains_key(name))
+                                .count(),
+                        )
+                    })
+                    .collect();
+                assert!(
+                    leaks.iter().all(|(_, count)| *count == 0),
+                    "Source-only headers reached another origin: {leaks:?}"
+                );
+            }
+            for headers in received.iter() {
+                for name in ["authorization", "cookie", "x-csrf-token"] {
+                    assert_eq!(
+                        headers.contains_key(name),
+                        !cross_origin,
+                        "Source-only {name} must not reach a different origin (cross_origin={cross_origin})"
+                    );
+                }
+                assert_eq!(headers["user-agent"], "IDG-redirect-test");
+                assert_eq!(headers["referer"], "https://example.test/source-page");
+            }
+        }
+    }
 
     #[tokio::test]
     async fn concurrent_files_queue_when_another_file_occupies_the_server_slots() {

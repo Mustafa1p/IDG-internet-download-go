@@ -449,10 +449,9 @@ mod tests {
         headers.insert("authorization", "Bearer export-test".parse().unwrap());
         headers.insert("x-csrf-token", "csrf-test".parse().unwrap());
         let client = Arc::new(
-            reqwest::Client::builder()
+            crate::download::http_client_builder()
                 .no_proxy()
                 .resolve("mail.hostinger.com", socket)
-                .default_headers(headers)
                 .build()
                 .unwrap(),
         );
@@ -477,6 +476,9 @@ mod tests {
                 32,
             );
             item.preserve_filename = false;
+            // Exercise captured headers on the real request path while keeping
+            // the injected resolver on the shared transport.
+            item.headers = headers.clone();
             let id = item.id.clone();
             downloads.lock().unwrap().push(item);
             start_download(client.clone(), downloads.clone(), id)

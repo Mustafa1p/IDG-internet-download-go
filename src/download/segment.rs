@@ -21,14 +21,16 @@ use std::{
     time::Duration,
 };
 
+#[cfg(test)]
+use super::gate::HostBudget;
 use super::{
-    gate::{ConnectionGate, HostBudget, LeasedResponse},
+    gate::{ConnectionGate, LeasedResponse},
+    request::{Control, InvalidRedirect, PausedRequest as PausedRange, RequestContext, Spec},
     writer::DownloadWriter,
 };
 use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use futures::StreamExt;
-use reqwest::Client;
 
 /// Retrying cannot repair invalid representations, rejected credentials or a
 /// failed destination writer. Keep the underlying error available to callers.
@@ -51,17 +53,6 @@ fn terminal(error: anyhow::Error) -> anyhow::Error {
     TerminalFailure(error).into()
 }
 
-#[derive(Debug)]
-struct PausedRange;
-
-impl std::fmt::Display for PausedRange {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("Range paused")
-    }
-}
-
-impl std::error::Error for PausedRange {}
-
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -74,7 +65,7 @@ pub struct SegmentArgs {
     pub bandwidth: Arc<super::bandwidth::BandwidthLimiter>,
     /// A GET already opened by the probe; consume it instead of requesting again.
     pub response: Option<LeasedResponse>,
-    pub client: Arc<Client>,
+    pub request: Arc<RequestContext>,
     /// Segment index (used in error messages).
     pub id: usize,
     /// URL to request (already resolved after redirects).
@@ -209,7 +200,7 @@ async fn download_range(
     idle_timeout: Duration,
 ) -> Result<()> {
     let SegmentArgs {
-        client,
+        request: context,
         url,
         end,
         file,
@@ -226,64 +217,52 @@ async fn download_range(
         None => format!("bytes={start}-"),
     };
 
-    let request = client.get(url).header("Accept-Encoding", "identity");
-    let request = if end.is_some() || start > 0 {
-        let request = request.header("Range", &range);
+    let mut spec = Spec::get(url);
+    if end.is_some() || start > 0 {
+        spec = spec.header("range", &range)?;
         if let Some(validator) = &args.if_range {
-            request.header("If-Range", validator)
-        } else {
-            request
+            spec = spec.header("if-range", validator)?;
         }
-    } else {
-        request
-    };
+    }
     let permit = args.gate.acquire(cancel).await?;
-    let (response, host_permit) = match response {
-        Some(LeasedResponse { response, permit }) => (Some(response), permit),
+    let LeasedResponse {
+        response: resp,
+        permit: _host_permit,
+    } = match response {
+        Some(response) => response,
         None => {
-            let budget = HostBudget::for_url(url);
-            let host_permit = tokio::select! {
-                permit = budget.acquire() => permit,
-                _ = super::cancelled(cancel) => bail!("cancelled waiting for server capacity"),
-            };
-            (None, host_permit)
+            context
+                .send(
+                    spec,
+                    Control {
+                        cancel: Some(cancel),
+                        pause: release_on_pause.then_some(pause),
+                        network_timeout: Some(idle_timeout),
+                        ..Control::default()
+                    },
+                )
+                .await
+                .map_err(|error| {
+                    if error.is::<InvalidRedirect>() {
+                        terminal(error)
+                    } else {
+                        error
+                    }
+                })?
+                .leased
         }
     };
     if release_on_pause && pause.load(Ordering::Relaxed) {
         return Err(PausedRange.into());
     }
-    // A single clock observes cancellation, pauses and stalled network reads.
-    // It is not reset for each packet and excludes intentional local backpressure.
     let mut clock = tokio::time::interval(Duration::from_millis(50));
     clock.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut last_network = tokio::time::Instant::now();
-    let resp = match response {
-        Some(response) => response,
-        None => {
-            let sending = request.send();
-            tokio::pin!(sending);
-            loop {
-                tokio::select! {
-                    response = &mut sending => break response.context("GET request failed")?,
-                    _ = clock.tick() => {
-                        anyhow::ensure!(!cancel.load(Ordering::Relaxed), "cancelled waiting for response headers");
-                        if release_on_pause && pause.load(Ordering::Relaxed) {
-                            return Err(PausedRange.into());
-                        }
-                        if network_stalled(&mut last_network, pause, idle_timeout) {
-                            bail!("Network stalled waiting for response headers");
-                        }
-                    }
-                }
-            }
-        }
-    };
+    let mut last_network;
 
     if matches!(
         resp.status(),
         reqwest::StatusCode::TOO_MANY_REQUESTS | reqwest::StatusCode::SERVICE_UNAVAILABLE
     ) {
-        host_permit.refused(resp.url().as_str());
         args.gate.refused(permit);
         bail!("server limited connections (HTTP {})", resp.status());
     }
@@ -633,7 +612,7 @@ mod tests {
                 let writer = Arc::new(DownloadWriter::new(file).unwrap());
                 let mut headers = reqwest::header::HeaderMap::new();
                 headers.insert("cookie", "session=retained".parse().unwrap());
-                let builder = super::super::http_client_builder().default_headers(headers);
+                let builder = super::super::http_client_builder();
                 let builder = if http2 {
                     builder.http2_prior_knowledge()
                 } else {
@@ -649,7 +628,10 @@ mod tests {
                         if fault == Fault::RateLimited { 1024 } else { 0 },
                     )),
                     response: None,
-                    client: Arc::new(builder.build().unwrap()),
+                    request: Arc::new(
+                        RequestContext::new(Arc::new(builder.build().unwrap()), &url, headers)
+                            .unwrap(),
+                    ),
                     id: 0,
                     url,
                     start: 0,
@@ -849,7 +831,7 @@ mod tests {
                 let budget = HostBudget::for_url(&url);
                 let mut headers = reqwest::header::HeaderMap::new();
                 headers.insert("cookie", "session=retained".parse().unwrap());
-                let builder = super::super::http_client_builder().default_headers(headers);
+                let builder = super::super::http_client_builder();
                 let client = Arc::new(
                     if http2 {
                         builder.http2_prior_knowledge()
@@ -859,8 +841,9 @@ mod tests {
                     .build()
                     .unwrap(),
                 );
+                let request = Arc::new(RequestContext::new(client, &url, headers).unwrap());
                 let response = if export {
-                    super::super::probe::post_probe(&client, &url, "token=once".into())
+                    super::super::probe::post_probe(&request, &url, "token=once".into())
                         .await
                         .unwrap()
                         .response
@@ -884,7 +867,7 @@ mod tests {
                     total_size: Some(LENGTH),
                     bandwidth: Arc::new(super::super::bandwidth::BandwidthLimiter::new(0)),
                     response,
-                    client,
+                    request,
                     id: 0,
                     url,
                     start: 0,

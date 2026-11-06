@@ -1,7 +1,7 @@
 //! Download subsystem.
 //!
 //! Modules:
-//! - [`probe`]   – HTTP HEAD probe (Content-Length, Accept-Ranges)
+//! - [`probe`]   – Validated GET metadata and range probe
 //! - [`segment`] – Single range-request worker
 //! - [`engine`]  – Orchestrator: splits file, spawns workers, tracks progress
 //! - [`types`]   – Shared data types and state
@@ -14,6 +14,7 @@ pub mod history;
 pub mod media;
 pub mod music;
 pub mod probe;
+pub mod request;
 pub mod segment;
 pub mod types;
 pub mod writer;
@@ -29,6 +30,7 @@ pub fn http_client_builder() -> reqwest::ClientBuilder {
 /// to the diagnostic CLI so protocol experiments do not alter desktop settings.
 pub fn http_transport_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .user_agent(concat!(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ",
             "AppleWebKit/537.36 (KHTML, like Gecko) ",

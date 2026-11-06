@@ -9,8 +9,9 @@
 //!
 
 use super::gate::{HostBudget, LeasedResponse};
+use super::request::{Control, InvalidRedirect, RequestContext, Spec};
 use anyhow::{Context, Result};
-use reqwest::{Client, StatusCode};
+use reqwest::StatusCode;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -115,7 +116,7 @@ mod response_guard_tests {
 /// # Errors
 /// Returns an error if the network request fails or the server returns a
 /// non-2xx status on the range probe or fallback full stream.
-pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
+pub async fn probe(client: &RequestContext, url: &str) -> Result<ProbeResult> {
     anyhow::ensure!(
         !is_token_download(url),
         "This download requires a fresh website token. Open the source page and click its download button with the updated IDG browser extension enabled; the download.php URL alone cannot download the file."
@@ -183,52 +184,58 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
 /// A valid one-byte response is drained so its connection returns to the pool.
 /// The five-second deadline covers only the probe, never a reused full stream.
 async fn initial_probe(
-    client: &Client,
+    client: &RequestContext,
     url: &str,
     deadline: std::time::Duration,
 ) -> Result<(LeasedResponse, bool)> {
-    let mut budget = HostBudget::for_url(url);
     for attempt in 0..3 {
-        // Waiting for another file's capacity is not a network stall.
-        let permit = budget.acquire().await;
         let probing = async {
-            let mut response = client
-                .get(url)
-                .header("Accept-Encoding", "identity")
-                .header("Range", "bytes=0-0")
-                .send()
-                .await
-                .context("GET range probe failed")?;
+            let received = client
+                .send(
+                    Spec::get(url).header("range", "bytes=0-0")?,
+                    Control {
+                        network_timeout: Some(deadline),
+                        ..Control::default()
+                    },
+                )
+                .await?;
+            let LeasedResponse {
+                mut response,
+                permit,
+            } = received.leased;
             let mut verified = false;
             if response.status() == StatusCode::PARTIAL_CONTENT
                 && range_probe_size(response.headers()).is_some()
             {
-                let mut received = 0;
-                while let Some(bytes) = response.chunk().await.context("Range probe interrupted")? {
-                    received += bytes.len();
-                    if received > 1 {
-                        break;
+                let reading = async {
+                    let mut count = 0;
+                    while let Some(bytes) =
+                        response.chunk().await.context("Range probe interrupted")?
+                    {
+                        count += bytes.len();
+                        if count > 1 {
+                            break;
+                        }
                     }
-                }
-                anyhow::ensure!(received > 0, "Range probe returned no bytes");
-                verified = received == 1;
+                    anyhow::ensure!(count > 0, "Range probe returned no bytes");
+                    Ok::<_, anyhow::Error>(count == 1)
+                };
+                verified = tokio::time::timeout(
+                    received.remaining_network_time.unwrap_or(deadline),
+                    reading,
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Range probe timed out"))??;
             }
             Ok::<_, anyhow::Error>((LeasedResponse { response, permit }, verified))
         };
-        let result = tokio::time::timeout(deadline, probing)
-            .await
-            .map_err(|_| anyhow::anyhow!("Range probe timed out"))
-            .and_then(|result| result);
-        match result {
+        match probing.await {
             Ok((response, _))
                 if matches!(
                     response.response.status().as_u16(),
                     429 | 500 | 502 | 503 | 504
                 ) =>
             {
-                if matches!(response.response.status().as_u16(), 429 | 503) {
-                    budget = response.permit.refused(response.response.url().as_str());
-                }
                 if attempt == 2 {
                     break;
                 }
@@ -241,11 +248,9 @@ async fn initial_probe(
                 ) {
                     return Ok((response, false));
                 }
-                // Malformed ranges or explicitly rejected range requests may
-                // still allow a normal, single-use full stream.
-                budget = HostBudget::for_url(response.response.url().as_str());
                 break;
             }
+            Err(error) if error.is::<InvalidRedirect>() => return Err(error),
             Err(error) if attempt == 2 => {
                 eprintln!("[IDG] range probe inconclusive; trying a full stream: {error:#}");
                 break;
@@ -258,18 +263,15 @@ async fn initial_probe(
         );
         tokio::time::sleep(std::time::Duration::from_millis(50 * (attempt + 1))).await;
     }
-    let permit = budget.acquire().await;
-    let response = client
-        .get(url)
-        .header("Accept-Encoding", "identity")
-        .send()
-        .await
-        .context("Streaming GET fallback failed")?;
+    let leased = client
+        .send(Spec::get(url), Control::default())
+        .await?
+        .leased;
     anyhow::ensure!(
-        response.status() != StatusCode::PARTIAL_CONTENT,
+        leased.response.status() != StatusCode::PARTIAL_CONTENT,
         "Server returned partial data for a full download request"
     );
-    Ok((LeasedResponse { response, permit }, false))
+    Ok((leased, false))
 }
 
 fn range_probe_size(headers: &reqwest::header::HeaderMap) -> Option<u64> {
@@ -315,19 +317,19 @@ fn is_mail_export_path(path: &str) -> bool {
 
 /// Send a token-bearing form exactly once; reuse the response as the file stream.
 /// HEAD/range probes and parallel POST replays can consume one-use tokens.
-pub async fn post_probe(client: &Client, url: &str, body: String) -> Result<ProbeResult> {
-    let budget = HostBudget::for_url(url);
-    let permit = budget.acquire().await;
-    let response = client
-        .post(url)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Accept-Encoding", "identity")
-        .body(body)
-        .send()
+pub async fn post_probe(client: &RequestContext, url: &str, body: String) -> Result<ProbeResult> {
+    let LeasedResponse { response, permit } = client
+        .send(Spec::form(url, body), Control::default())
         .await
         .context("Download form request failed")?
+        .leased;
+    let response = response
         .error_for_status()
         .context("Server rejected download form; return to the website for a fresh link")?;
+    anyhow::ensure!(
+        response.status().is_success(),
+        "Server returned an unexpected form status"
+    );
     let content_type = response
         .headers()
         .get("content-type")
@@ -362,15 +364,12 @@ pub async fn post_probe(client: &Client, url: &str, body: String) -> Result<Prob
     })
 }
 
-async fn streaming_probe(client: &Client, url: &str) -> Result<ProbeResult> {
-    let budget = HostBudget::for_url(url);
-    let permit = budget.acquire().await;
-    let response = client
-        .get(url)
-        .header("Accept-Encoding", "identity")
-        .send()
+async fn streaming_probe(client: &RequestContext, url: &str) -> Result<ProbeResult> {
+    let LeasedResponse { response, permit } = client
+        .send(Spec::get(url), Control::default())
         .await
-        .context("Email export request failed")?;
+        .context("Email export request failed")?
+        .leased;
     if matches!(
         response.status(),
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
@@ -382,6 +381,10 @@ async fn streaming_probe(client: &Client, url: &str) -> Result<ProbeResult> {
     let response = response
         .error_for_status()
         .context("Server rejected email export")?;
+    anyhow::ensure!(
+        response.status().is_success(),
+        "Server returned an unexpected export status"
+    );
     let content_type = response
         .headers()
         .get("content-type")
@@ -532,6 +535,14 @@ fn percent_decode(s: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn context(client: reqwest::Client, url: &str) -> RequestContext {
+        RequestContext::new(
+            std::sync::Arc::new(client),
+            url,
+            reqwest::header::HeaderMap::new(),
+        )
+        .unwrap()
+    }
 
     #[tokio::test]
     async fn one_get_probe_validates_exact_bytes_and_reuses_fallback_streams() {
@@ -600,7 +611,7 @@ mod tests {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let url = format!("http://{}/file.bin", listener.local_addr().unwrap());
             let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-            let result = probe(&super::super::http_client().unwrap(), &url).await;
+            let result = probe(&context(super::super::http_client().unwrap(), &url), &url).await;
             if mode == 4 {
                 assert!(
                     result
@@ -673,7 +684,7 @@ mod tests {
         let budget = HostBudget::for_url(&url);
         let held = budget.acquire().await;
         held.refused(&url);
-        let client = super::super::http_client().unwrap();
+        let client = context(super::super::http_client().unwrap(), &url);
         let probing = initial_probe(&client, &url, std::time::Duration::from_millis(50));
         tokio::pin!(probing);
         assert!(
@@ -727,7 +738,7 @@ mod tests {
         let url = format!("http://{}/stream.bin", listener.local_addr().unwrap());
         let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let (response, accepts_ranges) = initial_probe(
-            &super::super::http_client().unwrap(),
+            &context(super::super::http_client().unwrap(), &url),
             &url,
             std::time::Duration::from_millis(250),
         )
@@ -744,7 +755,10 @@ mod tests {
     #[tokio::test]
     async fn token_only_urls_fail_before_sending_a_probe() {
         let error = probe(
-            &Client::new(),
+            &context(
+                super::super::http_client().unwrap(),
+                "https://server53.safefilehosting.com/files/download.php",
+            ),
             "https://server53.safefilehosting.com/files/download.php",
         )
         .await
