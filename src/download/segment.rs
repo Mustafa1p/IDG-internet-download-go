@@ -51,6 +51,17 @@ fn terminal(error: anyhow::Error) -> anyhow::Error {
     TerminalFailure(error).into()
 }
 
+#[derive(Debug)]
+struct PausedRange;
+
+impl std::fmt::Display for PausedRange {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Range paused")
+    }
+}
+
+impl std::error::Error for PausedRange {}
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -106,6 +117,18 @@ async fn run_segment_with_idle_timeout(
     let mut resume_at = args.start;
 
     loop {
+        while args.pause.load(Ordering::Relaxed) {
+            anyhow::ensure!(
+                !args.cancel.load(Ordering::Relaxed),
+                "cancelled during pause"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        anyhow::ensure!(
+            !args.cancel.load(Ordering::Relaxed),
+            "segment {} cancelled",
+            args.id
+        );
         if args.end.is_some_and(|end| resume_at > end) {
             return Ok(());
         }
@@ -124,6 +147,10 @@ async fn run_segment_with_idle_timeout(
             Err(e) => {
                 if e.downcast_ref::<TerminalFailure>().is_some() {
                     return Err(e);
+                }
+                if e.downcast_ref::<PausedRange>().is_some() {
+                    // This is intentional suspension, not a failed attempt.
+                    continue;
                 }
                 // Generated exports cannot be resumed by byte offset or replayed
                 // reliably. Report the original error instead of appending a new export.
@@ -192,6 +219,7 @@ async fn download_range(
         ..
     } = args;
     let end = *end;
+    let release_on_pause = end.is_some() && response.is_none();
     // Build the Range header value.
     let range = match end {
         Some(e) => format!("bytes={start}-{e}"),
@@ -221,6 +249,9 @@ async fn download_range(
             (None, host_permit)
         }
     };
+    if release_on_pause && pause.load(Ordering::Relaxed) {
+        return Err(PausedRange.into());
+    }
     // A single clock observes cancellation, pauses and stalled network reads.
     // It is not reset for each packet and excludes intentional local backpressure.
     let mut clock = tokio::time::interval(Duration::from_millis(50));
@@ -236,6 +267,9 @@ async fn download_range(
                     response = &mut sending => break response.context("GET request failed")?,
                     _ = clock.tick() => {
                         anyhow::ensure!(!cancel.load(Ordering::Relaxed), "cancelled waiting for response headers");
+                        if release_on_pause && pause.load(Ordering::Relaxed) {
+                            return Err(PausedRange.into());
+                        }
                         if network_stalled(&mut last_network, pause, idle_timeout) {
                             bail!("Network stalled waiting for response headers");
                         }
@@ -318,6 +352,10 @@ async fn download_range(
             chunk = stream.next() => chunk,
             _ = clock.tick() => {
                 anyhow::ensure!(!cancel.load(Ordering::Relaxed), "cancelled waiting for response body");
+                if release_on_pause && pause.load(Ordering::Relaxed) {
+                    write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                    return Err(PausedRange.into());
+                }
                 if network_stalled(&mut last_network, pause, idle_timeout) {
                     // Resume only after every validated short buffer is written.
                     write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
@@ -336,6 +374,10 @@ async fn download_range(
         while pause.load(Ordering::Relaxed) {
             if cancel.load(Ordering::Relaxed) {
                 bail!("cancelled during pause");
+            }
+            if release_on_pause {
+                write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                return Err(PausedRange.into());
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -373,6 +415,10 @@ async fn download_range(
                         _ = &mut permit => break,
                         _ = tokio::time::sleep(Duration::from_millis(100)) => {
                             if cancel.load(Ordering::Relaxed) { bail!("cancelled while speed limited"); }
+                            if release_on_pause && pause.load(Ordering::Relaxed) {
+                                write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                                return Err(PausedRange.into());
+                            }
                         }
                     }
                 }
@@ -380,6 +426,10 @@ async fn download_range(
             while pause.load(Ordering::Relaxed) {
                 if cancel.load(Ordering::Relaxed) {
                     bail!("cancelled during pause");
+                }
+                if release_on_pause {
+                    write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                    return Err(PausedRange.into());
                 }
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
@@ -624,7 +674,7 @@ mod tests {
                     assert_eq!(
                         requests.lock().unwrap().len(),
                         1,
-                        "A user pause must not cause reconnects"
+                        "A paused range must not open another request"
                     );
                     pause.store(false, Ordering::Relaxed);
                 }
@@ -677,10 +727,210 @@ mod tests {
                 assert_eq!(
                     *requests.lock().unwrap(),
                     match fault {
-                        Fault::StalledHeaders | Fault::RequestTimeout => vec![0, 0],
-                        Fault::StalledBody | Fault::PausedBody => vec![0, PREFIX],
+                        Fault::StalledHeaders | Fault::RequestTimeout | Fault::PausedBody =>
+                            vec![0, 0],
+                        Fault::StalledBody => vec![0, PREFIX],
                         _ => vec![0],
                     }
+                );
+                server.abort();
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn pause_releases_ranges_at_acknowledged_offsets_but_keeps_one_use_streams() {
+        const PAUSE_AFTER: u64 = 1024 * 1024;
+        const PREFIX: u64 = 2 * PAUSE_AFTER;
+        const LENGTH: u64 = 2 * PREFIX;
+        for http2 in [false, true] {
+            for export in [false, true] {
+                let requests = Arc::new(Mutex::new(Vec::new()));
+                let seen = requests.clone();
+                let (resume, resumed) = tokio::sync::watch::channel(false);
+                let router = Router::new().route(
+                    "/file",
+                    axum::routing::any(
+                        move |method: axum::http::Method,
+                              headers: HeaderMap,
+                              body: bytes::Bytes| {
+                            let seen = seen.clone();
+                            let mut resumed = resumed.clone();
+                            async move {
+                                assert_eq!(headers["cookie"], "session=retained");
+                                let start = if export {
+                                    assert_eq!(method, axum::http::Method::POST);
+                                    assert_eq!(body.as_ref(), b"token=once");
+                                    assert!(!headers.contains_key("range"));
+                                    0
+                                } else {
+                                    assert_eq!(method, axum::http::Method::GET);
+                                    assert_eq!(headers["if-range"], "\"fixed\"");
+                                    headers["range"]
+                                        .to_str()
+                                        .unwrap()
+                                        .strip_prefix("bytes=")
+                                        .unwrap()
+                                        .split('-')
+                                        .next()
+                                        .unwrap()
+                                        .parse::<u64>()
+                                        .unwrap()
+                                };
+                                let first = {
+                                    let mut seen = seen.lock().unwrap();
+                                    seen.push(start);
+                                    seen.len() == 1
+                                };
+                                let body = if first {
+                                    let prefix = futures::stream::once(async {
+                                        Ok::<_, std::io::Error>(Bytes::from(
+                                            (0..PREFIX)
+                                                .map(|n| (n % 251) as u8)
+                                                .collect::<Vec<_>>(),
+                                        ))
+                                    });
+                                    if export {
+                                        Body::from_stream(prefix.chain(futures::stream::once(
+                                            async move {
+                                                resumed.wait_for(|resumed| *resumed).await.unwrap();
+                                                Ok::<_, std::io::Error>(Bytes::from(
+                                                    (PREFIX..LENGTH)
+                                                        .map(|n| (n % 251) as u8)
+                                                        .collect::<Vec<_>>(),
+                                                ))
+                                            },
+                                        )))
+                                    } else {
+                                        Body::from_stream(prefix.chain(futures::stream::pending()))
+                                    }
+                                } else {
+                                    Body::from(
+                                        (start..LENGTH)
+                                            .map(|n| (n % 251) as u8)
+                                            .collect::<Vec<_>>(),
+                                    )
+                                };
+                                let mut response = HeaderMap::new();
+                                response.insert(
+                                    "content-type",
+                                    "application/octet-stream".parse().unwrap(),
+                                );
+                                response.insert(
+                                    "content-length",
+                                    (LENGTH - start).to_string().parse().unwrap(),
+                                );
+                                response.insert("etag", "\"fixed\"".parse().unwrap());
+                                if !export {
+                                    response.insert(
+                                        "content-range",
+                                        format!("bytes {start}-{}/{LENGTH}", LENGTH - 1)
+                                            .parse()
+                                            .unwrap(),
+                                    );
+                                }
+                                (
+                                    if export {
+                                        StatusCode::OK
+                                    } else {
+                                        StatusCode::PARTIAL_CONTENT
+                                    },
+                                    response,
+                                    body,
+                                )
+                            }
+                        },
+                    ),
+                );
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let url = format!("http://{}/file", listener.local_addr().unwrap());
+                let server =
+                    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+                let budget = HostBudget::for_url(&url);
+                let mut headers = reqwest::header::HeaderMap::new();
+                headers.insert("cookie", "session=retained".parse().unwrap());
+                let builder = super::super::http_client_builder().default_headers(headers);
+                let client = Arc::new(
+                    if http2 {
+                        builder.http2_prior_knowledge()
+                    } else {
+                        builder
+                    }
+                    .build()
+                    .unwrap(),
+                );
+                let response = if export {
+                    super::super::probe::post_probe(&client, &url, "token=once".into())
+                        .await
+                        .unwrap()
+                        .response
+                } else {
+                    None
+                };
+                let directory = tempfile::tempdir().unwrap();
+                let output = directory.path().join("paused.bin");
+                let file = std::fs::File::create(&output).unwrap();
+                file.set_len(LENGTH).unwrap();
+                let writer = Arc::new(DownloadWriter::new(file).unwrap());
+                let pause = Arc::new(AtomicBool::new(false));
+                let paused = pause.clone();
+                let ready = Arc::new(tokio::sync::Notify::new());
+                let signal = ready.clone();
+                let acknowledged = Arc::new(AtomicU64::new(0));
+                let progress = acknowledged.clone();
+                let args = SegmentArgs {
+                    gate: Arc::new(ConnectionGate::new(1)),
+                    if_range: (!export).then(|| "\"fixed\"".into()),
+                    total_size: Some(LENGTH),
+                    bandwidth: Arc::new(super::super::bandwidth::BandwidthLimiter::new(0)),
+                    response,
+                    client,
+                    id: 0,
+                    url,
+                    start: 0,
+                    end: (!export).then_some(LENGTH - 1),
+                    file: writer.clone(),
+                    cancel: Arc::new(AtomicBool::new(false)),
+                    pause: pause.clone(),
+                    on_progress: Box::new(move |bytes| {
+                        let before = progress.fetch_add(bytes, Ordering::Relaxed);
+                        if before < PAUSE_AFTER && before + bytes >= PAUSE_AFTER {
+                            paused.store(true, Ordering::Relaxed);
+                            signal.notify_one();
+                        }
+                    }),
+                };
+                // Zero retries proves an intentional pause does not spend the failure budget.
+                let work = tokio::spawn(run_segment(args, 0));
+                tokio::time::timeout(Duration::from_secs(2), ready.notified())
+                    .await
+                    .unwrap();
+                tokio::time::sleep(Duration::from_millis(150)).await;
+                let paused_at = acknowledged.load(Ordering::Relaxed);
+                assert!((PAUSE_AFTER..=PREFIX).contains(&paused_at));
+                assert_eq!(*requests.lock().unwrap(), vec![0]);
+                assert_eq!(
+                    budget.counts().0,
+                    usize::from(export),
+                    "Only a one-use stream keeps its accepted connection during pause"
+                );
+                assert!(!work.is_finished());
+                pause.store(false, Ordering::Relaxed);
+                resume.send(true).unwrap();
+                tokio::time::timeout(Duration::from_secs(3), work)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+                writer.finish().await.unwrap();
+                assert_eq!(acknowledged.load(Ordering::Relaxed), LENGTH);
+                assert_eq!(
+                    *requests.lock().unwrap(),
+                    if export { vec![0] } else { vec![0, paused_at] }
+                );
+                assert_eq!(
+                    std::fs::read(output).unwrap(),
+                    (0..LENGTH).map(|n| (n % 251) as u8).collect::<Vec<_>>()
                 );
                 server.abort();
             }

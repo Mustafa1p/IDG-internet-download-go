@@ -366,167 +366,182 @@ mod regression_tests {
 
     #[tokio::test]
     async fn concurrent_files_queue_when_another_file_occupies_the_server_slots() {
-        const LENGTH: u64 = 2 * 1024 * 1024 + 19;
         for redirected in [false, true] {
-            let slots = Arc::new(tokio::sync::Semaphore::new(4));
-            let ready = Arc::new(tokio::sync::Notify::new());
-            let admitted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-            let refused = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-            let (release, released) = tokio::sync::watch::channel(false);
-            let rejected = refused.clone();
-            let signal = ready.clone();
-            let names = Arc::new(std::sync::Mutex::new(Vec::new()));
-            let seen_names = names.clone();
-            let router = Router::new().route(
-                "/file/{name}",
-                get(
-                    move |axum::extract::Path(name): axum::extract::Path<String>,
-                          headers: HeaderMap| {
-                        let slots = slots.clone();
-                        let mut released = released.clone();
-                        let signal = signal.clone();
-                        let admitted = admitted.clone();
-                        let refused = rejected.clone();
-                        let names = seen_names.clone();
-                        async move {
-                            names.lock().unwrap().push(name.clone());
-                            if redirected {
-                                assert!(!headers.contains_key("authorization"));
-                            } else {
-                                assert_eq!(
-                                    headers["authorization"].to_str().unwrap(),
-                                    format!("Bearer {name}")
-                                );
-                            }
-                            let Ok(permit) = slots.try_acquire_owned() else {
-                                refused.fetch_add(1, Ordering::Relaxed);
-                                return StatusCode::SERVICE_UNAVAILABLE.into_response();
-                            };
-                            let range = headers.get("range").and_then(|r| r.to_str().ok());
-                            let (start, end) = range
-                                .map(|range| {
-                                    let (start, end) = range
-                                        .strip_prefix("bytes=")
-                                        .unwrap()
-                                        .split_once('-')
-                                        .unwrap();
-                                    (start.parse::<u64>().unwrap(), end.parse::<u64>().unwrap())
-                                })
-                                .unwrap_or((0, LENGTH - 1));
-                            let probe = range == Some("bytes=0-0");
-                            if !probe && admitted.fetch_add(1, Ordering::Relaxed) == 3 {
-                                signal.notify_one();
-                            }
-                            let body = Body::from_stream(futures::stream::once(async move {
-                                let _permit = permit;
-                                if !probe {
-                                    released.wait_for(|released| *released).await.unwrap();
-                                }
-                                Ok::<_, std::io::Error>(bytes::Bytes::from(
-                                    (start..=end).map(|n| (n % 251) as u8).collect::<Vec<_>>(),
-                                ))
-                            }));
-                            let mut response = HeaderMap::new();
-                            response.insert(
-                                "content-length",
-                                (end - start + 1).to_string().parse().unwrap(),
+            concurrent_file_case(redirected, false).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn paused_resumable_file_releases_capacity_for_another_file() {
+        concurrent_file_case(false, true).await;
+    }
+
+    async fn concurrent_file_case(redirected: bool, pause_first: bool) {
+        const LENGTH: u64 = 2 * 1024 * 1024 + 19;
+        let slots = Arc::new(tokio::sync::Semaphore::new(4));
+        let ready = Arc::new(tokio::sync::Notify::new());
+        let admitted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let refused = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (release, released) = tokio::sync::watch::channel(false);
+        let rejected = refused.clone();
+        let signal = ready.clone();
+        let names = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_names = names.clone();
+        let router = Router::new().route(
+            "/file/{name}",
+            get(
+                move |axum::extract::Path(name): axum::extract::Path<String>,
+                      headers: HeaderMap| {
+                    let slots = slots.clone();
+                    let mut released = released.clone();
+                    let signal = signal.clone();
+                    let admitted = admitted.clone();
+                    let refused = rejected.clone();
+                    let names = seen_names.clone();
+                    async move {
+                        names.lock().unwrap().push(name.clone());
+                        if redirected {
+                            assert!(!headers.contains_key("authorization"));
+                        } else {
+                            assert_eq!(
+                                headers["authorization"].to_str().unwrap(),
+                                format!("Bearer {name}")
                             );
-                            response.insert(
-                                "content-type",
-                                "application/octet-stream".parse().unwrap(),
-                            );
-                            response.insert("etag", "\"fixed\"".parse().unwrap());
-                            if range.is_some() {
-                                response.insert(
-                                    "content-range",
-                                    format!("bytes {start}-{end}/{LENGTH}").parse().unwrap(),
-                                );
-                            }
-                            (
-                                if range.is_some() {
-                                    StatusCode::PARTIAL_CONTENT
-                                } else {
-                                    StatusCode::OK
-                                },
-                                response,
-                                body,
-                            )
-                                .into_response()
                         }
-                    },
-                ),
-            );
+                        let Ok(permit) = slots.try_acquire_owned() else {
+                            refused.fetch_add(1, Ordering::Relaxed);
+                            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+                        };
+                        let range = headers.get("range").and_then(|r| r.to_str().ok());
+                        let (start, end) = range
+                            .map(|range| {
+                                let (start, end) = range
+                                    .strip_prefix("bytes=")
+                                    .unwrap()
+                                    .split_once('-')
+                                    .unwrap();
+                                (start.parse::<u64>().unwrap(), end.parse::<u64>().unwrap())
+                            })
+                            .unwrap_or((0, LENGTH - 1));
+                        let probe = range == Some("bytes=0-0");
+                        if !probe && admitted.fetch_add(1, Ordering::Relaxed) == 3 {
+                            signal.notify_one();
+                        }
+                        let body = Body::from_stream(futures::stream::once(async move {
+                            let _permit = permit;
+                            if !probe {
+                                released.wait_for(|released| *released).await.unwrap();
+                            }
+                            Ok::<_, std::io::Error>(bytes::Bytes::from(
+                                (start..=end).map(|n| (n % 251) as u8).collect::<Vec<_>>(),
+                            ))
+                        }));
+                        let mut response = HeaderMap::new();
+                        response.insert(
+                            "content-length",
+                            (end - start + 1).to_string().parse().unwrap(),
+                        );
+                        response
+                            .insert("content-type", "application/octet-stream".parse().unwrap());
+                        response.insert("etag", "\"fixed\"".parse().unwrap());
+                        if range.is_some() {
+                            response.insert(
+                                "content-range",
+                                format!("bytes {start}-{end}/{LENGTH}").parse().unwrap(),
+                            );
+                        }
+                        (
+                            if range.is_some() {
+                                StatusCode::PARTIAL_CONTENT
+                            } else {
+                                StatusCode::OK
+                            },
+                            response,
+                            body,
+                        )
+                            .into_response()
+                    }
+                },
+            ),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let directory = tempfile::tempdir().unwrap();
+        let (second_url, redirect_task) = if redirected {
+            let location = format!("{base}/file/second");
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-            let base = format!("http://{}", listener.local_addr().unwrap());
-            let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-            let directory = tempfile::tempdir().unwrap();
-            let (second_url, redirect_task) =
-                if redirected {
-                    let location = format!("{base}/file/second");
-                    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-                    let url = format!("http://{}/redirect", listener.local_addr().unwrap());
-                    let router = Router::new().route("/redirect", get(move || {
-                let location = location.clone();
-                async move { (StatusCode::TEMPORARY_REDIRECT, [("location", location)]) }
-            }));
-                    (
-                        url,
-                        Some(tokio::spawn(async move {
-                            axum::serve(listener, router).await.unwrap()
-                        })),
-                    )
-                } else {
-                    (format!("{base}/file/second"), None)
-                };
-            let first_path = directory.path().join("first.bin");
-            let second_path = directory.path().join("second.bin");
-            let mut first = crate::download::types::DownloadItem::new(
-                format!("{base}/file/first"),
-                first_path.clone(),
-                16,
+            let url = format!("http://{}/redirect", listener.local_addr().unwrap());
+            let router = Router::new().route(
+                "/redirect",
+                get(move || {
+                    let location = location.clone();
+                    async move { (StatusCode::TEMPORARY_REDIRECT, [("location", location)]) }
+                }),
             );
-            let mut second =
-                crate::download::types::DownloadItem::new(second_url, second_path.clone(), 4);
-            if !redirected {
-                first
-                    .headers
-                    .insert("authorization", "Bearer first".parse().unwrap());
-                second
-                    .headers
-                    .insert("authorization", "Bearer second".parse().unwrap());
-            }
-            let cancelled_path = directory.path().join("cancelled.bin");
-            let mut cancelled = crate::download::types::DownloadItem::new(
-                format!("{base}/file/cancelled"),
-                cancelled_path.clone(),
-                1,
-            );
-            if !redirected {
-                cancelled
-                    .headers
-                    .insert("authorization", "Bearer cancelled".parse().unwrap());
-            }
-            let cancel = cancelled.cancel_flag.clone();
-            let cancelled_id = cancelled.id.clone();
-            let first_id = first.id.clone();
-            let second_id = second.id.clone();
-            let downloads: Downloads =
-                Arc::new(std::sync::Mutex::new(vec![first, second, cancelled]));
-            let client = Arc::new(super::super::http_client().unwrap());
-            let first = tokio::spawn(start_download(client.clone(), downloads.clone(), first_id));
-            tokio::time::timeout(Duration::from_secs(2), ready.notified())
-                .await
-                .unwrap();
-            tokio::time::timeout(Duration::from_secs(2), async {
-                while refused.load(Ordering::Relaxed) < 12
-                    || super::super::gate::HostBudget::for_url(&base).counts() != (4, 4)
-                {
-                    tokio::time::sleep(Duration::from_millis(5)).await;
-                }
-            })
+            (
+                url,
+                Some(tokio::spawn(async move {
+                    axum::serve(listener, router).await.unwrap()
+                })),
+            )
+        } else {
+            (format!("{base}/file/second"), None)
+        };
+        let first_path = directory.path().join("first.bin");
+        let second_path = directory.path().join("second.bin");
+        let mut first = crate::download::types::DownloadItem::new(
+            format!("{base}/file/first"),
+            first_path.clone(),
+            16,
+        );
+        let mut second =
+            crate::download::types::DownloadItem::new(second_url, second_path.clone(), 4);
+        if !redirected {
+            first
+                .headers
+                .insert("authorization", "Bearer first".parse().unwrap());
+            second
+                .headers
+                .insert("authorization", "Bearer second".parse().unwrap());
+        }
+        let cancelled_path = directory.path().join("cancelled.bin");
+        let mut cancelled = crate::download::types::DownloadItem::new(
+            format!("{base}/file/cancelled"),
+            cancelled_path.clone(),
+            1,
+        );
+        if !redirected {
+            cancelled
+                .headers
+                .insert("authorization", "Bearer cancelled".parse().unwrap());
+        }
+        let cancel = cancelled.cancel_flag.clone();
+        let cancelled_id = cancelled.id.clone();
+        let first_pause = first.pause_flag.clone();
+        let first_id = first.id.clone();
+        let second_id = second.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![first, second, cancelled]));
+        let client = Arc::new(super::super::http_client().unwrap());
+        let first = tokio::spawn(start_download(client.clone(), downloads.clone(), first_id));
+        tokio::time::timeout(Duration::from_secs(2), ready.notified())
             .await
             .unwrap();
-            let second = tokio::spawn(start_download(client.clone(), downloads.clone(), second_id));
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while refused.load(Ordering::Relaxed) < 12
+                || super::super::gate::HostBudget::for_url(&base).counts() != (4, 4)
+            {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        if pause_first {
+            first_pause.store(true, Ordering::Relaxed);
+            release.send(true).unwrap();
+        }
+        let mut second = tokio::spawn(start_download(client.clone(), downloads.clone(), second_id));
+        if !pause_first {
             let cancelled = tokio::spawn(start_download(client, downloads.clone(), cancelled_id));
             tokio::time::sleep(Duration::from_millis(100)).await;
             cancel.store(true, Ordering::Relaxed);
@@ -535,40 +550,70 @@ mod regression_tests {
                 .unwrap()
                 .unwrap()
                 .unwrap();
-            assert!(!cancelled_path.exists());
-            tokio::time::sleep(Duration::from_millis(200)).await;
-            let failed_while_busy = second.is_finished();
-            release.send(true).unwrap();
-            let first_result = tokio::time::timeout(Duration::from_secs(5), first)
+        }
+        assert!(!cancelled_path.exists());
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let failed_while_busy = second.is_finished();
+        let early_second = if pause_first {
+            tokio::time::timeout(Duration::from_secs(1), &mut second)
+                .await
+                .ok()
+                .map(|joined| joined.unwrap())
+        } else {
+            None
+        };
+        let completed_while_paused = early_second.is_some();
+        if pause_first {
+            assert!(!first.is_finished());
+        }
+        first_pause.store(false, Ordering::Relaxed);
+        release.send(true).unwrap();
+        let first_result = tokio::time::timeout(Duration::from_secs(5), first)
+            .await
+            .unwrap()
+            .unwrap();
+        let second_result = match early_second {
+            Some(result) => result,
+            None => tokio::time::timeout(Duration::from_secs(5), second)
                 .await
                 .unwrap()
-                .unwrap();
-            let second_result = tokio::time::timeout(Duration::from_secs(5), second)
-                .await
-                .unwrap()
-                .unwrap();
-            server.abort();
-            if let Some(redirect) = redirect_task {
-                redirect.abort();
-            }
-            first_result.unwrap();
+                .unwrap(),
+        };
+        server.abort();
+        if let Some(redirect) = redirect_task {
+            redirect.abort();
+        }
+        first_result.unwrap();
+        if pause_first {
+            assert!(
+                completed_while_paused,
+                "A paused resumable file must release capacity for another file"
+            );
+        } else {
             assert!(
                 !failed_while_busy,
                 "Another file's occupied server slots must queue a download, not fail it: {second_result:?}"
             );
-            second_result.unwrap();
-            let expected: Vec<u8> = (0..LENGTH).map(|n| (n % 251) as u8).collect();
-            assert_eq!(std::fs::read(first_path).unwrap(), expected);
-            assert_eq!(std::fs::read(second_path).unwrap(), expected);
-            let items = downloads.lock().unwrap();
-            assert!(
-                items[..2]
-                    .iter()
-                    .all(|item| item.status == Status::Completed)
-            );
-            assert_eq!(items[2].status, Status::Cancelled);
-            assert!(!names.lock().unwrap().iter().any(|name| name == "cancelled"));
         }
+        second_result.unwrap();
+        let expected: Vec<u8> = (0..LENGTH).map(|n| (n % 251) as u8).collect();
+        assert_eq!(std::fs::read(first_path).unwrap(), expected);
+        assert_eq!(std::fs::read(second_path).unwrap(), expected);
+        let items = downloads.lock().unwrap();
+        assert!(
+            items[..2]
+                .iter()
+                .all(|item| item.status == Status::Completed)
+        );
+        assert_eq!(
+            items[2].status,
+            if pause_first {
+                Status::Queued
+            } else {
+                Status::Cancelled
+            }
+        );
+        assert!(!names.lock().unwrap().iter().any(|name| name == "cancelled"));
     }
 
     #[tokio::test]
