@@ -21,7 +21,10 @@ use std::{
     time::Duration,
 };
 
-use super::{gate::ConnectionGate, writer::DownloadWriter};
+use super::{
+    gate::{ConnectionGate, HostBudget, LeasedResponse},
+    writer::DownloadWriter,
+};
 use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use futures::StreamExt;
@@ -59,7 +62,7 @@ pub struct SegmentArgs {
     pub total_size: Option<u64>,
     pub bandwidth: Arc<super::bandwidth::BandwidthLimiter>,
     /// A GET already opened by the probe; consume it instead of requesting again.
-    pub response: Option<reqwest::Response>,
+    pub response: Option<LeasedResponse>,
     pub client: Arc<Client>,
     /// Segment index (used in error messages).
     pub id: usize,
@@ -175,7 +178,7 @@ async fn download_range(
     args: &SegmentArgs,
     start: u64,
     cursor: &mut u64,
-    response: Option<reqwest::Response>,
+    response: Option<LeasedResponse>,
     idle_timeout: Duration,
 ) -> Result<()> {
     let SegmentArgs {
@@ -207,6 +210,17 @@ async fn download_range(
         request
     };
     let permit = args.gate.acquire(cancel).await?;
+    let (response, host_permit) = match response {
+        Some(LeasedResponse { response, permit }) => (Some(response), permit),
+        None => {
+            let budget = HostBudget::for_url(url);
+            let host_permit = tokio::select! {
+                permit = budget.acquire() => permit,
+                _ = super::cancelled(cancel) => bail!("cancelled waiting for server capacity"),
+            };
+            (None, host_permit)
+        }
+    };
     // A single clock observes cancellation, pauses and stalled network reads.
     // It is not reset for each packet and excludes intentional local backpressure.
     let mut clock = tokio::time::interval(Duration::from_millis(50));
@@ -235,6 +249,7 @@ async fn download_range(
         resp.status(),
         reqwest::StatusCode::TOO_MANY_REQUESTS | reqwest::StatusCode::SERVICE_UNAVAILABLE
     ) {
+        host_permit.refused(resp.url().as_str());
         args.gate.refused(permit);
         bail!("server limited connections (HTTP {})", resp.status());
     }

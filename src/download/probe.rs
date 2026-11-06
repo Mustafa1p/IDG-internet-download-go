@@ -8,6 +8,7 @@
 //! Reuses a full response when ranges are ignored, or falls back to a plain GET.
 //!
 
+use super::gate::{HostBudget, LeasedResponse};
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode};
 
@@ -23,7 +24,9 @@ pub struct ProbeResult {
     /// Strong server validator used to keep reconnects on the same representation.
     pub if_range: Option<String>,
     /// Reuse a streaming GET when the endpoint cannot be probed safely.
-    pub response: Option<reqwest::Response>,
+    pub response: Option<LeasedResponse>,
+    /// Retain learned capacity while this download schedules its range workers.
+    pub host_budget: std::sync::Arc<HostBudget>,
     /// File size in bytes, if the server reported `Content-Length`.
     pub content_length: Option<u64>,
     /// `true` after validating a complete one-byte partial response.
@@ -122,8 +125,12 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     }
     // One request establishes metadata and verifies real range semantics. A
     // separate HEAD adds an avoidable round trip and can disagree with GET.
-    let (resp, accepts_ranges) =
+    let (leased, accepts_ranges) =
         initial_probe(client, url, std::time::Duration::from_secs(5)).await?;
+    let LeasedResponse {
+        response: resp,
+        permit,
+    } = leased;
     let reuse_response = !accepts_ranges;
     let resp = resp
         .error_for_status()
@@ -135,6 +142,7 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     );
     let http_version = resp.version();
     let final_url = resp.url().to_string();
+    let host_budget = HostBudget::for_url(&final_url);
     let headers = resp.headers().clone();
     validate_file_response(&headers, &final_url)?;
     let if_range = headers
@@ -159,7 +167,11 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     Ok(ProbeResult {
         http_version,
         if_range,
-        response: reuse_response.then_some(resp),
+        response: reuse_response.then_some(LeasedResponse {
+            response: resp,
+            permit,
+        }),
+        host_budget,
         content_length,
         accepts_ranges,
         filename,
@@ -174,8 +186,11 @@ async fn initial_probe(
     client: &Client,
     url: &str,
     deadline: std::time::Duration,
-) -> Result<(reqwest::Response, bool)> {
+) -> Result<(LeasedResponse, bool)> {
+    let mut budget = HostBudget::for_url(url);
     for attempt in 0..3 {
+        // Waiting for another file's capacity is not a network stall.
+        let permit = budget.acquire().await;
         let probing = async {
             let mut response = client
                 .get(url)
@@ -198,7 +213,7 @@ async fn initial_probe(
                 anyhow::ensure!(received > 0, "Range probe returned no bytes");
                 verified = received == 1;
             }
-            Ok::<_, anyhow::Error>((response, verified))
+            Ok::<_, anyhow::Error>((LeasedResponse { response, permit }, verified))
         };
         let result = tokio::time::timeout(deadline, probing)
             .await
@@ -206,8 +221,14 @@ async fn initial_probe(
             .and_then(|result| result);
         match result {
             Ok((response, _))
-                if matches!(response.status().as_u16(), 429 | 500 | 502 | 503 | 504) =>
+                if matches!(
+                    response.response.status().as_u16(),
+                    429 | 500 | 502 | 503 | 504
+                ) =>
             {
+                if matches!(response.response.status().as_u16(), 429 | 503) {
+                    budget = response.permit.refused(response.response.url().as_str());
+                }
                 if attempt == 2 {
                     break;
                 }
@@ -215,13 +236,14 @@ async fn initial_probe(
             Ok((response, true)) => return Ok((response, true)),
             Ok((response, false)) => {
                 if !matches!(
-                    response.status().as_u16(),
+                    response.response.status().as_u16(),
                     206 | 400 | 403 | 405 | 416 | 501
                 ) {
                     return Ok((response, false));
                 }
                 // Malformed ranges or explicitly rejected range requests may
                 // still allow a normal, single-use full stream.
+                budget = HostBudget::for_url(response.response.url().as_str());
                 break;
             }
             Err(error) if attempt == 2 => {
@@ -236,6 +258,7 @@ async fn initial_probe(
         );
         tokio::time::sleep(std::time::Duration::from_millis(50 * (attempt + 1))).await;
     }
+    let permit = budget.acquire().await;
     let response = client
         .get(url)
         .header("Accept-Encoding", "identity")
@@ -246,7 +269,7 @@ async fn initial_probe(
         response.status() != StatusCode::PARTIAL_CONTENT,
         "Server returned partial data for a full download request"
     );
-    Ok((response, false))
+    Ok((LeasedResponse { response, permit }, false))
 }
 
 fn range_probe_size(headers: &reqwest::header::HeaderMap) -> Option<u64> {
@@ -293,6 +316,8 @@ fn is_mail_export_path(path: &str) -> bool {
 /// Send a token-bearing form exactly once; reuse the response as the file stream.
 /// HEAD/range probes and parallel POST replays can consume one-use tokens.
 pub async fn post_probe(client: &Client, url: &str, body: String) -> Result<ProbeResult> {
+    let budget = HostBudget::for_url(url);
+    let permit = budget.acquire().await;
     let response = client
         .post(url)
         .header("Content-Type", "application/x-www-form-urlencoded")
@@ -332,11 +357,14 @@ pub async fn post_probe(client: &Client, url: &str, body: String) -> Result<Prob
         accepts_ranges: false,
         filename,
         final_url: response.url().to_string(),
-        response: Some(response),
+        host_budget: HostBudget::for_url(response.url().as_str()),
+        response: Some(LeasedResponse { response, permit }),
     })
 }
 
 async fn streaming_probe(client: &Client, url: &str) -> Result<ProbeResult> {
+    let budget = HostBudget::for_url(url);
+    let permit = budget.acquire().await;
     let response = client
         .get(url)
         .header("Accept-Encoding", "identity")
@@ -385,7 +413,8 @@ async fn streaming_probe(client: &Client, url: &str) -> Result<ProbeResult> {
         accepts_ranges: false,
         filename: Some(filename),
         final_url,
-        response: Some(response),
+        host_budget: HostBudget::for_url(response.url().as_str()),
+        response: Some(LeasedResponse { response, permit }),
     })
 }
 
@@ -596,13 +625,74 @@ mod tests {
             } else {
                 assert!(!result.supports_multipart());
                 assert_eq!(
-                    result.response.unwrap().bytes().await.unwrap().as_ref(),
+                    result
+                        .response
+                        .unwrap()
+                        .response
+                        .bytes()
+                        .await
+                        .unwrap()
+                        .as_ref(),
                     vec![b'x'; 8192]
                 );
                 assert_eq!(*requests.lock().unwrap(), vec![ranged, (Method::GET, None)]);
             }
             server.abort();
         }
+    }
+
+    #[tokio::test]
+    async fn queued_server_capacity_does_not_consume_the_probe_deadline() {
+        use axum::{Router, routing::get};
+        let requests = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = requests.clone();
+        let router = Router::new().route(
+            "/file.bin",
+            get(move |headers: reqwest::header::HeaderMap| {
+                seen.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                async move {
+                    if headers.get("range").is_some_and(|v| v == "bytes=0-0") {
+                        (
+                            StatusCode::PARTIAL_CONTENT,
+                            [("content-range", "bytes 0-0/8192")],
+                            "x",
+                        )
+                    } else {
+                        (
+                            StatusCode::OK,
+                            [("content-type", "application/octet-stream")],
+                            "unexpected full fallback",
+                        )
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/file.bin", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let budget = HostBudget::for_url(&url);
+        let held = budget.acquire().await;
+        held.refused(&url);
+        let client = super::super::http_client().unwrap();
+        let probing = initial_probe(&client, &url, std::time::Duration::from_millis(50));
+        tokio::pin!(probing);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(400), &mut probing)
+                .await
+                .is_err()
+        );
+        assert_eq!(requests.load(std::sync::atomic::Ordering::Relaxed), 0);
+        drop(held);
+        let (_, verified) = tokio::time::timeout(std::time::Duration::from_secs(1), probing)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            verified,
+            "Queued time must not exhaust the verified-range retry budget"
+        );
+        assert_eq!(requests.load(std::sync::atomic::Ordering::Relaxed), 1);
+        server.abort();
     }
 
     #[tokio::test]
@@ -644,7 +734,10 @@ mod tests {
         .await
         .unwrap();
         assert!(!accepts_ranges);
-        assert_eq!(response.bytes().await.unwrap().as_ref(), b"complete");
+        assert_eq!(
+            response.response.bytes().await.unwrap().as_ref(),
+            b"complete"
+        );
         assert_eq!(requests.load(Ordering::Relaxed), 1);
         server.abort();
     }
