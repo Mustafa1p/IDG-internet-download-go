@@ -45,6 +45,8 @@ def main():
     p.add_argument("--idg-baseline-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed"], default="production", help="Diagnostic policy for a preserved IDG CLI that supports it")
     p.add_argument("--idg-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed"], default="production", help="Candidate CLI diagnostic policy; production is the actual desktop policy")
     p.add_argument("--idg-baseline", type=Path, help="Preserved IDG executable for interleaved before/after comparisons")
+    p.add_argument("--idg-connections", type=int, choices=range(33), metavar="0..32", help="Diagnostic candidate override; 0 tests the app's automatic connection policy")
+    p.add_argument("--idg-baseline-connections", type=int, choices=range(33), metavar="0..32", help="Diagnostic baseline override; recorded separately from the standard workload")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--scenarios", nargs="+", choices=SCENARIOS, default=list("ABCD"))
     p.add_argument("--tools", nargs="+", choices=["curl", "aria2c", "Prism", "IDG", "IDG-baseline"], default=["curl", "aria2c", "Prism", "IDG"])
@@ -93,6 +95,7 @@ def main():
               "binary_sha256": {k: digest(v) for k, v in binaries.items() if k in args.tools},
               "server_sha256": digest(server), "runs": []}
     result["publisher_references"] = publisher_references
+    result["connection_overrides"] = {"IDG": args.idg_connections, "IDG-baseline": args.idg_baseline_connections}
     result["workloads"] = {key: dict(size=SCENARIOS[key][0], seed=SCENARIOS[key][1],
                                     requested_connections=SCENARIOS[key][2], server_options=SCENARIOS[key][3],
                                     source=HTTPS_SOURCES.get(key)) for key in args.scenarios}
@@ -146,8 +149,12 @@ def main():
                 time.sleep(0.05)
             assert expected, "Server did not publish reference hash"
             destination = directory / "download.bin"
+            requested_connections = 1 if tool == "curl" else connections
             if tool in ("IDG", "IDG-baseline"):
-                command = [str(binaries[tool]), url, str(destination), str(connections)]
+                override = args.idg_connections if tool == "IDG" else args.idg_baseline_connections
+                if override is not None:
+                    requested_connections = override
+                command = [str(binaries[tool]), url, str(destination), str(requested_connections)]
                 if tool == "IDG" and args.idg_mode != "production":
                     command.append("--" + args.idg_mode)
                 if tool == "IDG-baseline" and args.idg_baseline_mode != "production":
@@ -171,7 +178,7 @@ def main():
             actual_size = destination.stat().st_size if exists else None
             actual_hash = digest(destination) if exists else None
             verified = code == 0 and not sync_error and actual_size == size and actual_hash == expected
-            row = {"scenario": scenario, "repeat": repeat, "tool": tool, "size": size, "requested_connections": 1 if tool == "curl" else connections,
+            row = {"scenario": scenario, "repeat": repeat, "tool": tool, "size": size, "requested_connections": requested_connections,
                    "expected_sha256": expected, "actual_sha256": actual_hash, "actual_size": actual_size,
                    "exit_code": code, "verified": verified, "process_seconds": process_seconds, "durable_seconds": durable_seconds,
                    "verification_seconds": time.perf_counter() - hash_started,

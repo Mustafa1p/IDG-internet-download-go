@@ -94,6 +94,13 @@ class ReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "mixed source"):
             self.summary([trial(), row], 2)
 
+    def test_different_connection_settings_cannot_disappear_into_a_median(self):
+        rows = [trial(), trial(repeat=2)]
+        rows[0]["requested_connections"] = 1
+        rows[1]["requested_connections"] = 16
+        with self.assertRaisesRegex(ValueError, "connection settings"):
+            self.summary(rows, 2)
+
     def test_resource_summary_includes_failed_attempts_and_excludes_unavailable(self):
         rows = [trial(repeat=i) for i in range(1, 4)]
         rows[0]["resources"] = dict(errors=[], cpu_total_seconds=1.0,

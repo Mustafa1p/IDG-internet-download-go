@@ -47,6 +47,7 @@ def summarize(runs, *, tools=TOOLS, scenarios=LABELS, repeats=3, curl_repeats=1)
             require(sorted(r["repeat"] for r in rows) == list(range(1, expected + 1)), "Missing or duplicate repeats")
             policies = {r.get("candidate_policy") for r in rows}
             require(len(policies) == 1, "Cannot combine different transport policies")
+            require(len({r.get("requested_connections") for r in rows}) == 1, "Cannot combine different connection settings")
             for r in rows:
                 require(type(r["verified"]) is bool, "Verification must be a boolean")
                 require(math.isfinite(r["durable_seconds"]) and r["durable_seconds"] > 0, "Invalid duration")
@@ -121,6 +122,9 @@ def main():
             shutil.copyfile(server_log, target.with_name("server.log"))
 
     labels = {tool: args.idg_label if tool == "IDG" else tool for tool in tools}
+    for tool, count in source.get("connection_overrides", {}).items():
+        if tool in labels and count is not None:
+            labels[tool] += " (automatic connections)" if count == 0 else f" ({count} requested connection{'s' if count != 1 else ''})"
     counts = {tool: min(source.get("curl_repeats", source["repeats"]), source["repeats"]) if tool == "curl" else source["repeats"] for tool in tools}
     lines = ["| Scenario | " + " | ".join(f"{labels[t]} (n={counts[t]})" for t in tools) + " |",
              "| --- | " + " | ".join("---:" for _ in tools) + " |"]
@@ -149,7 +153,7 @@ def main():
                 values = [s[k] for k in ("median_client_cpu_seconds", "max_client_peak_working_set_mib", "max_client_peak_commit_mib")]
                 resource_lines.append(f"| {scenario} | {tool} | {s['resource_samples']} / {s['attempts']} | " + " | ".join(f"{v:.3f}" if v is not None else "—" for v in values) + " |")
         (args.output / "resources.md").write_text("\n".join(resource_lines) + "\n", encoding="utf-8")
-    identity = {key: source.get(key) for key in ("idg_commit", "prism_commit", "binary_sha256", "production_sources", "harness_sha256", "started_utc", "finished_utc", "source_snapshot", "tracked_worktree_changes", "publisher_references", "workloads")}
+    identity = {key: source.get(key) for key in ("idg_commit", "prism_commit", "binary_sha256", "production_sources", "harness_sha256", "started_utc", "finished_utc", "source_snapshot", "tracked_worktree_changes", "publisher_references", "workloads", "connection_overrides")}
     (args.output / "identity.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
     if source.get("source_snapshot"):
         shutil.copytree(args.results.parent / source["source_snapshot"], args.output / source["source_snapshot"])
@@ -187,7 +191,7 @@ def main():
     ax.tick_params(axis="y", length=0, pad=10)
     ax.legend(loc="lower right", frameon=False, fontsize=10)
     fig.text(0.02, 0.025, f"{source['repeats']} trials per engine and scenario; bars require every transfer to pass SHA-256 verification.\nMedians, not confidence intervals. One machine; not a universal speed guarantee.", fontsize=9, color="#4b5563")
-    fig.subplots_adjust(left=0.30, right=0.97, bottom=0.29 if len(scenarios) < 3 else 0.18, top=0.78 if len(scenarios) < 3 else 0.84)
+    fig.subplots_adjust(left=0.30, right=0.97, bottom=0.29 if len(scenarios) <= 3 else 0.18, top=0.78 if len(scenarios) < 3 else 0.84)
     fig.savefig(args.output / "comparison.png", facecolor="white")
     plt.close(fig)
 
