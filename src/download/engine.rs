@@ -337,6 +337,10 @@ pub async fn start_download(
                                 let count =
                                     length.div_ceil(MIN_RANGE_BYTES).clamp(1, seg_count as u64)
                                         as usize;
+                                eprintln!(
+                                    "[IDG] handoff id={} segment={} start={} end={} bytes={} workers={}",
+                                    id, seg_id, remaining.start, remaining.end, length, count
+                                );
                                 for (start, end) in build_segments(count, Some(length)) {
                                     spawn(
                                         &mut tasks,
