@@ -3,7 +3,7 @@
 //! # Algorithm
 //!
 //! ```text
-//! 1. HEAD probe  →  Content-Length + Accept-Ranges
+//! 1. GET range probe → validated size, validators and byte-range support
 //! 2. Pre-allocate the output file (avoids filesystem fragmentation)
 //! 3. Plan a bounded queue of smaller, non-overlapping byte ranges
 //! 4. Schedule range tasks behind a gate of N concurrent requests
@@ -508,7 +508,7 @@ mod regression_tests {
     }
 
     #[tokio::test]
-    async fn non_range_size_changes_never_complete_with_preallocation_padding() {
+    async fn get_metadata_avoids_inconsistent_head_preallocation() {
         for actual_size in [1024, 8192] {
             let router = Router::new().route(
                 "/file",
@@ -539,20 +539,73 @@ mod regression_tests {
             });
             let directory = tempfile::tempdir().unwrap();
             let output = directory.path().join("changed.bin");
-            let item = crate::download::types::DownloadItem::new(url, output, 1);
+            let item = crate::download::types::DownloadItem::new(url, output.clone(), 1);
             let id = item.id.clone();
             let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
-            let error = start_download(
+            start_download(
                 Arc::new(super::super::http_client().unwrap()),
                 downloads.clone(),
                 id,
             )
             .await
-            .expect_err("A changed full-response size must not produce a completed, padded file");
-            assert!(error.to_string().contains("byte count"), "{error:#}");
-            assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
+            .unwrap();
+            assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+            assert_eq!(
+                downloads.lock().unwrap()[0].total_bytes,
+                Some(actual_size as u64)
+            );
+            assert_eq!(std::fs::read(output).unwrap(), vec![b'x'; actual_size]);
             server.abort();
         }
+    }
+
+    #[tokio::test]
+    async fn truncated_full_stream_never_completes_from_preallocation() {
+        let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = requests.clone();
+        let router = Router::new().route(
+            "/file.bin",
+            get(move || {
+                seen.fetch_add(1, Ordering::Relaxed);
+                async {
+                    let body = Body::from_stream(futures::stream::once(async {
+                        // Flush headers before the short body, reproducing a
+                        // stream interruption after the full response was accepted.
+                        tokio::time::sleep(Duration::from_millis(40)).await;
+                        Ok::<_, std::io::Error>(bytes::Bytes::from(vec![b'x'; 1024]))
+                    }));
+                    (
+                        [
+                            ("content-length", "4096"),
+                            ("content-type", "application/octet-stream"),
+                        ],
+                        body,
+                    )
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/file.bin", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("truncated.bin");
+        let item = crate::download::types::DownloadItem::new(url, path, 16);
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        let result = start_download(
+            Arc::new(super::super::http_client().unwrap()),
+            downloads.clone(),
+            id,
+        )
+        .await;
+        assert!(result.is_err());
+        assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
+        assert_eq!(
+            requests.load(Ordering::Relaxed),
+            1,
+            "A reused full stream must not be replayed after a partial body"
+        );
+        server.abort();
     }
 
     #[tokio::test]
@@ -747,7 +800,7 @@ mod regression_tests {
     }
 
     #[tokio::test]
-    async fn rejected_head_and_range_probes_stream_exact_bytes_without_replaying_get() {
+    async fn rejected_or_ignored_range_probes_reuse_the_exact_full_stream() {
         for reject_range in [false, true] {
             let requests = Arc::new(std::sync::Mutex::new(Vec::new()));
             let seen = requests.clone();
@@ -793,7 +846,7 @@ mod regression_tests {
             assert_eq!(std::fs::read(path).unwrap(), expected);
             assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
             assert_eq!(downloads.lock().unwrap()[0].num_segments, 1);
-            let mut expected_requests = vec![(Method::HEAD, false), (Method::GET, true)];
+            let mut expected_requests = vec![(Method::GET, true)];
             if reject_range {
                 expected_requests.push((Method::GET, false));
             }

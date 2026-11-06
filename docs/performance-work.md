@@ -12,10 +12,15 @@ The goal is to make IDG (the download manager in the referenced benchmark image)
 - Completion requires the actual acknowledged byte count to match a known source length. HEAD/GET size changes previously produced falsely completed padded files; shorter and larger changed responses now fail visibly. Unknown-length successful streams receive their actual final size.
 - Shared authenticated/default client settings; cookies and validators remain attached during reconnection.
 - Permanent authorization, representation and destination errors stop without useless retries. The engine owns its workers in a JoinSet, aborts and drains siblings on failure, and keeps internal cleanup distinct from user cancellation.
+- A new single-GET metadata candidate removes the separate HEAD round trip. A complete one-byte partial response validates both size and range support; ignored ranges reuse the full response, rejected/malformed ranges fall back to a plain full stream, and exhausted inconclusive probes can fall back without replaying an accepted body. The probe deadline does not become a timeout on a reused full stream. Mail exports and token POSTs retain their dedicated one-request paths.
 
 ## Verification completed
 
 Current candidate: formatting, warning-free clippy and full Rust bin suites on x64 and x86. Each architecture passed 62 app/engine tests and two native-host tests; nine explicit external/tool-dependent tests remain ignored.
+
+The later single-GET candidate adds three tests, bringing each architecture to 65 app/engine and two native-host tests. New socket checks validate one GET with no HEAD, malformed/overlong range fallback, empty-probe retry, non-success response rejection, reused full streams outliving the probe deadline without replay, and incomplete full streams refusing completion. Both architectures pass warning-free clippy. Detailed logs: `target/perf-single-probe-x64-tests.log`, `target/perf-single-probe-x86-tests.log` and corresponding clippy logs.
+
+The HEAD-size mismatch regression now verifies exact fresh GET bytes and final size: HEAD is no longer queried, so an inconsistent HEAD length cannot pad the file. This deliberately supersedes the earlier behavior of rejecting HEAD/GET size differences; the acknowledged-byte completion guard still applies to the actual GET representation, with a separate truncated-stream regression and existing changed-validator/range checks.
 
 New real-socket regressions cover cancellation in all network phases; range-probe recovery; exact HTTP/1 and HTTP/2 bytes; stalled-header/body reconnection with retained cookies/If-Range; short-buffer resume at the acknowledged offset; pauses; speed limits; bounded persistent failures; changed full-response lengths; and fast workers claiming queued work while the first slow range is pending. A malformed-range/stalled-siblings regression failed before the new terminal-error/JoinSet handling and now returns within about 0.01 seconds. Read-only destinations and HTTP 403 make one request; HTTP 408 still retries successfully over both HTTP/1 and HTTP/2.
 
@@ -34,6 +39,7 @@ All numbers below are successful-transfer medians. Failures are retained and dis
 | HTTP/1 queue up to 4 work units/connection, E, n=3 | 28.48 MiB/s, 3/3 | Static same-policy reference 10.48; aria2c 37.27; Prism 24.79 |
 | HTTP/1 queue up to 8 work units/connection, E, n=3 | 39.41 MiB/s, 3/3 | Previous queue 30.66; aria2c 34.07; Prism 26.49 |
 | Actual default policy, E, n=7, commit 726f23d | 45.99 MiB/s, 7/7 | Original IDG 12.86; curl 42.31; aria2c 39.95; Prism 25.04; all 7/7 |
+| Terminal-error refinement, E, n=7, commit 022d640 | 47.20 MiB/s, 7/7 | Original IDG 15.84; curl 50.44; aria2c 42.32; Prism 25.67; all 7/7 |
 
 The n=7 E result led this same-machine batch. The later terminal-error/JoinSet refinement preserves the scheduler and transport policy, but must be measured as its own build; do not silently combine source identities. Broader verification remains required. Internet conditions varied substantially, including curl stalls/timeouts. No significance claim is made.
 
@@ -65,6 +71,10 @@ The current `022d640` pipeline is terminal: all 52 A–D trials and 35 E trials 
 
 Rates are successful medians in MiB/s. This batch supports a large improvement on E versus original IDG, but curl leads E and original IDG is about 1.9% ahead on B. A/C are effectively server-limit ties. The first E candidate transfer took 8.784 seconds, retained in the seven samples; its trace showed a gradual throughput ramp, rather than a silent idle tail. Do not substitute the prior batch where curl was slower or discard this slow sample. The full objective is not achieved.
 
+The broader-host run `target/perf-20261106-independent-hosts-fg.json` is terminal (session 5861, all 30/30 files verified). F (Node) medians: IDG 43.06, original IDG 42.91, curl 44.64, aria2c 43.36, Prism 35.55 MiB/s. G (Python): IDG 18.58, original IDG 19.53, curl 19.02, aria2c 18.88, Prism 16.80 MiB/s. Resource counters succeeded for every attempt; IDG's maximum client working set was 24.93/22.37 MiB on F/G versus Prism's 34.83/33.23 MiB, while curl remained lower at about 13 MiB. IDG's client CPU median on F was higher than original IDG (0.234 versus 0.141 seconds). Preserve these limits rather than claiming across-the-board superiority. Complete report: `target/perf-20261106-independent-hosts-fg-report`.
+
+The single-GET change has a separate controlled comparison in `target/perf-20261106-get-probe-latency.json`. Both release executables transferred exact 4 MiB files on a local server with 80 ms per-request latency, three interleaved trials each. Median completion fell from 0.359759 to 0.283138 seconds (about 21.3%); requests fell from ten to nine. All six hashes passed. This isolates the removed metadata round trip, not a general internet speed claim. Reproduce with `scripts/benchmark_probe_latency.py` and the preserved `target/perf-idg-022d640.exe` (SHA-256 `0a0137e11aa5ea5485a3030c3fcb6f28c7096d1d276bf283dccbf20b2890285a`). Real E/F/G verification of the new source remains required.
+
 The report generator now accepts the actual tool set/repeat counts, including preserved baseline binaries and E-only seven-round batches. It rejects incomplete inputs, missing/duplicate trials, mixed transport policies, mixed source files and inconsistent size/hash/timing claims, including under Python optimization. Partial-success medians always show their verified fraction and cannot produce comparison bars. Outputs require a new directory and retain raw data, logs, source snapshots and identity metadata. Eight focused regression tests pass; the original A–E report reproduces unchanged numeric results, and both accepted/rejected seven-round E batches have been exercised. The chart was inspected and its subset labels corrected to avoid clipping. Optional resource tables include measured failed attempts and show counter coverage; missing counters are never zeroes.
 
 Example for a terminal run: `python scripts/benchmark_report.py target/perf-20261106-validation-final-e.json --output target/perf-20261106-validation-final-e-report --scenarios E --idg-label "IDG 022d640"`. Do not run it until `finished_utc` is set and the expected trial count is present.
@@ -89,7 +99,7 @@ Primary discussion that motivated a tested connection-policy experiment, not pro
 
 ## Outstanding work and completion audit
 
-Both prior E session `28087` and the current-candidate pipeline `30795` are terminal; do not restart them. Both JSON outputs of 30795 have `finished_utc` and the expected 52/35 trials. The engine build remains `022d640`; next validation uses the integrated resource harness on official Node/Python hosts. Runtime checkpoint: `target/performance-active.json`.
+Prior E session `28087`, candidate pipeline `30795` and broader-host session `5861` are terminal; do not restart them. Their JSON outputs have `finished_utc` and expected trial counts (35, 52+35, and 30 respectively). The next comparison measures the single-GET source against preserved `022d640`, with curl/aria2c/Prism on E/F/G; local A–D integrity/throughput rechecks follow. Runtime checkpoint: `target/performance-active.json`.
 
 - Run a larger interleaved E comparison against curl, aria2c, Prism and the preserved original IDG using the actual default policy.
 - Refresh A–D measurements with the selected candidate; confirm peak localhost performance, server-limited throughput, connection caps and fault recovery are preserved.

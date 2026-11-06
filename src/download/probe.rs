@@ -1,15 +1,12 @@
 //! URL probe – discovers file metadata before downloading.
 //!
-//! Sends a `HEAD` request to determine:
-//! - `Content-Length` – total file size in bytes
-//! - `Accept-Ranges: bytes` – whether the server supports parallel range requests
+//! Uses a one-byte `GET Range` request to determine:
+//! - `Content-Range` (or a whole-response `Content-Length`) – total file size
+//! - Verified byte-range support – whether parallel requests are safe
 //! - Suggested filename from `Content-Disposition` or the URL path
 //!
-//! Falls back to a `GET` with `Range: bytes=0-0` if the server rejects `HEAD`.
+//! Reuses a full response when ranges are ignored, or falls back to a plain GET.
 //!
-//! # Evidence from IDMan.exe
-//! The string `"Range: bytes=0-"` in IDMan.exe confirms IDM uses this exact
-//! fallback probe pattern.
 
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode};
@@ -29,7 +26,7 @@ pub struct ProbeResult {
     pub response: Option<reqwest::Response>,
     /// File size in bytes, if the server reported `Content-Length`.
     pub content_length: Option<u64>,
-    /// `true` when the server sent `Accept-Ranges: bytes`.
+    /// `true` after validating a complete one-byte partial response.
     pub accepts_ranges: bool,
     /// Resolved filename (from `Content-Disposition` or URL path).
     pub filename: Option<String>,
@@ -114,7 +111,7 @@ mod response_guard_tests {
 ///
 /// # Errors
 /// Returns an error if the network request fails or the server returns a
-/// non-2xx status on both `HEAD` and the fallback `GET`.
+/// non-2xx status on the range probe or fallback full stream.
 pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     anyhow::ensure!(
         !is_token_download(url),
@@ -123,56 +120,19 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     if is_mail_export(url) {
         return streaming_probe(client, url).await;
     }
-    let mut reuse_response = false;
-    let resp = client
-        .head(url)
-        .header("Accept-Encoding", "identity")
-        .send()
-        .await
-        .context("HEAD request failed")?;
-
-    // Some servers (nginx, CDNs) reject HEAD – fall back to a zero-byte GET.
-    let resp = if matches!(
-        resp.status(),
-        StatusCode::METHOD_NOT_ALLOWED
-            | StatusCode::NOT_IMPLEMENTED
-            | StatusCode::BAD_REQUEST
-            | StatusCode::FORBIDDEN
-    ) {
-        let response = client
-            .get(url)
-            .header("Accept-Encoding", "identity")
-            .header("Range", "bytes=0-0")
-            .send()
-            .await
-            .context("fallback GET probe failed")?;
-        let response = if matches!(
-            response.status(),
-            StatusCode::METHOD_NOT_ALLOWED
-                | StatusCode::NOT_IMPLEMENTED
-                | StatusCode::BAD_REQUEST
-                | StatusCode::FORBIDDEN
-                | StatusCode::RANGE_NOT_SATISFIABLE
-        ) {
-            drop(response);
-            client
-                .get(url)
-                .header("Accept-Encoding", "identity")
-                .send()
-                .await
-                .context("Streaming GET fallback failed")?
-        } else {
-            response
-        };
-        reuse_response = response.status() == StatusCode::OK;
-        response
-    } else {
-        resp
-    };
-
+    // One request establishes metadata and verifies real range semantics. A
+    // separate HEAD adds an avoidable round trip and can disagree with GET.
+    let (resp, accepts_ranges) =
+        initial_probe(client, url, std::time::Duration::from_secs(5)).await?;
+    let reuse_response = !accepts_ranges;
     let resp = resp
         .error_for_status()
         .context("Server rejected download probe")?;
+    anyhow::ensure!(
+        resp.status().is_success(),
+        "Server returned an unexpected probe status: {}",
+        resp.status()
+    );
     let http_version = resp.version();
     let final_url = resp.url().to_string();
     let headers = resp.headers().clone();
@@ -184,38 +144,11 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .or_else(|| headers.get("last-modified").and_then(|v| v.to_str().ok()))
         .map(str::to_owned);
 
-    let mut accepts_ranges = headers
-        .get("accept-ranges")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.to_ascii_lowercase().contains("bytes"))
-        .unwrap_or(false);
-
-    let content_length = headers
-        .get("content-range")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.rsplit('/').next())
-        .and_then(|v| v.parse::<u64>().ok())
-        .or_else(|| {
-            headers
-                .get("content-length")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.trim().parse::<u64>().ok())
-        });
-
-    // Verify range semantics before spawning workers; advertised support alone
-    // can be incorrect on CDNs/proxies. Never write a full response at a range offset.
-    if reuse_response {
-        accepts_ranges = false;
-    } else if let Some(size) = content_length.filter(|size| *size > 0) {
-        if resp.status() == StatusCode::PARTIAL_CONTENT {
-            accepts_ranges = headers
-                .get("content-range")
-                .and_then(|value| value.to_str().ok())
-                .is_some_and(|value| value.trim() == format!("bytes 0-0/{size}"));
-        } else if accepts_ranges {
-            accepts_ranges = verify_ranges(client, &final_url, size).await;
-        }
-    }
+    let content_length = if accepts_ranges {
+        range_probe_size(&headers)
+    } else {
+        resp.content_length()
+    };
 
     let filename = headers
         .get("content-disposition")
@@ -234,55 +167,98 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     })
 }
 
-/// Retry inconclusive network/overload failures, but never infer range support
-/// from an ignored or malformed range. Consume the one-byte response so a valid
-/// probe also returns its transport connection to the pool.
-async fn verify_ranges(client: &Client, url: &str, size: u64) -> bool {
+/// Retry inconclusive network/overload failures without a speculative HEAD.
+/// A valid one-byte response is drained so its connection returns to the pool.
+/// The five-second deadline covers only the probe, never a reused full stream.
+async fn initial_probe(
+    client: &Client,
+    url: &str,
+    deadline: std::time::Duration,
+) -> Result<(reqwest::Response, bool)> {
     for attempt in 0..3 {
-        let response = client
-            .get(url)
-            .header("Accept-Encoding", "identity")
-            .header("Range", "bytes=0-0")
-            .timeout(std::time::Duration::from_secs(5))
-            .send()
-            .await;
-        match response {
-            Ok(response) if matches!(response.status().as_u16(), 429 | 500 | 502 | 503 | 504) => {}
-            Ok(mut response) => {
-                if response.status() != StatusCode::PARTIAL_CONTENT
-                    || !response
-                        .headers()
-                        .get("content-range")
-                        .and_then(|v| v.to_str().ok())
-                        .is_some_and(|value| value.trim() == format!("bytes 0-0/{size}"))
-                {
-                    return false;
-                }
+        let probing = async {
+            let mut response = client
+                .get(url)
+                .header("Accept-Encoding", "identity")
+                .header("Range", "bytes=0-0")
+                .send()
+                .await
+                .context("GET range probe failed")?;
+            let mut verified = false;
+            if response.status() == StatusCode::PARTIAL_CONTENT
+                && range_probe_size(response.headers()).is_some()
+            {
                 let mut received = 0;
-                loop {
-                    match response.chunk().await {
-                        Ok(Some(bytes)) => {
-                            received += bytes.len();
-                            if received > 1 {
-                                return false;
-                            }
-                        }
-                        Ok(None) if received == 1 => return true,
-                        Ok(None) | Err(_) => break,
+                while let Some(bytes) = response.chunk().await.context("Range probe interrupted")? {
+                    received += bytes.len();
+                    if received > 1 {
+                        break;
                     }
                 }
+                anyhow::ensure!(received > 0, "Range probe returned no bytes");
+                verified = received == 1;
+            }
+            Ok::<_, anyhow::Error>((response, verified))
+        };
+        let result = tokio::time::timeout(deadline, probing)
+            .await
+            .map_err(|_| anyhow::anyhow!("Range probe timed out"))
+            .and_then(|result| result);
+        match result {
+            Ok((response, _))
+                if matches!(response.status().as_u16(), 429 | 500 | 502 | 503 | 504) =>
+            {
+                if attempt == 2 {
+                    break;
+                }
+            }
+            Ok((response, true)) => return Ok((response, true)),
+            Ok((response, false)) => {
+                if !matches!(
+                    response.status().as_u16(),
+                    206 | 400 | 403 | 405 | 416 | 501
+                ) {
+                    return Ok((response, false));
+                }
+                // Malformed ranges or explicitly rejected range requests may
+                // still allow a normal, single-use full stream.
+                break;
+            }
+            Err(error) if attempt == 2 => {
+                eprintln!("[IDG] range probe inconclusive; trying a full stream: {error:#}");
+                break;
             }
             Err(_) => {}
         }
-        if attempt < 2 {
-            eprintln!(
-                "[IDG] retrying inconclusive range probe ({}/3)",
-                attempt + 1
-            );
-            tokio::time::sleep(std::time::Duration::from_millis(50 * (attempt + 1))).await;
-        }
+        eprintln!(
+            "[IDG] retrying inconclusive range probe ({}/3)",
+            attempt + 1
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50 * (attempt + 1))).await;
     }
-    false
+    let response = client
+        .get(url)
+        .header("Accept-Encoding", "identity")
+        .send()
+        .await
+        .context("Streaming GET fallback failed")?;
+    anyhow::ensure!(
+        response.status() != StatusCode::PARTIAL_CONTENT,
+        "Server returned partial data for a full download request"
+    );
+    Ok((response, false))
+}
+
+fn range_probe_size(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    headers
+        .get("content-range")?
+        .to_str()
+        .ok()?
+        .trim()
+        .strip_prefix("bytes 0-0/")?
+        .parse::<u64>()
+        .ok()
+        .filter(|size| *size > 0)
 }
 
 /// Token-only endpoints must be submitted through the original browser form.
@@ -527,6 +503,151 @@ fn percent_decode(s: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn one_get_probe_validates_exact_bytes_and_reuses_fallback_streams() {
+        use axum::{Router, body::Body, http::Method, response::IntoResponse, routing::get};
+        use std::sync::{Arc, Mutex};
+        for mode in 0..5 {
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let seen = requests.clone();
+            let router = Router::new().route(
+                "/file.bin",
+                get(move |method: Method, headers: reqwest::header::HeaderMap| {
+                    let seen = seen.clone();
+                    async move {
+                        let range = headers
+                            .get("range")
+                            .and_then(|v| v.to_str().ok())
+                            .map(str::to_owned);
+                        let count = {
+                            let mut seen = seen.lock().unwrap();
+                            seen.push((method.clone(), range.clone()));
+                            seen.len()
+                        };
+                        if mode == 4 {
+                            return StatusCode::NOT_MODIFIED.into_response();
+                        }
+                        if method == Method::HEAD {
+                            return (
+                                [("content-length", "8192"), ("accept-ranges", "bytes")],
+                                Body::empty(),
+                            )
+                                .into_response();
+                        }
+                        if range.is_some() {
+                            let bytes = match mode {
+                                1 => "bad",
+                                2 => "xx",
+                                3 if count == 1 => "",
+                                _ => "x",
+                            };
+                            return (
+                                StatusCode::PARTIAL_CONTENT,
+                                [
+                                    (
+                                        "content-range",
+                                        if mode == 1 {
+                                            "bytes 0-2/8192"
+                                        } else {
+                                            "bytes 0-0/8192"
+                                        },
+                                    ),
+                                    ("etag", "\"fixed\""),
+                                    ("content-type", "application/octet-stream"),
+                                ],
+                                bytes,
+                            )
+                                .into_response();
+                        }
+                        (
+                            [("content-type", "application/octet-stream")],
+                            vec![b'x'; 8192],
+                        )
+                            .into_response()
+                    }
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file.bin", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let result = probe(&super::super::http_client().unwrap(), &url).await;
+            if mode == 4 {
+                assert!(
+                    result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("unexpected probe status")
+                );
+                server.abort();
+                continue;
+            }
+            let result = result.unwrap();
+            assert_eq!(result.content_length, Some(8192));
+            let ranged = (Method::GET, Some("bytes=0-0".to_owned()));
+            if mode == 0 || mode == 3 {
+                assert!(result.supports_multipart());
+                assert!(result.response.is_none());
+                assert_eq!(result.if_range.as_deref(), Some("\"fixed\""));
+                assert_eq!(
+                    *requests.lock().unwrap(),
+                    vec![ranged; if mode == 3 { 2 } else { 1 }]
+                );
+            } else {
+                assert!(!result.supports_multipart());
+                assert_eq!(
+                    result.response.unwrap().bytes().await.unwrap().as_ref(),
+                    vec![b'x'; 8192]
+                );
+                assert_eq!(*requests.lock().unwrap(), vec![ranged, (Method::GET, None)]);
+            }
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn reused_full_stream_outlives_the_probe_deadline_without_replay() {
+        use axum::{Router, body::Body, routing::get};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let requests = Arc::new(AtomicUsize::new(0));
+        let seen = requests.clone();
+        let router = Router::new().route(
+            "/stream.bin",
+            get(move || {
+                seen.fetch_add(1, Ordering::Relaxed);
+                async {
+                    let stream = futures::stream::once(async {
+                        tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+                        Ok::<_, std::io::Error>(bytes::Bytes::from_static(b"complete"))
+                    });
+                    (
+                        [
+                            ("content-type", "application/octet-stream"),
+                            ("content-length", "8"),
+                        ],
+                        Body::from_stream(stream),
+                    )
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/stream.bin", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let (response, accepts_ranges) = initial_probe(
+            &super::super::http_client().unwrap(),
+            &url,
+            std::time::Duration::from_millis(250),
+        )
+        .await
+        .unwrap();
+        assert!(!accepts_ranges);
+        assert_eq!(response.bytes().await.unwrap().as_ref(), b"complete");
+        assert_eq!(requests.load(Ordering::Relaxed), 1);
+        server.abort();
+    }
     #[tokio::test]
     async fn token_only_urls_fail_before_sending_a_probe() {
         let error = probe(
