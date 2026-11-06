@@ -61,8 +61,13 @@ def summarize(runs, *, tools=TOOLS, scenarios=LABELS, repeats=3, curl_repeats=1)
             successful = [r for r in rows if r["verified"]]
             rates = [r["mib_per_second"] for r in successful]
             resources = []
+            cycles = []
             for row in rows:
                 usage = row.get("resources", {})
+                cycle_count = usage.get("cpu_cycles")
+                if cycle_count is not None:
+                    require(type(cycle_count) is int and 0 <= cycle_count <= (1 << 64) - 1, "Invalid process cycle counter")
+                    cycles.append(cycle_count)
                 fields = ("cpu_total_seconds", "peak_working_set_bytes", "peak_commit_bytes")
                 if usage.get("errors") or not all(key in usage for key in fields):
                     continue
@@ -76,6 +81,8 @@ def summarize(runs, *, tools=TOOLS, scenarios=LABELS, repeats=3, curl_repeats=1)
                 "median_seconds": statistics.median(r["durable_seconds"] for r in successful) if rates else None,
                 "all_verified": len(successful) == expected,
                 "resource_samples": len(resources),
+                "cycle_samples": len(cycles),
+                "median_client_cpu_cycles": statistics.median(cycles) if cycles else None,
                 "median_client_cpu_seconds": statistics.median(r["cpu_total_seconds"] for r in resources) if resources else None,
                 "max_client_peak_working_set_mib": max(r["peak_working_set_bytes"] for r in resources) / 1048576 if resources else None,
                 "max_client_peak_commit_mib": max(r["peak_commit_bytes"] for r in resources) / 1048576 if resources else None,
@@ -143,7 +150,7 @@ def main():
             spread = f"{s['min_mib_s']:.2f}–{s['max_mib_s']:.2f}" if s["verified"] else "—"
             detail.append(f"| {scenario} | {tool} | {s['verified']} / {s['attempts']} | {time} | {median} | {spread} |")
     (args.output / "detail.md").write_text("\n".join(detail) + "\n", encoding="utf-8")
-    if any(s["resource_samples"] for group in summary.values() for s in group.values()):
+    if any(s["resource_samples"] or s["cycle_samples"] for group in summary.values() for s in group.values()):
         resource_lines = ["Client process only; excludes descendants and the test server. Includes measured failed attempts. Missing counters are not zeroes.", "",
                           "| Scenario | Tool | Measured / attempted | Median client CPU seconds | Maximum client peak working set MiB | Maximum client peak commit MiB |",
                           "| --- | --- | ---: | ---: | ---: | ---: |"]
@@ -152,6 +159,16 @@ def main():
                 s = summary[scenario][tool]
                 values = [s[k] for k in ("median_client_cpu_seconds", "max_client_peak_working_set_mib", "max_client_peak_commit_mib")]
                 resource_lines.append(f"| {scenario} | {tool} | {s['resource_samples']} / {s['attempts']} | " + " | ".join(f"{v:.3f}" if v is not None else "—" for v in values) + " |")
+        if any(s["cycle_samples"] for group in summary.values() for s in group.values()):
+            resource_lines += ["", "Interpret CPU-time medians with the full trial distribution. CPU cycles are independent hardware-dependent counts, not elapsed time; no conversion to seconds is made.", "",
+                               "| Scenario | Tool | Cycle samples / attempted | Median client CPU cycles (millions) |",
+                               "| --- | --- | ---: | ---: |"]
+            for scenario in scenarios:
+                for tool in tools:
+                    s = summary[scenario][tool]
+                    cycles = s["median_client_cpu_cycles"]
+                    value = f"{cycles / 1_000_000:.3f}" if cycles is not None else "—"
+                    resource_lines.append(f"| {scenario} | {tool} | {s['cycle_samples']} / {s['attempts']} | {value} |")
         (args.output / "resources.md").write_text("\n".join(resource_lines) + "\n", encoding="utf-8")
     identity = {key: source.get(key) for key in ("idg_commit", "prism_commit", "binary_sha256", "production_sources", "harness_sha256", "started_utc", "finished_utc", "source_snapshot", "tracked_worktree_changes", "publisher_references", "workloads", "connection_overrides")}
     (args.output / "identity.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")

@@ -29,14 +29,19 @@ while time.process_time() < deadline:
             self.assertGreaterEqual(usage["peak_commit_bytes"], 32 * 1024 * 1024)
             self.assertGreaterEqual(usage["cpu_total_seconds"], 0.10)
             self.assertAlmostEqual(usage["cpu_total_seconds"], usage["cpu_user_seconds"] + usage["cpu_kernel_seconds"])
+            self.assertGreater(usage["cpu_cycles"], 0)
+            repeated = metrics.snapshot(child)
+            self.assertEqual(repeated["cpu_cycles"], usage["cpu_cycles"])
+            self.assertEqual(repeated["cpu_total_seconds"], usage["cpu_total_seconds"])
 
     def test_invalid_handle_reports_unavailable_counters_without_inventing_zero(self):
         class Closed:
             _handle = 0
         usage = metrics.snapshot(Closed())
-        self.assertEqual(len(usage["errors"]), 2)
+        self.assertEqual(len(usage["errors"]), 3)
         self.assertNotIn("cpu_total_seconds", usage)
         self.assertNotIn("peak_working_set_bytes", usage)
+        self.assertNotIn("cpu_cycles", usage)
 
 
 if __name__ == "__main__":

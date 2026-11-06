@@ -67,7 +67,8 @@ class ReportTests(unittest.TestCase):
             rows = [trial(tool, n) for tool in ["IDG", "IDG-baseline"] for n in range(1, 8)]
             for row in rows:
                 row["resources"] = dict(errors=[], cpu_total_seconds=0.5,
-                                        peak_working_set_bytes=1048576, peak_commit_bytes=2097152)
+                                        peak_working_set_bytes=1048576, peak_commit_bytes=2097152,
+                                        cpu_cycles=2_000_000_000)
                 log = root / row["log"]
                 log.parent.mkdir(parents=True)
                 log.write_text("fixture diagnostics")
@@ -86,6 +87,8 @@ class ReportTests(unittest.TestCase):
             self.assertEqual((root / "report/logs/IDG-7/tool.log").read_text(), "fixture diagnostics")
             self.assertIn("Includes measured failed attempts", (root / "report/resources.md").read_text())
             self.assertIn("7 / 7 | 0.500 | 1.000 | 2.000", (root / "report/resources.md").read_text())
+            self.assertIn("7 / 7 | 2000.000", (root / "report/resources.md").read_text())
+            self.assertIn("no conversion to seconds", (root / "report/resources.md").read_text())
             self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
 
     def test_different_source_files_are_not_compared_as_one_workload(self):
@@ -104,19 +107,26 @@ class ReportTests(unittest.TestCase):
     def test_resource_summary_includes_failed_attempts_and_excludes_unavailable(self):
         rows = [trial(repeat=i) for i in range(1, 4)]
         rows[0]["resources"] = dict(errors=[], cpu_total_seconds=1.0,
-                                    peak_working_set_bytes=1048576, peak_commit_bytes=2097152)
+                                    peak_working_set_bytes=1048576, peak_commit_bytes=2097152, cpu_cycles=100)
         rows[1].update(verified=False, exit_code="timeout", mib_per_second=None)
         rows[1]["resources"] = dict(errors=[], cpu_total_seconds=5.0,
-                                    peak_working_set_bytes=8388608, peak_commit_bytes=16777216)
+                                    peak_working_set_bytes=8388608, peak_commit_bytes=16777216, cpu_cycles=300)
         rows[2]["resources"] = dict(errors=["unavailable"])
         value = self.summary(rows, 3)["E"]["IDG"]
         self.assertEqual(value["resource_samples"], 2)
         self.assertEqual(value["median_client_cpu_seconds"], 3.0)
         self.assertEqual(value["max_client_peak_working_set_mib"], 8.0)
         self.assertEqual(value["max_client_peak_commit_mib"], 16.0)
+        self.assertEqual(value["cycle_samples"], 2)
+        self.assertEqual(value["median_client_cpu_cycles"], 200)
         rows[0]["resources"]["cpu_total_seconds"] = -1.0
         with self.assertRaisesRegex(ValueError, "resource counter"):
             self.summary(rows, 3)
+        rows[0]["resources"]["cpu_total_seconds"] = 1.0
+        for invalid in [True, -1, float("nan"), 1 << 64]:
+            rows[0]["resources"]["cpu_cycles"] = invalid
+            with self.assertRaisesRegex(ValueError, "cycle counter"):
+                self.summary(rows, 3)
 
     def test_incomplete_or_missing_scenario_creates_no_report(self):
         with tempfile.TemporaryDirectory() as temp:

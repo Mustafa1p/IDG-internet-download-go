@@ -4,6 +4,7 @@ Query the still-open Popen handle after wait(), before releasing the Popen.
 No polling/sampling thread is needed. Counters exclude descendant processes.
 API definitions: https://learn.microsoft.com/windows/win32/api/psapi/ns-psapi-process_memory_counters
 https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes
+https://learn.microsoft.com/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryprocesscycletime
 """
 import ctypes
 from ctypes import wintypes
@@ -49,4 +50,18 @@ def snapshot(process):
                       cpu_total_seconds=seconds(user) + seconds(system))
     else:
         result["errors"].append(f"GetProcessTimes: {ctypes.WinError(ctypes.get_last_error())}")
+    # Keep cycles as a hardware-dependent count, never convert them to seconds.
+    # This is an independent check when short, concurrent I/O workloads produce
+    # widely varying process-time readings. It also runs after transfer timing.
+    query_cycles = getattr(kernel, "QueryProcessCycleTime", None)
+    if query_cycles is None:
+        result["errors"].append("QueryProcessCycleTime is unavailable")
+    else:
+        query_cycles.argtypes = [wintypes.HANDLE, ctypes.POINTER(ctypes.c_uint64)]
+        query_cycles.restype = wintypes.BOOL
+        cycles = ctypes.c_uint64()
+        if query_cycles(handle, ctypes.byref(cycles)):
+            result["cpu_cycles"] = cycles.value
+        else:
+            result["errors"].append(f"QueryProcessCycleTime: {ctypes.WinError(ctypes.get_last_error())}")
     return result
