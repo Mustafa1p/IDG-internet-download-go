@@ -67,7 +67,15 @@ pub struct SegmentArgs {
 /// # Errors
 /// Returns an error after `max_retries` failed attempts, or immediately if
 /// the segment is cancelled.
-pub async fn run_segment(mut args: SegmentArgs, max_retries: u32) -> Result<()> {
+pub async fn run_segment(args: SegmentArgs, max_retries: u32) -> Result<()> {
+    run_segment_with_idle_timeout(args, max_retries, Duration::from_secs(15)).await
+}
+
+async fn run_segment_with_idle_timeout(
+    mut args: SegmentArgs,
+    max_retries: u32,
+    idle_timeout: Duration,
+) -> Result<()> {
     let mut attempts = 0u32;
     // `resume_at` advances after each successful chunk write, enabling
     // within-segment resume across retries.
@@ -80,7 +88,12 @@ pub async fn run_segment(mut args: SegmentArgs, max_retries: u32) -> Result<()> 
         let response = args.response.take();
         let streaming_export = super::probe::is_mail_export(&args.url) || response.is_some();
         let before = resume_at;
-        let result = download_range(&args, resume_at, &mut resume_at, response).await;
+        let timeout = if args.end.is_some() && !streaming_export {
+            idle_timeout
+        } else {
+            Duration::from_secs(300)
+        };
+        let result = download_range(&args, resume_at, &mut resume_at, response, timeout).await;
 
         match result {
             Ok(()) => return Ok(()),
@@ -139,6 +152,7 @@ async fn download_range(
     start: u64,
     cursor: &mut u64,
     response: Option<reqwest::Response>,
+    idle_timeout: Duration,
 ) -> Result<()> {
     let SegmentArgs {
         client,
@@ -169,9 +183,28 @@ async fn download_range(
         request
     };
     let permit = args.gate.acquire(cancel).await?;
+    // A single clock observes cancellation, pauses and stalled network reads.
+    // It is not reset for each packet and excludes intentional local backpressure.
+    let mut clock = tokio::time::interval(Duration::from_millis(50));
+    clock.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut last_network = tokio::time::Instant::now();
     let resp = match response {
         Some(response) => response,
-        None => request.send().await.context("GET request failed")?,
+        None => {
+            let sending = request.send();
+            tokio::pin!(sending);
+            loop {
+                tokio::select! {
+                    response = &mut sending => break response.context("GET request failed")?,
+                    _ = clock.tick() => {
+                        anyhow::ensure!(!cancel.load(Ordering::Relaxed), "cancelled waiting for response headers");
+                        if network_stalled(&mut last_network, pause, idle_timeout) {
+                            bail!("Network stalled waiting for response headers");
+                        }
+                    }
+                }
+            }
+        }
     };
 
     if matches!(
@@ -226,8 +259,24 @@ async fn download_range(
     let mut stream = resp.bytes_stream();
     let mut buffered = Vec::with_capacity(1024 * 1024);
     let mut last_write = std::time::Instant::now();
+    last_network = tokio::time::Instant::now();
 
-    while let Some(chunk_result) = stream.next().await {
+    loop {
+        let chunk_result = tokio::select! {
+            chunk = stream.next() => chunk,
+            _ = clock.tick() => {
+                anyhow::ensure!(!cancel.load(Ordering::Relaxed), "cancelled waiting for response body");
+                if network_stalled(&mut last_network, pause, idle_timeout) {
+                    // Resume only after every validated short buffer is written.
+                    write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                    bail!("Network stalled waiting for response body");
+                }
+                continue;
+            }
+        };
+        let Some(chunk_result) = chunk_result else {
+            break;
+        };
         // Check cancel / pause before processing each chunk.
         if cancel.load(Ordering::Relaxed) {
             bail!("cancelled");
@@ -295,6 +344,8 @@ async fn download_range(
                 break;
             }
         }
+        // Disk writes, rate limiting and user pauses are not network inactivity.
+        last_network = tokio::time::Instant::now();
         if end.is_some_and(|end| *cursor > end) {
             break;
         }
@@ -308,6 +359,18 @@ async fn download_range(
         bail!("Response ended before the requested range was complete");
     }
     Ok(())
+}
+
+fn network_stalled(
+    last_activity: &mut tokio::time::Instant,
+    pause: &AtomicBool,
+    timeout: Duration,
+) -> bool {
+    if pause.load(Ordering::Relaxed) {
+        *last_activity = tokio::time::Instant::now();
+        return false;
+    }
+    last_activity.elapsed() >= timeout
 }
 
 // Coalesce packets and advance the retry cursor only after a disk acknowledgement.
@@ -329,4 +392,184 @@ async fn write_buffer(
     buffered.clear();
     on_progress(count);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        Router,
+        body::Body,
+        http::{HeaderMap, StatusCode},
+        response::IntoResponse,
+        routing::get,
+    };
+    use std::sync::{Mutex, atomic::AtomicU64};
+
+    #[tokio::test]
+    async fn idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits() {
+        const SIZE: u64 = 2048;
+        const PREFIX: u64 = 193;
+        for http2 in [false, true] {
+            for phase in 0..5 {
+                let requests = Arc::new(Mutex::new(Vec::new()));
+                let seen = requests.clone();
+                let pause = Arc::new(AtomicBool::new(false));
+                let paused = pause.clone();
+                let ready = Arc::new(tokio::sync::Notify::new());
+                let signal = ready.clone();
+                let router = Router::new().route(
+                    "/file",
+                    get(move |headers: HeaderMap| {
+                        let seen = seen.clone();
+                        let pause = paused.clone();
+                        let signal = signal.clone();
+                        async move {
+                            assert_eq!(headers["cookie"], "session=retained");
+                            assert_eq!(headers["if-range"], "\"fixed\"");
+                            let start: u64 = headers["range"]
+                                .to_str()
+                                .unwrap()
+                                .strip_prefix("bytes=")
+                                .unwrap()
+                                .split('-')
+                                .next()
+                                .unwrap()
+                                .parse()
+                                .unwrap();
+                            let first = {
+                                let mut seen = seen.lock().unwrap();
+                                seen.push(start);
+                                seen.len() == 1
+                            };
+                            if (first && phase == 0) || phase == 4 {
+                                std::future::pending::<()>().await;
+                            }
+                            let content: Vec<u8> = (start..SIZE).map(|n| (n % 251) as u8).collect();
+                            let body = if first && matches!(phase, 1 | 2) {
+                                if phase == 2 {
+                                    pause.store(true, Ordering::Relaxed);
+                                    signal.notify_one();
+                                }
+                                Body::from_stream(
+                                    futures::stream::once(async {
+                                        Ok::<_, std::io::Error>(Bytes::from(
+                                            (0..PREFIX)
+                                                .map(|n| (n % 251) as u8)
+                                                .collect::<Vec<_>>(),
+                                        ))
+                                    })
+                                    .chain(futures::stream::pending()),
+                                )
+                            } else {
+                                Body::from(content)
+                            };
+                            (
+                                StatusCode::PARTIAL_CONTENT,
+                                [
+                                    (
+                                        "content-range",
+                                        format!("bytes {start}-{}/{SIZE}", SIZE - 1),
+                                    ),
+                                    ("content-length", (SIZE - start).to_string()),
+                                    ("etag", "\"fixed\"".into()),
+                                    ("content-type", "application/octet-stream".into()),
+                                ],
+                                body,
+                            )
+                                .into_response()
+                        }
+                    }),
+                );
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let url = format!("http://{}/file", listener.local_addr().unwrap());
+                let server = tokio::spawn(async move {
+                    axum::serve(listener, router).await.unwrap();
+                });
+                let directory = tempfile::tempdir().unwrap();
+                let output = directory.path().join("resumed.bin");
+                let file = std::fs::File::create(&output).unwrap();
+                file.set_len(SIZE).unwrap();
+                let writer = Arc::new(DownloadWriter::new(file).unwrap());
+                let mut headers = reqwest::header::HeaderMap::new();
+                headers.insert("cookie", "session=retained".parse().unwrap());
+                let builder = super::super::http_client_builder().default_headers(headers);
+                let builder = if http2 {
+                    builder.http2_prior_knowledge()
+                } else {
+                    builder
+                };
+                let acknowledged = Arc::new(AtomicU64::new(0));
+                let progress = acknowledged.clone();
+                let args = SegmentArgs {
+                    gate: Arc::new(ConnectionGate::new(1)),
+                    if_range: Some("\"fixed\"".into()),
+                    total_size: Some(SIZE),
+                    bandwidth: Arc::new(super::super::bandwidth::BandwidthLimiter::new(
+                        if phase == 3 { 1024 } else { 0 },
+                    )),
+                    response: None,
+                    client: Arc::new(builder.build().unwrap()),
+                    id: 0,
+                    url,
+                    start: 0,
+                    end: Some(SIZE - 1),
+                    file: writer.clone(),
+                    cancel: Arc::new(AtomicBool::new(false)),
+                    pause: pause.clone(),
+                    on_progress: Box::new(move |bytes| {
+                        progress.fetch_add(bytes, Ordering::Relaxed);
+                    }),
+                };
+                let work = tokio::spawn(run_segment_with_idle_timeout(
+                    args,
+                    2,
+                    Duration::from_millis(100),
+                ));
+                if phase == 2 {
+                    tokio::time::timeout(Duration::from_secs(1), ready.notified())
+                        .await
+                        .unwrap();
+                    tokio::time::sleep(Duration::from_millis(350)).await;
+                    assert_eq!(
+                        requests.lock().unwrap().len(),
+                        1,
+                        "A user pause must not cause reconnects"
+                    );
+                    pause.store(false, Ordering::Relaxed);
+                }
+                let outcome = tokio::time::timeout(Duration::from_secs(5), work)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                if phase == 4 {
+                    let error = outcome.unwrap_err().to_string();
+                    assert!(
+                        error.contains("failed after 3 retries")
+                            && error.contains("Network stalled")
+                    );
+                    assert_eq!(*requests.lock().unwrap(), vec![0, 0, 0]);
+                    assert_eq!(acknowledged.load(Ordering::Relaxed), 0);
+                    server.abort();
+                    continue;
+                }
+                outcome.unwrap();
+                writer.finish().await.unwrap();
+                assert_eq!(acknowledged.load(Ordering::Relaxed), SIZE);
+                assert_eq!(
+                    std::fs::read(output).unwrap(),
+                    (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    *requests.lock().unwrap(),
+                    match phase {
+                        0 => vec![0, 0],
+                        1 | 2 => vec![0, PREFIX],
+                        _ => vec![0],
+                    }
+                );
+                server.abort();
+            }
+        }
+    }
 }

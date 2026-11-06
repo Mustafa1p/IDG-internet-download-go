@@ -42,12 +42,16 @@ def main():
     p.add_argument("--prism-root", type=Path, required=True)
     p.add_argument("--aria2", type=Path, required=True)
     p.add_argument("--idg", type=Path, default=ROOT / "target/release/examples/idg-get.exe")
+    p.add_argument("--idg-baseline-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed"], default="production", help="Diagnostic policy for a preserved IDG CLI that supports it")
+    p.add_argument("--idg-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed"], default="production", help="Candidate CLI diagnostic policy; production is the actual desktop policy")
+    p.add_argument("--idg-baseline", type=Path, help="Preserved IDG executable for interleaved before/after comparisons")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--scenarios", nargs="+", choices=SCENARIOS, default=list("ABCD"))
-    p.add_argument("--tools", nargs="+", choices=["curl", "aria2c", "Prism", "IDG"], default=["curl", "aria2c", "Prism", "IDG"])
+    p.add_argument("--tools", nargs="+", choices=["curl", "aria2c", "Prism", "IDG", "IDG-baseline"], default=["curl", "aria2c", "Prism", "IDG"])
     p.add_argument("--repeats", type=int, default=3)
     p.add_argument("--curl-repeats", type=int, help="Optional smaller curl reference sample; recorded explicitly")
     p.add_argument("--size-factor", type=float, default=1.0, help="Exploration only; published A-D use 1.0")
+    p.add_argument("--trace-idg", action="store_true", help="Retain per-second progress diagnostics in candidate IDG logs")
     p.add_argument("--timeout", type=float, default=600)
     args = p.parse_args()
     assert args.repeats > 0 and args.size_factor > 0
@@ -58,6 +62,9 @@ def main():
     prism = (args.prism_root / "target/release/examples/prism-get.exe").resolve()
     server = (args.prism_root / "target/release/prism-testserver.exe").resolve()
     binaries = {"curl": Path(shutil.which("curl.exe") or "curl"), "aria2c": args.aria2.resolve(), "Prism": prism, "IDG": args.idg.resolve()}
+    if "IDG-baseline" in args.tools:
+        assert args.idg_baseline, "--idg-baseline is required for IDG-baseline trials"
+        binaries["IDG-baseline"] = args.idg_baseline.resolve()
     for tool in args.tools:
         assert binaries[tool].is_file(), binaries[tool]
     assert server.is_file(), server
@@ -66,6 +73,16 @@ def main():
     assert not output.exists(), "Choose a new output path; prior measurements are never overwritten"
     work = output.parent / (output.stem + "-files")
     work.mkdir()
+    # Retain exact candidate sources as well as hashes when benchmarking an
+    # uncommitted optimization. A hash alone cannot reconstruct those sources.
+    snapshot = work / "source-snapshot"
+    snapshot.mkdir()
+    source_paths = [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "examples/idg-get.rs", ROOT / "scripts/benchmark.py", *sorted((ROOT / "src/download").glob("*.rs"))]
+    for source in source_paths:
+        destination = snapshot / source.relative_to(ROOT)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+    (snapshot / "working.patch").write_bytes(subprocess.check_output(["git", "diff", "--binary"], cwd=ROOT))
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     result = {"schema": 1, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
               "platform": platform.platform(), "logical_cpus": os.cpu_count(),
@@ -78,6 +95,8 @@ def main():
     result["production_sources"] = {str(path.relative_to(ROOT)): digest(path)
         for path in sorted((ROOT / "src/download").glob("*.rs"))}
     result["driver_sha256"] = digest(ROOT / "examples/idg-get.rs")
+    result["source_snapshot"] = str(snapshot.relative_to(output.parent))
+    result["harness_sha256"] = digest(ROOT / "scripts/benchmark.py")
     result["tracked_worktree_changes"] = subprocess.check_output(["git", "diff", "--name-only"], cwd=ROOT, text=True).splitlines()
     result["rustc"] = subprocess.check_output(["rustc", "--version"], text=True).strip()
 
@@ -122,8 +141,12 @@ def main():
                 time.sleep(0.05)
             assert expected, "Server did not publish reference hash"
             destination = directory / "download.bin"
-            if tool == "IDG":
+            if tool in ("IDG", "IDG-baseline"):
                 command = [str(binaries[tool]), url, str(destination), str(connections)]
+                if tool == "IDG" and args.idg_mode != "production":
+                    command.append("--" + args.idg_mode)
+                if tool == "IDG-baseline" and args.idg_baseline_mode != "production":
+                    command.append("--" + args.idg_baseline_mode)
             elif tool == "Prism":
                 command = [str(prism), url, "-c", str(connections), "-o", str(directory)]
             elif tool == "aria2c":
@@ -133,7 +156,8 @@ def main():
             started = time.perf_counter()
             with (directory / "tool.log").open("wb") as log:
                 try:
-                    completed = subprocess.run(command, stdout=log, stderr=log, timeout=args.timeout, creationflags=flags)
+                    completed = subprocess.run(command, stdout=log, stderr=log, timeout=args.timeout, creationflags=flags,
+                        env={**os.environ, "IDG_TRACE_PROGRESS": "1"} if args.trace_idg and tool == "IDG" else None)
                     code = completed.returncode
                 except subprocess.TimeoutExpired:
                     code = "timeout"
@@ -159,6 +183,8 @@ def main():
                    "verification_seconds": time.perf_counter() - hash_started,
                    "mib_per_second": size / MIB / durable_seconds if verified else None,
                    "sync_error": sync_error, "command": command, "server_command": server_command,
+                   "trace_idg": args.trace_idg and tool == "IDG",
+                   "candidate_policy": args.idg_mode if tool == "IDG" else args.idg_baseline_mode if tool == "IDG-baseline" else None,
                    "log": str((directory / "tool.log").relative_to(output.parent))}
             result["runs"].append(row)
             save()

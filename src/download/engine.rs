@@ -35,6 +35,8 @@ use crate::download::{
 
 /// Consecutive failures without acknowledged progress before giving up.
 const MAX_RETRIES: u32 = 10;
+const MIN_RANGE_BYTES: u64 = 512 * 1024;
+const RANGES_PER_CONNECTION: usize = 8;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -86,24 +88,31 @@ pub async fn start_download(
     }
 
     // ── Step 1: Probe ─────────────────────────────────────────────────────────
+    let setup_started = std::time::Instant::now();
     let client = if headers.is_empty() {
         client
     } else {
         Arc::new(
-            reqwest::Client::builder()
+            super::http_client_builder()
                 .default_headers(headers)
-                .connect_timeout(std::time::Duration::from_secs(15))
-                .read_timeout(std::time::Duration::from_secs(300))
                 .build()?,
         )
     };
     with_item(&downloads, &id, |i| i.status = Status::Probing);
 
-    let mut probe_result = match post_data {
-        Some(body) => super::probe::post_probe(&client, &url, body).await,
-        None => probe(&client, &url).await,
-    }
-    .map_err(|error| anyhow::anyhow!("URL probe failed: {error:#}"))?;
+    let probing = async {
+        match post_data {
+            Some(body) => super::probe::post_probe(&client, &url, body).await,
+            None => probe(&client, &url).await,
+        }
+    };
+    let mut probe_result = tokio::select! {
+        result = probing => result.map_err(|error| anyhow::anyhow!("URL probe failed: {error:#}"))?,
+        _ = super::cancelled(&cancel) => {
+            with_item(&downloads, &id, |item| item.status = Status::Cancelled);
+            return Ok(());
+        }
+    };
 
     // Persist probe results; update the save path if the server suggested a
     // different filename via Content-Disposition.
@@ -172,15 +181,29 @@ pub async fn start_download(
         probe_result.supports_multipart(),
     );
     with_item(&downloads, &id, |item| item.num_segments = seg_count);
-    let segments = build_segments(seg_count, probe_result.content_length);
+    // Queue a bounded number of smaller work units behind the connection gate.
+    // Fast requests can claim more work instead of waiting on one large tail.
+    let range_count = if seg_count > 1 && probe_result.supports_multipart() {
+        (probe_result.content_length.unwrap() / MIN_RANGE_BYTES)
+            .clamp(seg_count as u64, (seg_count * RANGES_PER_CONNECTION) as u64) as usize
+    } else {
+        seg_count
+    };
+    let segments = build_segments(range_count, probe_result.content_length);
     let gate = Arc::new(super::gate::ConnectionGate::new(seg_count));
     let final_url = probe_result.final_url.clone();
 
     eprintln!(
-        "[IDG] starting download id={} segments={} size={:?}",
-        id, seg_count, probe_result.content_length
+        "[IDG] starting download id={} segments={} ranges={} size={:?} protocol={:?} setup_ms={}",
+        id,
+        seg_count,
+        range_count,
+        probe_result.content_length,
+        probe_result.http_version,
+        setup_started.elapsed().as_millis()
     );
 
+    let acknowledged = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let mut initial_response = probe_result.response.take();
     let tasks: Vec<_> = segments
         .into_iter()
@@ -192,6 +215,7 @@ pub async fn start_download(
             let cancel = cancel.clone();
             let pause = pause.clone();
             let downloads = downloads.clone();
+            let acknowledged = acknowledged.clone();
             let id = id.clone();
 
             let args = SegmentArgs {
@@ -213,6 +237,7 @@ pub async fn start_download(
                 cancel,
                 pause,
                 on_progress: Box::new(move |bytes| {
+                    acknowledged.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
                     with_item(&downloads, &id, |item| item.record_progress(bytes));
                 }),
             };
@@ -238,6 +263,15 @@ pub async fn start_download(
     if cancel.load(std::sync::atomic::Ordering::Relaxed) {
         with_item(&downloads, &id, |i| i.status = Status::Cancelled);
     } else {
+        // Preallocation is not evidence that all file bytes arrived. Check actual
+        // acknowledged writes independently of the UI's progress state.
+        let received = acknowledged.load(std::sync::atomic::Ordering::Relaxed);
+        if let Some(expected) = probe_result.content_length {
+            anyhow::ensure!(
+                received == expected,
+                "Download byte count does not match the source: expected {expected}, received {received}. The file may have changed; add a fresh download link."
+            );
+        }
         // The writer barrier syncs every acknowledged range before completion.
         file.finish().await.context("failed to sync output file")?;
         eprintln!(
@@ -246,6 +280,8 @@ pub async fn start_download(
             save_path.display()
         );
         with_item(&downloads, &id, |i| {
+            i.downloaded_bytes = received;
+            i.total_bytes = Some(received);
             i.status = Status::Completed;
             i.speed_bps = 0.0;
             i.completed_at = Some(chrono::Utc::now());
@@ -327,6 +363,323 @@ mod regression_tests {
     use std::time::Duration;
 
     const SIZE: usize = 256 * 1024 + 19;
+
+    #[tokio::test]
+    async fn fast_workers_take_more_ranges_while_a_slow_range_is_still_pending() {
+        const LENGTH: u64 = 8 * 1024 * 1024;
+        let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = requests.clone();
+        let release = Arc::new(tokio::sync::Notify::new());
+        let unblock = release.clone();
+        let router = Router::new().route(
+            "/file",
+            get(move |method: Method, headers: HeaderMap| {
+                let seen = seen.clone();
+                let unblock = unblock.clone();
+                async move {
+                    let mut response = HeaderMap::new();
+                    response.insert("content-length", LENGTH.to_string().parse().unwrap());
+                    response.insert("accept-ranges", "bytes".parse().unwrap());
+                    if method == Method::HEAD {
+                        return (response, Body::empty()).into_response();
+                    }
+                    let (start, end) = headers["range"]
+                        .to_str()
+                        .unwrap()
+                        .strip_prefix("bytes=")
+                        .unwrap()
+                        .split_once('-')
+                        .unwrap();
+                    let (start, end): (u64, u64) = (start.parse().unwrap(), end.parse().unwrap());
+                    if end > 0 {
+                        let count = seen.fetch_add(1, Ordering::Relaxed) + 1;
+                        if count > 4 {
+                            unblock.notify_one();
+                        }
+                        if start == 0 {
+                            unblock.notified().await;
+                        }
+                    }
+                    let bytes: Vec<u8> = (start..=end).map(|n| (n % 251) as u8).collect();
+                    response.insert("content-length", bytes.len().to_string().parse().unwrap());
+                    response.insert(
+                        "content-range",
+                        format!("bytes {start}-{end}/{LENGTH}").parse().unwrap(),
+                    );
+                    (StatusCode::PARTIAL_CONTENT, response, bytes).into_response()
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/file", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("balanced.bin");
+        let item = crate::download::types::DownloadItem::new(url, output.clone(), 4);
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            start_download(
+                Arc::new(super::super::http_client().unwrap()),
+                downloads.clone(),
+                id,
+            ),
+        )
+        .await
+        .expect("Fast workers must claim queued ranges while the slow first range is pending")
+        .unwrap();
+        assert!(requests.load(Ordering::Relaxed) > 4);
+        let item = downloads.lock().unwrap()[0].clone();
+        assert_eq!(item.num_segments, 4);
+        assert_eq!(item.status, Status::Completed);
+        assert_eq!(
+            std::fs::read(output).unwrap(),
+            (0..LENGTH).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+        );
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn non_range_size_changes_never_complete_with_preallocation_padding() {
+        for actual_size in [1024, 8192] {
+            let router = Router::new().route(
+                "/file",
+                get(move |method: Method| async move {
+                    let size = if method == Method::HEAD {
+                        4096
+                    } else {
+                        actual_size
+                    };
+                    let body = if method == Method::HEAD {
+                        Body::empty()
+                    } else {
+                        Body::from(vec![b'x'; size])
+                    };
+                    (
+                        [
+                            ("content-length", size.to_string()),
+                            ("content-type", "application/octet-stream".into()),
+                        ],
+                        body,
+                    )
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move {
+                axum::serve(listener, router).await.unwrap();
+            });
+            let directory = tempfile::tempdir().unwrap();
+            let output = directory.path().join("changed.bin");
+            let item = crate::download::types::DownloadItem::new(url, output, 1);
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            let error = start_download(
+                Arc::new(super::super::http_client().unwrap()),
+                downloads.clone(),
+                id,
+            )
+            .await
+            .expect_err("A changed full-response size must not produce a completed, padded file");
+            assert!(error.to_string().contains("byte count"), "{error:#}");
+            assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn transient_range_probe_refusal_does_not_force_a_single_stream() {
+        let probes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = probes.clone();
+        let router = Router::new().route(
+            "/file",
+            get(move |method: Method, headers: HeaderMap| {
+                let seen = seen.clone();
+                async move {
+                    if method == Method::GET
+                        && headers.get("range").is_some_and(|r| r == "bytes=0-0")
+                        && seen.fetch_add(1, Ordering::Relaxed) == 0
+                    {
+                        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+                    }
+                    if method == Method::GET && !headers.contains_key("range") {
+                        return (
+                            [("content-type", "application/octet-stream")],
+                            (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>(),
+                        )
+                            .into_response();
+                    }
+                    range_file(method, headers).await
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/file", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("probe-retry.bin");
+        let item = crate::download::types::DownloadItem::new(url, path.clone(), 16);
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        start_download(
+            Arc::new(super::super::http_client().unwrap()),
+            downloads.clone(),
+            id,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            downloads.lock().unwrap()[0].num_segments,
+            16,
+            "One transient probe refusal must not disable working ranges"
+        );
+        assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+        assert_eq!(
+            std::fs::read(path).unwrap(),
+            (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+        );
+        assert_eq!(probes.load(Ordering::Relaxed), 2);
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn cancellation_interrupts_stalled_probe_headers_and_response_bodies() {
+        for stall_phase in 0..3 {
+            let started = Arc::new(tokio::sync::Notify::new());
+            let signal = started.clone();
+            let router = Router::new().route(
+                "/file",
+                get(move |method: Method, headers: HeaderMap| {
+                    let signal = signal.clone();
+                    async move {
+                        if stall_phase == 0 {
+                            signal.notify_one();
+                            std::future::pending::<()>().await;
+                        }
+                        if method == Method::HEAD
+                            || headers.get("range").is_some_and(|r| r == "bytes=0-0")
+                        {
+                            return range_file(method, headers).await;
+                        }
+                        signal.notify_one();
+                        if stall_phase == 1 {
+                            std::future::pending::<()>().await;
+                        }
+                        range_file(method, headers).await.map(|_| {
+                            Body::from_stream(futures::stream::pending::<
+                                Result<bytes::Bytes, std::io::Error>,
+                            >())
+                        })
+                    }
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move {
+                axum::serve(listener, router).await.unwrap();
+            });
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("stalled.bin");
+            let item = crate::download::types::DownloadItem::new(url, path.clone(), 4);
+            let cancel = item.cancel_flag.clone();
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            let work = tokio::spawn(start_download(
+                Arc::new(super::super::http_client().unwrap()),
+                downloads.clone(),
+                id,
+            ));
+            tokio::time::timeout(Duration::from_secs(5), started.notified())
+                .await
+                .unwrap();
+            cancel.store(true, Ordering::Relaxed);
+            tokio::time::timeout(Duration::from_secs(1), work)
+                .await
+                .expect("Cancellation must not wait for the 300-second network timeout")
+                .unwrap()
+                .unwrap();
+            assert_eq!(downloads.lock().unwrap()[0].status, Status::Cancelled);
+            assert_eq!(path.exists(), stall_phase != 0);
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn production_client_preserves_exact_ranges_over_http2_and_http1_fallback() {
+        for use_http2 in [false, true] {
+            let peers = Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+            let seen = peers.clone();
+            let router = Router::new().route(
+                "/file",
+                get(
+                    move |axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<
+                        std::net::SocketAddr,
+                    >,
+                          request: axum::extract::Request| {
+                        let seen = seen.clone();
+                        async move {
+                            assert_eq!(
+                                request.version(),
+                                if use_http2 {
+                                    axum::http::Version::HTTP_2
+                                } else {
+                                    axum::http::Version::HTTP_11
+                                }
+                            );
+                            seen.lock().unwrap().insert(peer);
+                            range_file(request.method().clone(), request.headers().clone()).await
+                        }
+                    },
+                ),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move {
+                axum::serve(
+                    listener,
+                    router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                )
+                .await
+                .unwrap();
+            });
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("multiplexed.bin");
+            let item = crate::download::types::DownloadItem::new(url, path.clone(), 16);
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            let builder = super::super::http_client_builder();
+            let builder = if use_http2 {
+                builder.http2_prior_knowledge()
+            } else {
+                builder
+            };
+            tokio::time::timeout(
+                Duration::from_secs(10),
+                start_download(Arc::new(builder.build().unwrap()), downloads.clone(), id),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+            assert_eq!(
+                std::fs::read(path).unwrap(),
+                (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+            );
+            if use_http2 {
+                assert_eq!(
+                    peers.lock().unwrap().len(),
+                    1,
+                    "HTTP/2 ranges should multiplex on one connection"
+                );
+            }
+            server.abort();
+        }
+    }
 
     #[tokio::test]
     async fn rejected_head_and_range_probes_stream_exact_bytes_without_replaying_get() {

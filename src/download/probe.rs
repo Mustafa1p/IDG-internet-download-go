@@ -21,6 +21,8 @@ use reqwest::{Client, StatusCode};
 /// Result of probing a URL before starting a download.
 #[derive(Debug)]
 pub struct ProbeResult {
+    /// Negotiated HTTP protocol, retained for transfer diagnostics.
+    pub http_version: reqwest::Version,
     /// Strong server validator used to keep reconnects on the same representation.
     pub if_range: Option<String>,
     /// Reuse a streaming GET when the endpoint cannot be probed safely.
@@ -171,6 +173,7 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
     let resp = resp
         .error_for_status()
         .context("Server rejected download probe")?;
+    let http_version = resp.version();
     let final_url = resp.url().to_string();
     let headers = resp.headers().clone();
     validate_file_response(&headers, &final_url)?;
@@ -210,23 +213,7 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
                 .and_then(|value| value.to_str().ok())
                 .is_some_and(|value| value.trim() == format!("bytes 0-0/{size}"));
         } else if accepts_ranges {
-            accepts_ranges = match client
-                .get(&final_url)
-                .header("Accept-Encoding", "identity")
-                .header("Range", "bytes=0-0")
-                .send()
-                .await
-            {
-                Ok(response) => {
-                    response.status() == StatusCode::PARTIAL_CONTENT
-                        && response
-                            .headers()
-                            .get("content-range")
-                            .and_then(|value| value.to_str().ok())
-                            .is_some_and(|value| value.trim() == format!("bytes 0-0/{size}"))
-                }
-                Err(_) => false,
-            };
+            accepts_ranges = verify_ranges(client, &final_url, size).await;
         }
     }
 
@@ -237,6 +224,7 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .or_else(|| Some(filename_from_url(&final_url)));
 
     Ok(ProbeResult {
+        http_version,
         if_range,
         response: reuse_response.then_some(resp),
         content_length,
@@ -244,6 +232,57 @@ pub async fn probe(client: &Client, url: &str) -> Result<ProbeResult> {
         filename,
         final_url,
     })
+}
+
+/// Retry inconclusive network/overload failures, but never infer range support
+/// from an ignored or malformed range. Consume the one-byte response so a valid
+/// probe also returns its transport connection to the pool.
+async fn verify_ranges(client: &Client, url: &str, size: u64) -> bool {
+    for attempt in 0..3 {
+        let response = client
+            .get(url)
+            .header("Accept-Encoding", "identity")
+            .header("Range", "bytes=0-0")
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await;
+        match response {
+            Ok(response) if matches!(response.status().as_u16(), 429 | 500 | 502 | 503 | 504) => {}
+            Ok(mut response) => {
+                if response.status() != StatusCode::PARTIAL_CONTENT
+                    || !response
+                        .headers()
+                        .get("content-range")
+                        .and_then(|v| v.to_str().ok())
+                        .is_some_and(|value| value.trim() == format!("bytes 0-0/{size}"))
+                {
+                    return false;
+                }
+                let mut received = 0;
+                loop {
+                    match response.chunk().await {
+                        Ok(Some(bytes)) => {
+                            received += bytes.len();
+                            if received > 1 {
+                                return false;
+                            }
+                        }
+                        Ok(None) if received == 1 => return true,
+                        Ok(None) | Err(_) => break,
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+        if attempt < 2 {
+            eprintln!(
+                "[IDG] retrying inconclusive range probe ({}/3)",
+                attempt + 1
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50 * (attempt + 1))).await;
+        }
+    }
+    false
 }
 
 /// Token-only endpoints must be submitted through the original browser form.
@@ -311,6 +350,7 @@ pub async fn post_probe(client: &Client, url: &str, body: String) -> Result<Prob
         .and_then(|value| value.to_str().ok())
         .and_then(filename_from_content_disposition);
     Ok(ProbeResult {
+        http_version: response.version(),
         if_range: None,
         content_length: response.content_length(),
         accepts_ranges: false,
@@ -363,6 +403,7 @@ async fn streaming_probe(client: &Client, url: &str) -> Result<ProbeResult> {
         .and_then(filename_from_content_disposition)
         .unwrap_or_else(|| filename_from_url(url));
     Ok(ProbeResult {
+        http_version: response.version(),
         if_range: None,
         content_length: response.content_length(),
         accepts_ranges: false,
