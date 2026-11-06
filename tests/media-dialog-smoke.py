@@ -1,4 +1,8 @@
-"""Click real egui format/quality controls at representative window sizes/scales."""
+"""Click development-build egui controls at representative sizes/scales.
+
+IDG_UI_BINARY may select another development build, including x86. Release
+builds deliberately omit the preview harness; this is not a package smoke test.
+"""
 import json
 import os
 import subprocess
@@ -15,6 +19,7 @@ for width, height, scale in [(800, 500, 1), (800, 500, 1.25), (800, 500, 1.5), (
         f"--preview-scale={scale}"], cwd=root, capture_output=True, timeout=40,
         creationflags=subprocess.CREATE_NO_WINDOW)
     assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert report.is_file(), "Preview report missing; IDG_UI_BINARY must be a development build with the preview harness enabled"
     data = json.loads(report.read_text())
     assert data["passed"] and len(data["checks"]) == 7, data
     assert all(check["passed"] for check in data["checks"]), data
