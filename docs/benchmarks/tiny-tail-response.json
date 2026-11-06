@@ -1,0 +1,729 @@
+{
+  "scope": "Correctness repair to unreleased handoff optimization. No new throughput ranking established.",
+  "trace_raw_sha256": "be0b22af6774cd7024267a4113b46b0b78adab54427e3760040eda4f09add39c",
+  "trace_evidence": {
+    "schema": 2,
+    "started_utc": "2026-11-06T23:32:27Z",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "logical_cpus": 32,
+    "idg_commit": "78c9ef5fec6f4e49a0f365d51a859e3f7ac239c7",
+    "prism_commit": "c25f3c795c962323982effcb0220fcbbe75ee2a3",
+    "size_factor": 1.0,
+    "repeats": 3,
+    "curl_repeats": 3,
+    "timing": "Process startup through completed file and external fsync; SHA-256 is outside timed interval; OS caches are not purged",
+    "binary_sha256": {
+      "IDG": "4773e939522f5acaa4895d37f6b3f9f7419060de6201477ff0fe2d4a3541d49a"
+    },
+    "server_sha256": "302bd6ce2f2fe70bcc3ce685b6a6e1f4c71f0eb2cff7f3e696fad5921d45ce4d",
+    "runs": [
+      {
+        "scenario": "E",
+        "repeat": 1,
+        "tool": "IDG",
+        "size": 79909984,
+        "requested_connections": 0,
+        "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+        "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+        "actual_size": 79909984,
+        "exit_code": 0,
+        "verified": true,
+        "process_seconds": 1.4720847000135109,
+        "durable_seconds": 1.4734168000286445,
+        "verification_seconds": 0.03891130001284182,
+        "mib_per_second": 51.72202418470648,
+        "sync_error": null,
+        "command": [
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-handoff-observation.exe",
+          "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-handoff-observation-public-eg-files\\000-E-1-IDG\\download.bin",
+          "0"
+        ],
+        "server_command": [],
+        "resources": {
+          "scope": "client process only; excludes descendants and test server",
+          "errors": [],
+          "peak_working_set_bytes": 36507648,
+          "peak_commit_bytes": 55062528,
+          "page_faults": 23173,
+          "cpu_user_seconds": 0.234375,
+          "cpu_kernel_seconds": 0.203125,
+          "cpu_total_seconds": 0.4375,
+          "cpu_cycles": 2017986262
+        },
+        "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+        "trace_idg": false,
+        "candidate_policy": "production",
+        "log": "perf-20261107-handoff-observation-public-eg-files\\000-E-1-IDG\\tool.log"
+      },
+      {
+        "scenario": "E",
+        "repeat": 2,
+        "tool": "IDG",
+        "size": 79909984,
+        "requested_connections": 0,
+        "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+        "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+        "actual_size": 79909984,
+        "exit_code": 0,
+        "verified": true,
+        "process_seconds": 1.4522453000536188,
+        "durable_seconds": 1.4544497999595478,
+        "verification_seconds": 0.03941929992288351,
+        "mib_per_second": 52.39651404081044,
+        "sync_error": null,
+        "command": [
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-handoff-observation.exe",
+          "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-handoff-observation-public-eg-files\\001-E-2-IDG\\download.bin",
+          "0"
+        ],
+        "server_command": [],
+        "resources": {
+          "scope": "client process only; excludes descendants and test server",
+          "errors": [],
+          "peak_working_set_bytes": 34283520,
+          "peak_commit_bytes": 50679808,
+          "page_faults": 22687,
+          "cpu_user_seconds": 0.1875,
+          "cpu_kernel_seconds": 0.171875,
+          "cpu_total_seconds": 0.359375,
+          "cpu_cycles": 2075834033
+        },
+        "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+        "trace_idg": false,
+        "candidate_policy": "production",
+        "log": "perf-20261107-handoff-observation-public-eg-files\\001-E-2-IDG\\tool.log"
+      },
+      {
+        "scenario": "E",
+        "repeat": 3,
+        "tool": "IDG",
+        "size": 79909984,
+        "requested_connections": 0,
+        "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+        "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+        "actual_size": 79909984,
+        "exit_code": 0,
+        "verified": true,
+        "process_seconds": 1.4373934000032023,
+        "durable_seconds": 1.4387437000405043,
+        "verification_seconds": 0.03881089994683862,
+        "mib_per_second": 52.968502564486585,
+        "sync_error": null,
+        "command": [
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-handoff-observation.exe",
+          "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-handoff-observation-public-eg-files\\002-E-3-IDG\\download.bin",
+          "0"
+        ],
+        "server_command": [],
+        "resources": {
+          "scope": "client process only; excludes descendants and test server",
+          "errors": [],
+          "peak_working_set_bytes": 38014976,
+          "peak_commit_bytes": 52621312,
+          "page_faults": 22349,
+          "cpu_user_seconds": 0.375,
+          "cpu_kernel_seconds": 0.265625,
+          "cpu_total_seconds": 0.640625,
+          "cpu_cycles": 2087366267
+        },
+        "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+        "trace_idg": false,
+        "candidate_policy": "production",
+        "log": "perf-20261107-handoff-observation-public-eg-files\\002-E-3-IDG\\tool.log"
+      },
+      {
+        "scenario": "G",
+        "repeat": 1,
+        "tool": "IDG",
+        "size": 28160096,
+        "requested_connections": 0,
+        "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+        "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+        "actual_size": 28160096,
+        "exit_code": 0,
+        "verified": true,
+        "process_seconds": 0.9359767000423744,
+        "durable_seconds": 0.9382513000164181,
+        "verification_seconds": 0.014070899924263358,
+        "mib_per_second": 28.62299290420854,
+        "sync_error": null,
+        "command": [
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-handoff-observation.exe",
+          "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-handoff-observation-public-eg-files\\003-G-1-IDG\\download.bin",
+          "0"
+        ],
+        "server_command": [],
+        "resources": {
+          "scope": "client process only; excludes descendants and test server",
+          "errors": [],
+          "peak_working_set_bytes": 23085056,
+          "peak_commit_bytes": 24227840,
+          "page_faults": 11509,
+          "cpu_user_seconds": 0.109375,
+          "cpu_kernel_seconds": 0.09375,
+          "cpu_total_seconds": 0.203125,
+          "cpu_cycles": 793066387
+        },
+        "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+        "trace_idg": false,
+        "candidate_policy": "production",
+        "log": "perf-20261107-handoff-observation-public-eg-files\\003-G-1-IDG\\tool.log"
+      },
+      {
+        "scenario": "G",
+        "repeat": 2,
+        "tool": "IDG",
+        "size": 28160096,
+        "requested_connections": 0,
+        "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+        "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+        "actual_size": 28160096,
+        "exit_code": 0,
+        "verified": true,
+        "process_seconds": 0.9089305000379682,
+        "durable_seconds": 0.9102204999653623,
+        "verification_seconds": 0.014367499970830977,
+        "mib_per_second": 29.50445557285992,
+        "sync_error": null,
+        "command": [
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-handoff-observation.exe",
+          "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-handoff-observation-public-eg-files\\004-G-2-IDG\\download.bin",
+          "0"
+        ],
+        "server_command": [],
+        "resources": {
+          "scope": "client process only; excludes descendants and test server",
+          "errors": [],
+          "peak_working_set_bytes": 22401024,
+          "peak_commit_bytes": 23572480,
+          "page_faults": 11432,
+          "cpu_user_seconds": 0.046875,
+          "cpu_kernel_seconds": 0.1875,
+          "cpu_total_seconds": 0.234375,
+          "cpu_cycles": 815131898
+        },
+        "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+        "trace_idg": false,
+        "candidate_policy": "production",
+        "log": "perf-20261107-handoff-observation-public-eg-files\\004-G-2-IDG\\tool.log"
+      },
+      {
+        "scenario": "G",
+        "repeat": 3,
+        "tool": "IDG",
+        "size": 28160096,
+        "requested_connections": 0,
+        "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+        "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+        "actual_size": 28160096,
+        "exit_code": 0,
+        "verified": true,
+        "process_seconds": 1.154205499915406,
+        "durable_seconds": 1.1555164000019431,
+        "verification_seconds": 0.014292099978774786,
+        "mib_per_second": 23.241176241799092,
+        "sync_error": null,
+        "command": [
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-handoff-observation.exe",
+          "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+          "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-handoff-observation-public-eg-files\\005-G-3-IDG\\download.bin",
+          "0"
+        ],
+        "server_command": [],
+        "resources": {
+          "scope": "client process only; excludes descendants and test server",
+          "errors": [],
+          "peak_working_set_bytes": 22654976,
+          "peak_commit_bytes": 23863296,
+          "page_faults": 11223,
+          "cpu_user_seconds": 0.03125,
+          "cpu_kernel_seconds": 0.09375,
+          "cpu_total_seconds": 0.125,
+          "cpu_cycles": 823829634
+        },
+        "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+        "trace_idg": false,
+        "candidate_policy": "production",
+        "log": "perf-20261107-handoff-observation-public-eg-files\\005-G-3-IDG\\tool.log"
+      }
+    ],
+    "publisher_references": {
+      "E": {
+        "checksum_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz.sha256",
+        "sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+        "metadata_sha256": "7f193cade27683b038df566e537c75f58b2630ee582179799be0ccd1259087dc",
+        "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+      },
+      "G": {
+        "checksum_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe.sigstore",
+        "sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+        "metadata_sha256": "13c08963683b048dc574418e0c1df136ce584c96105a571f0c68ccc61f4a1b74",
+        "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+      }
+    },
+    "connection_overrides": {
+      "IDG": 0,
+      "IDG-baseline": null
+    },
+    "workloads": {
+      "E": {
+        "size": 79909984,
+        "seed": 0,
+        "requested_connections": 16,
+        "server_options": [],
+        "source": {
+          "label": "76.2 MiB public Rust archive over HTTPS",
+          "size": 79909984,
+          "url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+          "sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+          "checksum_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz.sha256",
+          "checksum_format": "sha256"
+        }
+      },
+      "G": {
+        "size": 28160096,
+        "seed": 0,
+        "requested_connections": 16,
+        "server_options": [],
+        "source": {
+          "label": "26.9 MiB official Python installer over HTTPS",
+          "size": 28160096,
+          "url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+          "sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+          "checksum_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe.sigstore",
+          "checksum_format": "sigstore-digest"
+        }
+      }
+    },
+    "production_sources": {
+      "src\\download\\bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+      "src\\download\\connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+      "src\\download\\engine.rs": "4e3940146c2d10fdf1f9aa4e9ea99824f04fb37fae534a3b5fc04cc323c51bae",
+      "src\\download\\gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+      "src\\download\\history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+      "src\\download\\media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+      "src\\download\\mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+      "src\\download\\music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+      "src\\download\\probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+      "src\\download\\request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+      "src\\download\\segment.rs": "840b7b295a5189c24e0d7a9e076109e38a5697a28d6aed9bcf8d53eb6afee27a",
+      "src\\download\\types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+      "src\\download\\writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+    },
+    "driver_sha256": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+    "source_snapshot": "perf-20261107-handoff-observation-public-eg-files\\source-snapshot",
+    "harness_sha256": "835c9ce4a1252a2bc2e4f35fdde9c71df61f376c6b330cf24bef993835873f4f",
+    "tracked_worktree_changes": [],
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "finished_utc": "2026-11-06T23:32:35Z"
+  },
+  "observations": [
+    {
+      "scenario": "E",
+      "repeat": 1,
+      "durable_seconds": 1.4734168000286445,
+      "handoffs": [],
+      "log_sha256": "ff9366db8102bc543c0e96b7a43ecfbeb8af2219cc73c56e4be7aeafd885ce8f"
+    },
+    {
+      "scenario": "E",
+      "repeat": 2,
+      "durable_seconds": 1.4544497999595478,
+      "handoffs": [],
+      "log_sha256": "4a44fbc900df95593ee7e8f1b27a3d0bd78f87e9450d557069f4a5810fb60b9b"
+    },
+    {
+      "scenario": "E",
+      "repeat": 3,
+      "durable_seconds": 1.4387437000405043,
+      "handoffs": [],
+      "log_sha256": "fa1c353b80167e9721e1784ee1b24f706460236dbfe3cd61dd7db47a7365d50d"
+    },
+    {
+      "scenario": "G",
+      "repeat": 1,
+      "durable_seconds": 0.9382513000164181,
+      "handoffs": [],
+      "log_sha256": "5647cdceffe51417905a086bb53b881f58471ee7f8dac58f4093958d8e3596c7"
+    },
+    {
+      "scenario": "G",
+      "repeat": 2,
+      "durable_seconds": 0.9102204999653623,
+      "handoffs": [],
+      "log_sha256": "c6a2d6825b19955368e44932d555334e425417d6b28590c63d2cadf327679bf5"
+    },
+    {
+      "scenario": "G",
+      "repeat": 3,
+      "durable_seconds": 1.1555164000019431,
+      "handoffs": [
+        "[IDG] handoff id=abf08244-dfdc-46e9-9852-9d15d330cb41 segment=7 start=5779528 end=5820423 bytes=40896 workers=1"
+      ],
+      "log_sha256": "352f7218d22004d2ce9dabcac72e0ac1893990e51cc395c58c0f8e75c8c34b26"
+    }
+  ],
+  "observation_limit": "Single-tool diagnostic cohort. One Python file reopened 40,896 bytes; the cohort alone cannot establish why that trial was slower.",
+  "reproduced_failure": "A valid response with 40 KiB left is held while peers finish. The previous handoff closes it and sends a new request. That request receives 403, turning a usable response into a failed download.",
+  "fix": "Skip cooperative handoff when at most 64 KiB remains, including a fresh check after buffered bytes are acknowledged. Ordinary inactivity/retry behavior remains active.",
+  "cli_fixture_source": "import hashlib, json, subprocess, threading, time\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nfrom pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\nOUT = ROOT / \"target/tiny-tail-cli-verification\"\nOUT.mkdir(exist_ok=False)\nDATA = hashlib.shake_256(b\"IDG tiny valid response tail v1\").digest(8 * 1024 * 1024 + 19)\nEXPECTED = hashlib.sha256(DATA).hexdigest()\nresults = []\nfor name, executable, success in [(\"before\", \"perf-idg-handoff-observation.exe\", False), (\"after\", \"perf-idg-tiny-tail-fixed.exe\", True)]:\n    seen = []; lock = threading.Lock(); sent = threading.Event(); release = threading.Event()\n    class Handler(BaseHTTPRequestHandler):\n        protocol_version = \"HTTP/1.1\"\n        def log_message(self, *args): pass\n        def do_GET(self):\n            start, end = map(int, self.headers[\"Range\"].removeprefix(\"bytes=\").split(\"-\"))\n            end = min(end, len(DATA) - 1)\n            with lock:\n                target = next((r for r in seen if r[\"start\"] == 2 * 1024 * 1024), None)\n                forbidden = target is not None and target[\"start\"] < start <= target[\"end\"]\n                seen.append({\"start\": start, \"end\": end, \"status\": 403 if forbidden else 206, \"if_range\": self.headers.get(\"If-Range\")})\n            self.send_response(403 if forbidden else 206)\n            self.send_header(\"Content-Length\", str(0 if forbidden else end - start + 1))\n            self.send_header(\"Connection\", \"close\")\n            if forbidden:\n                self.end_headers(); return\n            self.send_header(\"Content-Type\", \"application/octet-stream\")\n            self.send_header(\"Content-Range\", f\"bytes {start}-{end}/{len(DATA)}\")\n            self.send_header(\"ETag\", '\"fixed\"'); self.end_headers()\n            try:\n                if start == 2 * 1024 * 1024:\n                    cursor = end + 1 - 40 * 1024\n                    self.wfile.write(DATA[start:cursor]); self.wfile.flush(); sent.set()\n                    release.wait(5)\n                    self.wfile.write(DATA[cursor:end + 1])\n                else: self.wfile.write(DATA[start:end + 1])\n            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError): pass\n    server = ThreadingHTTPServer((\"127.0.0.1\", 0), Handler); server.daemon_threads = True\n    serving = threading.Thread(target=server.serve_forever, daemon=True); serving.start()\n    def release_tail():\n        if sent.wait(5): time.sleep(0.5)\n        release.set()\n    releasing = threading.Thread(target=release_tail, daemon=True); releasing.start()\n    destination = OUT / (name + \".bin\"); binary = ROOT / \"target\" / executable\n    try:\n        process = subprocess.run([str(binary), f\"http://127.0.0.1:{server.server_port}/fixture.bin\", str(destination), \"0\"], capture_output=True, text=True, encoding=\"utf-8\", errors=\"replace\", timeout=20)\n    finally:\n        release.set(); releasing.join(); server.shutdown(); server.server_close(); serving.join()\n    actual = hashlib.sha256(destination.read_bytes()).hexdigest() if destination.exists() else None\n    row = {\"name\":name, \"binary_sha256\":hashlib.sha256(binary.read_bytes()).hexdigest(), \"expected_success\":success, \"exit_code\":process.returncode, \"actual_size\":destination.stat().st_size if destination.exists() else None, \"actual_sha256\":actual, \"expected_size\":len(DATA), \"expected_sha256\":EXPECTED, \"requests\":seen, \"stdout\":process.stdout, \"stderr\":process.stderr}\n    assert (process.returncode == 0) == success, row\n    if success:\n        assert actual == EXPECTED and row[\"actual_size\"] == len(DATA), row\n        assert all(r[\"status\"] == 206 for r in seen), row\n    else:\n        assert \"403\" in process.stderr and any(r[\"status\"] == 403 for r in seen), row\n    row[\"verified\"] = True; results.append(row)\n(OUT / \"results.json\").write_text(json.dumps({\"fixture_sha256\":hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), \"results\":results}, indent=2) + \"\\n\", encoding=\"utf-8\")\nprint(json.dumps([{k:r[k] for k in [\"name\", \"expected_success\", \"exit_code\", \"actual_sha256\", \"verified\"]} for r in results], indent=2))\n",
+  "cli_verification": {
+    "fixture_sha256": "1da6f0289d2c8d25ed24cd20a8a839ae6fb4945a66124dc523170bba95153db4",
+    "results": [
+      {
+        "name": "before",
+        "binary_sha256": "4773e939522f5acaa4895d37f6b3f9f7419060de6201477ff0fe2d4a3541d49a",
+        "expected_success": false,
+        "exit_code": 1,
+        "actual_size": 8388627,
+        "actual_sha256": "d717b0d67a628f13baafd122ca32783a66458bc5be5d987b4d9d3a36408351d7",
+        "expected_size": 8388627,
+        "expected_sha256": "43638c31351eae7a1b3c909dc15f4f0e46e585e20dd4978277c3c2d451a4769a",
+        "requests": [
+          {
+            "start": 0,
+            "end": 2097151,
+            "status": 206,
+            "if_range": null
+          },
+          {
+            "start": 3145730,
+            "end": 3670018,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 2097152,
+            "end": 2621440,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 2621441,
+            "end": 3145729,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 4194308,
+            "end": 4718596,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 4718597,
+            "end": 5242885,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 5767175,
+            "end": 6291463,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 6291464,
+            "end": 6815752,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 6815753,
+            "end": 7340041,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 7340042,
+            "end": 7864330,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 7864331,
+            "end": 8388626,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 3670019,
+            "end": 4194307,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 5242886,
+            "end": 5767174,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 2580481,
+            "end": 2621440,
+            "status": 403,
+            "if_range": "\"fixed\""
+          }
+        ],
+        "stdout": "",
+        "stderr": "[IDG] starting download id=aa38b01a-86bc-4e23-ad11-0f234145bcec segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=2\n[IDG] handoff id=aa38b01a-86bc-4e23-ad11-0f234145bcec segment=1 start=2580481 end=2621440 bytes=40960 workers=1\nError: server returned HTTP 403 Forbidden\n\nCaused by:\n    server returned HTTP 403 Forbidden\n",
+        "verified": true
+      },
+      {
+        "name": "after",
+        "binary_sha256": "78dbf6528bdc5c4290f8b5cdfbdeb071fd6fd249a79400fa3a7b16a39e99fbb2",
+        "expected_success": true,
+        "exit_code": 0,
+        "actual_size": 8388627,
+        "actual_sha256": "43638c31351eae7a1b3c909dc15f4f0e46e585e20dd4978277c3c2d451a4769a",
+        "expected_size": 8388627,
+        "expected_sha256": "43638c31351eae7a1b3c909dc15f4f0e46e585e20dd4978277c3c2d451a4769a",
+        "requests": [
+          {
+            "start": 0,
+            "end": 2097151,
+            "status": 206,
+            "if_range": null
+          },
+          {
+            "start": 2097152,
+            "end": 2621440,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 4194308,
+            "end": 4718596,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 4718597,
+            "end": 5242885,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 5242886,
+            "end": 5767174,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 6815753,
+            "end": 7340041,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 7340042,
+            "end": 7864330,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 5767175,
+            "end": 6291463,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 3670019,
+            "end": 4194307,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 7864331,
+            "end": 8388626,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 6291464,
+            "end": 6815752,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 3145730,
+            "end": 3670018,
+            "status": 206,
+            "if_range": "\"fixed\""
+          },
+          {
+            "start": 2621441,
+            "end": 3145729,
+            "status": 206,
+            "if_range": "\"fixed\""
+          }
+        ],
+        "stdout": "{\"bytes\":8388627,\"connections\":4,\"path\":\"X:\\\\github projects\\\\IDG-internet-download-go\\\\target\\\\tiny-tail-cli-verification\\\\after.bin\",\"policy\":\"production\"}\n",
+        "stderr": "[IDG] starting download id=0570c95c-dce4-4ff2-8d92-34e786323bd0 segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=2\n[IDG] download complete id=0570c95c-dce4-4ff2-8d92-34e786323bd0 path=X:\\github projects\\IDG-internet-download-go\\target\\tiny-tail-cli-verification\\after.bin\n",
+        "verified": true
+      }
+    ]
+  },
+  "fixed_identity": {
+    "git_head": "bc1386beebafde2e5539843c7799bc474886c901",
+    "binary": "target\\perf-idg-tiny-tail-fixed.exe",
+    "binary_sha256": "78dbf6528bdc5c4290f8b5cdfbdeb071fd6fd249a79400fa3a7b16a39e99fbb2",
+    "source_sha256": {
+      "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+      "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+      "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+      "examples/idg-get.rs": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+      "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+      "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+      "src/download/engine.rs": "aaaae3c675ef7b7af5dad46dca56d83b6e5c87948fd05f6fb46330d81d5ad615",
+      "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+      "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+      "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+      "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+      "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+      "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+      "src/download/request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+      "src/download/segment.rs": "1453c571f4be39892316fd5f724e0b09a7e77995edf6dff0c140bd8e3d0d4773",
+      "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+      "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+    }
+  },
+  "logs": {
+    "target/perf-tiny-tail-reproduction.log": {
+      "sha256": "19ea90a124fe847c1b555f40fe3460bf425cb0cabba6bb3d36f6e6b35c29db03",
+      "tail": [
+        "[IDG] download complete id=053fa131-2093-4a21-9ddc-347bd8439c32 path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmpFQVxOc\\prefix.bin",
+        "[IDG] starting download id=663b22af-cb14-4e78-8f2b-b5ab4830fb71 segments=4 ranges=16 size=Some(8388608) protocol=HTTP/1.1 setup_ms=115",
+        "[IDG] handoff id=663b22af-cb14-4e78-8f2b-b5ab4830fb71 segment=4 start=2128915 end=2621439 bytes=492525 workers=1",
+        "[IDG] download complete id=663b22af-cb14-4e78-8f2b-b5ab4830fb71 path=C:\\Users\\3D\\AppData\\Local\\Temp\\.tmp5JFwo0\\prefix.bin",
+        "[IDG] starting download id=d67dc967-3732-4690-bd48-63f7c4e4d62c segments=4 ranges=13 size=Some(8388627) protocol=HTTP/1.1 setup_ms=15",
+        "[IDG] handoff id=d67dc967-3732-4690-bd48-63f7c4e4d62c segment=1 start=2580481 end=2621440 bytes=40960 workers=1",
+        "",
+        "thread 'download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity' (71460) panicked at src\\download\\engine.rs:1511:37:",
+        "Keep the valid nearly complete stream instead of reopening its tiny tail: server returned HTTP 403 Forbidden",
+        "",
+        "Caused by:",
+        "    server returned HTTP 403 Forbidden",
+        "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "test download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... FAILED",
+        "",
+        "failures:",
+        "",
+        "failures:",
+        "    download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity",
+        "",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 98 filtered out; finished in 4.28s",
+        "",
+        "error: test failed, to rerun pass `--bin IDG`"
+      ]
+    },
+    "target/perf-tiny-tail-fixed-x64-tests.log": {
+      "sha256": "79f504bd4ad89a29f08c04236dce556267c95f9d17b9a431c2b4904fcede1acc",
+      "tail": [
+        "test download::segment::tests::pause_releases_ranges_at_acknowledged_offsets_but_keeps_one_use_streams ... ok",
+        "test download::request::tests::redirects_release_old_origin_and_exclude_capacity_wait_from_network_time ... ok",
+        "test download::engine::regression_tests::range_handoff_preserves_validator_cancel_and_pause ... ok",
+        "test download::engine::regression_tests::range_download_pauses_resumes_and_preserves_exact_bytes ... ok",
+        "test download::engine::regression_tests::url_credentials_authenticate_probe_and_all_resolved_ranges ... ok",
+        "test download::engine::regression_tests::productive_reconnects_exceed_retry_budget_without_discarding_short_buffers ... ok",
+        "test server::tests::automatic_download_uses_32_ranges_and_falls_back_when_ranges_are_ignored ... ok",
+        "test download::media::tests::expired_media_url_reextracts_once_and_preserves_partial_output ... ok",
+        "test download::engine::regression_tests::authenticated_files_reuse_transport_without_reusing_each_others_headers ... ok",
+        "test download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... ok",
+        "test download::engine::regression_tests::concurrent_files_survive_servers_that_close_excess_tcp_connections ... ok",
+        "test download::segment::tests::idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits ... ok",
+        "",
+        "test result: ok. 90 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 7.56s",
+        "",
+        "     Running unittests src\\native_host.rs (target\\debug\\deps\\IDG_native-2a2662f1ff0c0c14.exe)",
+        "",
+        "running 2 tests",
+        "test update_install::tests::installer_preserves_directory_and_startup_choice_without_shell_parsing ... ok",
+        "test tests::frames_round_trip_and_reject_oversized_messages ... ok",
+        "",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        ""
+      ]
+    },
+    "target/perf-tiny-tail-fixed-x64-clippy.log": {
+      "sha256": "531db1e64723bfcc0480d2bea5b8af7c319b79029c8a968ef669e449db5cc1c5",
+      "tail": [
+        "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)",
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.87s"
+      ]
+    },
+    "target/perf-tiny-tail-idle-x64-tests.log": {
+      "sha256": "9667973e5aeb3908c28a150c68c0951dbaf0f7d5f3c2a698063f3d57bc4fc095",
+      "tail": [
+        "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.51s",
+        "     Running unittests src\\main.rs (target\\debug\\deps\\IDG-04d2efe13aafde34.exe)",
+        "",
+        "running 1 test",
+        "test download::segment::tests::idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits ... ok",
+        "",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 98 filtered out; finished in 7.52s",
+        ""
+      ]
+    },
+    "target/perf-tiny-tail-idle-x64-clippy.log": {
+      "sha256": "730d3eab1e0b46e580bf53e271a1d09bf1e51ca0eaab691aae2eb91450eab953",
+      "tail": [
+        "    Checking idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)",
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.31s"
+      ]
+    },
+    "target/perf-tiny-tail-fixed-x86-tests.log": {
+      "sha256": "fce0a6bf5029188a41b289ad8ac1152b6155774cbefd33d2f5e46c2173a5b2d6",
+      "tail": [
+        "test download::request::tests::redirects_release_old_origin_and_exclude_capacity_wait_from_network_time ... ok",
+        "test download::segment::tests::pause_releases_ranges_at_acknowledged_offsets_but_keeps_one_use_streams ... ok",
+        "test download::engine::regression_tests::range_download_pauses_resumes_and_preserves_exact_bytes ... ok",
+        "test download::engine::regression_tests::url_credentials_authenticate_probe_and_all_resolved_ranges ... ok",
+        "test download::engine::regression_tests::range_handoff_preserves_validator_cancel_and_pause ... ok",
+        "test download::engine::regression_tests::productive_reconnects_exceed_retry_budget_without_discarding_short_buffers ... ok",
+        "test download::media::tests::expired_media_url_reextracts_once_and_preserves_partial_output ... ok",
+        "test server::tests::automatic_download_uses_32_ranges_and_falls_back_when_ranges_are_ignored ... ok",
+        "test download::engine::regression_tests::authenticated_files_reuse_transport_without_reusing_each_others_headers ... ok",
+        "test download::engine::regression_tests::concurrent_files_survive_servers_that_close_excess_tcp_connections ... ok",
+        "test download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... ok",
+        "test download::segment::tests::idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits ... ok",
+        "",
+        "test result: ok. 90 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 7.59s",
+        "",
+        "     Running unittests src\\native_host.rs (target\\i686-pc-windows-msvc\\debug\\deps\\IDG_native-84acbc32972d3e86.exe)",
+        "",
+        "running 2 tests",
+        "test update_install::tests::installer_preserves_directory_and_startup_choice_without_shell_parsing ... ok",
+        "test tests::frames_round_trip_and_reject_oversized_messages ... ok",
+        "",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        ""
+      ]
+    },
+    "target/perf-tiny-tail-fixed-x86-clippy.log": {
+      "sha256": "7efc46b7cbe8e4b210e3831367da9a374d2778db75cabf82323bbb92030e4bb9",
+      "tail": [
+        "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)",
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.22s"
+      ]
+    }
+  },
+  "ci_before_tiny_tail_fix": {
+    "run": 42312360123,
+    "source": "533051fe7505e99308b774c698854aff143504cb",
+    "x64": "success",
+    "x86": "success",
+    "release": "skipped"
+  },
+  "limits": [
+    "The passing CI run predates this tiny-tail repair. Latest-head CI is separate.",
+    "Actual packaged GUI/tray/cold-start and new release artifact verification remain incomplete.",
+    "Public stable remains v1.6.7 f8cd699; this fix is not yet published."
+  ]
+}
