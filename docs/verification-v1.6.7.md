@@ -1,0 +1,14 @@
+# v1.6.7 source verification
+
+Engine candidate: 7cc7afe, including the URL-authentication fix e040620. These source results were recorded before publication. The final published-asset checks and build identity are recorded in [PR #3](https://github.com/Mustafa1p/IDG-internet-download-go/pull/3).
+
+- Windows x64/x86: 84 app tests plus two native-host tests pass per architecture, with nine external/tool-dependent tests explicitly ignored. Both architectures pass all-target clippy with warnings denied; formatting passes.
+- Real-socket regressions reproduce and fix password-only URL credentials, excess TCP reset/EOF caps, isolated-reset recovery, recovered capacity while another stream remains open, pending cancellation, malformed HTTP, waiting forms and ambiguous form connection loss. Exact file bytes and origin isolation are checked.
+- Source logs: target/perf-empty-user-auth-{reproduction,verification}.log, target/perf-tcp-cap-reproduction.log, target/perf-tcp-cap-single-reset-reproduction.log, target/perf-tcp-cap-form-head-reproduction.log and target/perf-tcp-adaptive-{x64,x86}-{tests,clippy}.log.
+- All 68 B/D comparison files verify. The two untraced batches give 12 trials per tool/scenario: median candidate/baseline throughput is 1602.98/1616.68 MiB/s on localhost and 41.98/41.75 with random drops. Mean completion times are 1.2787/1.2710 and 6.1492/6.1343 seconds. The first candidate-only traced batch is retained separately. Results do not establish a new speed gain.
+- CPU-time readings varied sharply for both programs. An independent process-cycle counter is recorded after timing and exit, with coverage in reports; cycles are not converted to elapsed seconds. The cycle batch measured similar counts for both engines. All 18 evidence-tooling regressions pass, including stable post-exit counters and invalid-handle failures.
+- Inline-future diagnostics rejected a proposed boxing change: admission state shrank, but enclosing request/engine state did not. The production change was reverted. See docs/performance-work.md and the transport-layout example.
+
+The prior v1.6.6 published packages, extension, updater and supplied YouTube URL were verified as recorded in verification-v1.6.6.md. New v1.6.7 packages require their own checksum, architecture, build-identity, packaged-host, extension and updater checks before release completion is reported.
+
+Packaged GUI, tray and cold-start checks remain incomplete because the Windows computer-use helper is unavailable. An existing development process was left running. Development preview checks from the previous release do not establish packaged release-window verification. Account/source-dependent live checks and universal all-computer compatibility are not claimed.

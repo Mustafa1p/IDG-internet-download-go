@@ -1,13 +1,13 @@
-IDG v1.6.6 - reliable concurrent downloads and scoped authentication
+IDG v1.6.7 - authenticated downloads and connection recovery
 
-- Recover stalled and interrupted range requests from disk-acknowledged offsets, keeping short buffers and partial files. Stop promptly on permanent authorization, range-validation and disk errors.
-- Share server capacity fairly between files. Pausing a resumable download frees connections for other files; one-use form exports keep their accepted stream without replaying the form.
-- Keep captured credentials on their source origin across redirects. Reuse connections across authenticated files without sharing their headers. Preserve form redirect methods and updater integrity checks.
-- Replace the redundant metadata round trip with one validated GET probe and queue bounded smaller ranges for available workers.
-- Expand real-socket and Windows regression coverage, retaining complete benchmark evidence and failures. Throughput varies by server and workload; no universal speed claim is made.
+- Fix password-only URL authentication: an empty username no longer causes data ranges to lose credentials after the initial probe. Preserve explicit authorization overrides and source-origin credential boundaries.
+- Queue downloads when a server repeatedly closes excess TCP connections without HTTP 429/503, rather than exhausting probes while another file occupies the server's connections.
+- Keep quick retries for isolated connection failures and test recovered capacity with at most one GET/HEAD trial at a time. One-use forms are neither replayed nor used to probe capacity.
+- Fix a queue wake-up case involving a waiting form. Preserve cancellation, validated byte offsets, origin isolation, metadata deadlines and bounded failure when no healthy peers remain.
+- Add real-socket coverage for reset/EOF caps, recovered capacity, malformed HTTP, queued cancellation and form safety. Benchmark reports retain independent CPU-cycle coverage and complete trial evidence.
 
-Includes the v1.6.5 fixes for the format/quality dialog, closed-tab background errors, YouTube homepage preview churn, and bounded video URL refresh after transient CDN failures.
+Includes the previous dialog, closed-tab, YouTube homepage, interrupted-transfer and updater fixes. Throughput varied across the tested workloads and runs; this update makes no universal speed or all-hardware claim.
 
-Install the matching desktop app and extension, then reload existing website tabs. This package's extension ID is blmjnmockbofpnipcniflmalfmiaolcj. The reported background/*.svg URLs reference omiebabagdcfedkhfmjlndcpocnafcpb, a different extension ID; this package contains no such SVG assets.
+Install the matching desktop app and extension, then reload website tabs. This package uses extension ID blmjnmockbofpnipcniflmalfmiaolcj and contains no background/*.svg assets. The reported omiebabagdcfedkhfmjlndcpocnafcpb ID should be checked for an old or conflicting installation.
 
-Persistent website refusals remain visible errors after bounded retries. Windows x64/x86 installers, portable packages, extension ZIP and SHA-256 checksums are included.
+Persistent source refusals remain visible errors. Windows x64/x86 installers, portable packages, extension ZIP and SHA-256 checksums are included.
