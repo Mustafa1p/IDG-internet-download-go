@@ -245,7 +245,7 @@ pub async fn start_download(
     // Each original replayable range may yield once. Replacement workers do
     // not yield again, avoiding repeated cancellation of a persistently slow
     // endpoint when no smaller useful work remains.
-    let mut handoffs = std::collections::HashMap::new();
+    let mut handoffs = Vec::with_capacity(range_count);
     let make_args = |seg_id, start, end, response, initial_permit, handoff| {
         let request = request.clone();
         let url = final_url.clone();
@@ -287,11 +287,9 @@ pub async fn start_download(
         tasks.spawn(async move { (seg_id, run_segment(args, MAX_RETRIES).await) });
     };
     for (seg_id, (start, end)) in segments.into_iter().enumerate() {
-        let handoff = (seg_count > 1 && probe_result.supports_multipart()).then(|| {
-            let flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
-            handoffs.insert(seg_id, (start, end, flag.clone()));
-            flag
-        });
+        let handoff = (seg_count > 1 && probe_result.supports_multipart())
+            .then(|| Arc::new(std::sync::atomic::AtomicBool::new(false)));
+        handoffs.push(handoff.as_ref().map(|flag| (start, end, flag.clone())));
         spawn(
             &mut tasks,
             make_args(
@@ -310,14 +308,31 @@ pub async fn start_download(
     while let Some(result) = tasks.join_next().await {
         let error = match result {
             Ok((seg_id, outcome)) => {
-                let owned_range = handoffs.remove(&seg_id);
+                let owned_range = handoffs.get_mut(seg_id).and_then(Option::take);
                 match outcome {
                     Ok(()) => {
-                        if tasks.len() == 1
-                            && bandwidth.rate() == 0
-                            && let Some((_, _, flag)) = handoffs.values().next()
-                        {
-                            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                        if !tasks.is_empty() && tasks.len() < seg_count && bandwidth.rate() == 0 {
+                            // Request at most one new handoff per idle slot.
+                            // Stable segment order avoids cancelling every peer
+                            // when one fast range frees the first local slot.
+                            let requested = handoffs
+                                .iter()
+                                .flatten()
+                                .filter(|(_, _, flag)| {
+                                    flag.load(std::sync::atomic::Ordering::Relaxed)
+                                })
+                                .count();
+                            let available = (seg_count - tasks.len()).saturating_sub(requested);
+                            for (_, _, flag) in handoffs
+                                .iter()
+                                .flatten()
+                                .filter(|(_, _, flag)| {
+                                    !flag.load(std::sync::atomic::Ordering::Relaxed)
+                                })
+                                .take(available)
+                            {
+                                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                            }
                         }
                         continue;
                     }
@@ -1344,6 +1359,8 @@ mod regression_tests {
             (0, 8 * 1024 * 1024 + 19, false, false, 4),
             (4, 8 * 1024 * 1024, false, false, 4),
             (0, 8 * 1024 * 1024 + 19, false, false, 5),
+            (0, 8 * 1024 * 1024, false, false, 6),
+            (0, 8 * 1024 * 1024 + 19, false, false, 7),
         ] {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let url = format!("http://{}/file", listener.local_addr().unwrap());
@@ -1382,7 +1399,7 @@ mod regression_tests {
                             ranges.push((start, end, text.contains(r#"if-range: "fixed""#)));
                             first
                         };
-                        if action == 5
+                        if (action == 5 || action == 7)
                             && start > 2 * 1024 * 1024
                             && observed
                                 .lock()
@@ -1393,14 +1410,21 @@ mod regression_tests {
                             socket.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
                             return;
                         }
+                        if action == 7
+                            && start == 2 * 1024 * 1024
+                            && released.wait_for(|value| *value).await.is_err()
+                        {
+                            return;
+                        }
                         let header = format!(
                             "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{end}/{length}\r\nETag: \"fixed\"\r\nConnection: close\r\n\r\n",
                             end - start + 1
                         );
                         socket.write_all(header.as_bytes()).await.unwrap();
                         let mut body_start = start;
-                        let stalled =
-                            (first && action == 3) || (start == 2 * 1024 * 1024 && action >= 4);
+                        let stalled = (first && action == 3)
+                            || (start == 2 * 1024 * 1024 && action >= 4)
+                            || (start == 4 * 1024 * 1024 && action == 6);
                         if stalled {
                             body_start = if action == 5 {
                                 end + 1 - 40 * 1024
@@ -1411,7 +1435,7 @@ mod regression_tests {
                                 (start..body_start).map(|n| (n % 251) as u8).collect();
                             socket.write_all(&prefix).await.unwrap();
                         }
-                        if !stalled && (action == 3 || action == 4) {
+                        if !stalled && (action == 3 || action == 4 || action == 6) {
                             tokio::time::sleep(Duration::from_millis(100)).await;
                         }
                         while !*released.borrow() && (stalled || action < 3) {
@@ -1493,23 +1517,36 @@ mod regression_tests {
                 }
                 release.send(true).unwrap();
             }
-            if action == 5 {
+            if action == 5 || action == 7 {
                 tokio::time::timeout(Duration::from_secs(2), async {
-                    while downloads.lock().unwrap()[0].downloaded_bytes < length - 40 * 1024
-                        && !task.is_finished()
-                    {
+                    loop {
+                        let pending = if action == 5 {
+                            40 * 1024
+                        } else {
+                            ranges
+                                .lock()
+                                .unwrap()
+                                .iter()
+                                .find(|r| r.0 == 2 * 1024 * 1024)
+                                .map_or(0, |r| r.1 - r.0 + 1)
+                        };
+                        if downloads.lock().unwrap()[0].downloaded_bytes >= length - pending
+                            || task.is_finished()
+                        {
+                            break;
+                        }
                         tokio::time::sleep(Duration::from_millis(10)).await;
                     }
                 })
                 .await
                 .unwrap();
-                // Let idle workers consider handoff while a nearly complete
-                // valid response remains available. Reopening it is refused.
+                // Let idle workers consider handoff while the original request
+                // is still valid. Reopening its remaining bytes is refused.
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 let prematurely_finished = task.is_finished();
                 release.send(true).unwrap();
                 task.await.unwrap().expect(
-                    "Keep the valid nearly complete stream instead of reopening its tiny tail",
+                    "Keep the valid original request instead of reopening it speculatively",
                 );
                 assert!(!prematurely_finished);
             } else if action >= 3 {
@@ -1540,20 +1577,26 @@ mod regression_tests {
             assert_eq!(item.downloaded_bytes, length);
             let mut actual = ranges.lock().unwrap().clone();
             assert_eq!(actual[0].0, 0);
-            if action == 3 || action == 4 {
-                let stalled_start = if action == 3 { 0 } else { 2 * 1024 * 1024 };
-                let cursor = stalled_start + 31 * 1024 + 19;
-                actual
-                    .iter_mut()
-                    .find(|range| range.0 == stalled_start)
-                    .unwrap()
-                    .1 = cursor - 1;
-                assert!(
+            if action == 3 || action == 4 || action == 6 {
+                let stalled_starts = match action {
+                    3 => vec![0],
+                    6 => vec![2 * 1024 * 1024, 4 * 1024 * 1024],
+                    _ => vec![2 * 1024 * 1024],
+                };
+                for stalled_start in stalled_starts {
+                    let cursor = stalled_start + 31 * 1024 + 19;
                     actual
-                        .iter()
-                        .any(|(start, _, validator)| *start == cursor && *validator),
-                    "Handoff must start after the acknowledged short buffer and retain If-Range"
-                );
+                        .iter_mut()
+                        .find(|range| range.0 == stalled_start)
+                        .unwrap()
+                        .1 = cursor - 1;
+                    assert!(
+                        actual
+                            .iter()
+                            .any(|(start, _, validator)| *start == cursor && *validator),
+                        "Handoff must start after the acknowledged short buffer and retain If-Range"
+                    );
+                }
             }
             if requested > 1 {
                 assert_eq!(

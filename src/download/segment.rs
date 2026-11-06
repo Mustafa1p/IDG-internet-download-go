@@ -275,6 +275,7 @@ async fn download_range(
         Some(permit) => permit,
         None => args.gate.acquire(cancel).await?,
     };
+    let mut handoff_grace = Duration::from_millis(50);
     let LeasedResponse {
         response: resp,
         permit: _host_permit,
@@ -290,7 +291,7 @@ async fn download_range(
                     ..Control::default()
                 },
             );
-            let result = if args.handoff.is_some() {
+            let result = if args.handoff.is_some() && *cursor > args.start {
                 tokio::select! {
                     result = sending => result,
                     remaining = wait_for_handoff(args, *cursor) => return Err(remaining.into()),
@@ -298,15 +299,21 @@ async fn download_range(
             } else {
                 sending.await
             };
-            result
-                .map_err(|error| {
-                    if error.is::<InvalidRedirect>() {
-                        terminal(error)
-                    } else {
-                        error
-                    }
-                })?
-                .leased
+            let result = result.map_err(|error| {
+                if error.is::<InvalidRedirect>() {
+                    terminal(error)
+                } else {
+                    error
+                }
+            })?;
+            if let Some(remaining) = result.remaining_network_time {
+                // Capacity queues are excluded from this observed request cost.
+                // Give a valid stream at least that long to finish naturally.
+                handoff_grace = idle_timeout
+                    .saturating_sub(remaining)
+                    .clamp(handoff_grace, Duration::from_secs(1));
+            }
+            result.leased
         }
     };
     if release_on_pause && pause.load(Ordering::Relaxed) {
@@ -381,6 +388,7 @@ async fn download_range(
     let mut stream = resp.bytes_stream();
     let mut buffered = Vec::with_capacity(1024 * 1024);
     let mut last_write = std::time::Instant::now();
+    let mut handoff_seen = None;
     last_network = tokio::time::Instant::now();
 
     loop {
@@ -395,13 +403,18 @@ async fn download_range(
                     write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
                     return Err(PausedRange.into());
                 }
-                if pending_handoff(args, *cursor).is_some() {
-                    write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
-                    // Buffered bytes may leave only a tiny tail. Keep its valid
-                    // response rather than adding another request round trip.
-                    if let Some(remaining) = pending_handoff(args, *cursor) {
-                        return Err(remaining.into());
+                if handoff_requested(args) {
+                    let seen = handoff_seen.get_or_insert_with(std::time::Instant::now);
+                    if seen.elapsed() >= handoff_grace {
+                        write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                        // Buffered bytes may leave only a tiny tail. Keep its
+                        // valid response instead of opening another request.
+                        if let Some(remaining) = pending_handoff(args, *cursor) {
+                            return Err(remaining.into());
+                        }
                     }
+                } else {
+                    handoff_seen = None;
                 }
                 if network_stalled(&mut last_network, pause, idle_timeout) {
                     // Resume only after every validated short buffer is written.
@@ -510,15 +523,23 @@ async fn download_range(
     Ok(())
 }
 
+fn handoff_requested(args: &SegmentArgs) -> bool {
+    args.handoff
+        .as_ref()
+        .is_some_and(|flag| flag.load(Ordering::Relaxed))
+        && args.bandwidth.rate() == 0
+}
+
 fn pending_handoff(args: &SegmentArgs, cursor: u64) -> Option<YieldedRange> {
-    let flag = args.handoff.as_ref()?;
     let end = args.end?;
     // At most 64 KiB offers little work to redistribute. Normal inactivity
     // recovery still applies if this valid response actually stalls.
-    (end.saturating_sub(cursor).saturating_add(1) > 64 * 1024
-        && flag.load(Ordering::Relaxed)
-        && args.bandwidth.rate() == 0)
-        .then_some(YieldedRange { start: cursor, end })
+    // A peer finishing sooner is not evidence that an initial handshake is
+    // stalled. Require acknowledged data before replacing an active request.
+    (cursor > args.start
+        && end.saturating_sub(cursor).saturating_add(1) > 64 * 1024
+        && handoff_requested(args))
+    .then_some(YieldedRange { start: cursor, end })
 }
 
 async fn wait_for_handoff(args: &SegmentArgs, cursor: u64) -> YieldedRange {
