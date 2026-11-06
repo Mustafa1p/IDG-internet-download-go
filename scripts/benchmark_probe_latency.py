@@ -33,12 +33,15 @@ def main():
             or not 0 <= args.connections <= 32
             or any(not math.isfinite(value) or value < 0 for value in rates)):
         raise ValueError("Use a new output file, positive repeats/size, 0..32 connections and finite nonnegative delays/rates")
-    CONTENT = bytes(range(256)) * (args.size_kib * 4)
+    # A short repeating pattern can hide an offset error by a whole pattern
+    # length. Generate deterministic nonperiodic bytes outside the timed region.
+    CONTENT = hashlib.shake_256(b"IDG latency fixture v2").digest(args.size_kib * 1024)
     EXPECTED = hashlib.sha256(CONTENT).hexdigest()
     work = args.output.parent / (args.output.stem + "-files")
     work.mkdir(parents=True)
     result = dict(configuration={key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
                   fixture_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                  content_generator="SHAKE256(IDG latency fixture v2)",
                   latency_ms=args.latency_ms, size=len(CONTENT), expected_sha256=EXPECTED,
                   binaries={name: hashlib.sha256(path.read_bytes()).hexdigest()
                             for name, path in [("baseline", args.baseline), ("candidate", args.candidate)]}, runs=[])
@@ -50,6 +53,13 @@ def main():
 
             class Handler(BaseHTTPRequestHandler):
                 protocol_version = "HTTP/1.1"
+
+                def handle(self):
+                    try:
+                        super().handle()
+                    except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                        # A client can close an idle keep-alive connection too.
+                        self.close_connection = True
 
                 def reply(self, head=False):
                     with lock:
@@ -69,14 +79,19 @@ def main():
                         self.send_header("Content-Range", f"bytes {start}-{end}/{len(CONTENT)}")
                     self.end_headers()
                     if not head:
-                        rate = args.first_range_mib if args.first_range_mib and start == 0 and end > 0 else args.per_connection_mib
-                        if rate:
-                            for offset in range(start, end + 1, 32768):
-                                data = CONTENT[offset:min(offset + 32768, end + 1)]
-                                time.sleep(len(data) / (rate * 1024 * 1024))
-                                self.wfile.write(data)
-                        else:
-                            self.wfile.write(CONTENT[start:end + 1])
+                        try:
+                            rate = args.first_range_mib if args.first_range_mib and start == 0 and end > 0 else args.per_connection_mib
+                            if rate:
+                                for offset in range(start, end + 1, 32768):
+                                    data = CONTENT[offset:min(offset + 32768, end + 1)]
+                                    time.sleep(len(data) / (rate * 1024 * 1024))
+                                    self.wfile.write(data)
+                            else:
+                                self.wfile.write(CONTENT[start:end + 1])
+                        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                            # A cooperative handoff intentionally closes its old
+                            # response. Client success still requires exit/size/hash.
+                            self.close_connection = True
 
                 def do_HEAD(self):
                     self.reply(head=True)

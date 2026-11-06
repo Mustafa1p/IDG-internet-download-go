@@ -55,25 +55,6 @@ pub async fn start_download(
     downloads: Downloads,
     id: String,
 ) -> Result<()> {
-    start_download_impl(client, downloads, id, false).await
-}
-
-/// Experimental initial-range reuse, kept separate until runtime comparisons pass.
-#[allow(dead_code)]
-pub async fn start_download_with_initial_range(
-    client: Arc<reqwest::Client>,
-    downloads: Downloads,
-    id: String,
-) -> Result<()> {
-    start_download_impl(client, downloads, id, true).await
-}
-
-async fn start_download_impl(
-    client: Arc<reqwest::Client>,
-    downloads: Downloads,
-    id: String,
-    reuse: bool,
-) -> Result<()> {
     // ── Read the configuration from shared state ─────────────────────────────
     let (url, save_path, num_segments, cancel, pause, headers, post_data, bandwidth) = {
         let guard = downloads
@@ -117,7 +98,7 @@ async fn start_download_impl(
             // prefix cannot be larger than an evenly divided automatic range.
             // Explicit multi-connection counts can request much smaller pieces;
             // retaining 2 MiB there regressed capped-server completion time.
-            None if reuse && num_segments <= 1 => {
+            None if num_segments <= 1 => {
                 super::probe::probe_with_initial_range(&request, &url).await
             }
             None => probe(&request, &url).await,
@@ -237,7 +218,12 @@ async fn start_download_impl(
     // The retained response already occupies a server connection. Reserve its
     // local slot before spawning siblings so they cannot oversubscribe N.
     let mut initial_permit = if probe_result.initial_range_end.is_some() {
-        Some(gate.acquire(&cancel).await?)
+        let reserved = gate.acquire(&cancel).await;
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            with_item(&downloads, &id, |item| item.status = Status::Cancelled);
+            return Ok(());
+        }
+        Some(reserved?)
     } else {
         None
     };
@@ -256,7 +242,10 @@ async fn start_download_impl(
     let acknowledged = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let mut initial_response = probe_result.response.take();
     let mut tasks = tokio::task::JoinSet::new();
-    for (seg_id, (start, end)) in segments.into_iter().enumerate() {
+    let initial_handoff = (probe_result.initial_range_end.is_some() && seg_count > 1)
+        .then(|| Arc::new(std::sync::atomic::AtomicBool::new(false)));
+    let mut initial_pending = initial_handoff.is_some();
+    let make_args = |seg_id, start, end, response, initial_permit, handoff| {
         let request = request.clone();
         let url = final_url.clone();
         let file = file.clone();
@@ -266,13 +255,14 @@ async fn start_download_impl(
         let acknowledged = acknowledged.clone();
         let id = id.clone();
 
-        let args = SegmentArgs {
-            initial_permit: initial_permit.take(),
+        SegmentArgs {
+            handoff,
+            initial_permit,
             gate: gate.clone(),
             if_range: probe_result.if_range.clone(),
             total_size: probe_result.content_length,
             bandwidth: bandwidth.clone(),
-            response: initial_response.take(),
+            response,
             request,
             id: seg_id,
             url,
@@ -289,16 +279,85 @@ async fn start_download_impl(
                 acknowledged.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
                 with_item(&downloads, &id, |item| item.record_progress(bytes));
             }),
-        };
-
-        tasks.spawn(async move { run_segment(args, MAX_RETRIES).await });
+        }
+    };
+    let spawn = |tasks: &mut tokio::task::JoinSet<(usize, Result<()>)>, args: SegmentArgs| {
+        let seg_id = args.id;
+        tasks.spawn(async move { (seg_id, run_segment(args, MAX_RETRIES).await) });
+    };
+    for (seg_id, (start, end)) in segments.into_iter().enumerate() {
+        spawn(
+            &mut tasks,
+            make_args(
+                seg_id,
+                start,
+                end,
+                initial_response.take(),
+                initial_permit.take(),
+                if seg_id == 0 {
+                    initial_handoff.clone()
+                } else {
+                    None
+                },
+            ),
+        );
     }
+    let mut next_id = range_count;
 
-    // ── Step 5 & 6: Wait and finalise ─────────────────────────────────────────
+    // Wait for workers and redistribute only a cooperatively yielded remainder.
     while let Some(result) = tasks.join_next().await {
         let error = match result {
-            Ok(Ok(())) => continue,
-            Ok(Err(error)) => error,
+            Ok((seg_id, outcome)) => {
+                if seg_id == 0 {
+                    initial_pending = false;
+                }
+                match outcome {
+                    Ok(()) => {
+                        if initial_pending && tasks.len() == 1 && bandwidth.rate() == 0 {
+                            initial_handoff
+                                .as_ref()
+                                .unwrap()
+                                .store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        continue;
+                    }
+                    Err(error) if error.is::<super::segment::YieldedRange>() => {
+                        let remaining = error
+                            .downcast_ref::<super::segment::YieldedRange>()
+                            .unwrap();
+                        if seg_id == 0
+                            && Some(remaining.end) == probe_result.initial_range_end
+                            && remaining.start <= remaining.end.saturating_add(1)
+                        {
+                            if !cancel.load(std::sync::atomic::Ordering::Relaxed)
+                                && remaining.start <= remaining.end
+                            {
+                                let length = remaining.end - remaining.start + 1;
+                                let count =
+                                    length.div_ceil(MIN_RANGE_BYTES).clamp(1, seg_count as u64)
+                                        as usize;
+                                for (start, end) in build_segments(count, Some(length)) {
+                                    spawn(
+                                        &mut tasks,
+                                        make_args(
+                                            next_id,
+                                            start + remaining.start,
+                                            end + remaining.start,
+                                            None,
+                                            None,
+                                            None,
+                                        ),
+                                    );
+                                    next_id += 1;
+                                }
+                            }
+                            continue;
+                        }
+                        anyhow::anyhow!("Invalid retained-range handoff")
+                    }
+                    Err(error) => error,
+                }
+            }
             Err(error) => anyhow::Error::new(error).context("segment task panicked"),
         };
         // Own and drain all network workers instead of leaving detached
@@ -578,7 +637,9 @@ mod regression_tests {
                     (0..SIZE).map(|n| (n % 251) as u8).collect::<Vec<_>>()
                 );
             }
-            assert_eq!(requests.load(Ordering::Relaxed), 4);
+            // Each small single-stream file is now its own retained response;
+            // the two different credential sets must still share only transport.
+            assert_eq!(requests.load(Ordering::Relaxed), 2);
             assert_eq!(accepted.load(Ordering::Relaxed), if shared { 1 } else { 2 });
             server.abort();
         }
@@ -1258,19 +1319,20 @@ mod regression_tests {
             (0, 2 * 1024 * 1024, false, false, 0),
             (0, 2 * 1024 * 1024 + 1, false, false, 0),
             (0, 8 * 1024 * 1024 + 19, false, true, 0),
-            (0, 8 * 1024 * 1024 + 19, true, false, 0),
+            (1, 8 * 1024 * 1024 + 19, true, false, 0),
             (0, 8 * 1024 * 1024 + 19, false, true, 1),
             (0, 8 * 1024 * 1024 + 19, false, true, 2),
             (1, 8 * 1024 * 1024 + 19, false, false, 0),
             (4, 2 * 1024 * 1024, false, false, 0),
             (4, 4 * 1024 * 1024, false, false, 0),
+            (0, 8 * 1024 * 1024 + 19, false, false, 3),
         ] {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let url = format!("http://{}/file", listener.local_addr().unwrap());
             let budget = super::super::gate::HostBudget::for_url(&url);
             let ranges = Arc::new(std::sync::Mutex::new(Vec::new()));
             let observed = ranges.clone();
-            let (release, released) = tokio::sync::watch::channel(!hold);
+            let (release, released) = tokio::sync::watch::channel(!hold && action != 3);
             let server = tokio::spawn(async move {
                 loop {
                     let (mut socket, _) = listener.accept().await.unwrap();
@@ -1307,7 +1369,17 @@ mod regression_tests {
                             end - start + 1
                         );
                         socket.write_all(header.as_bytes()).await.unwrap();
-                        while !*released.borrow() {
+                        let mut body_start = start;
+                        if first && action == 3 {
+                            body_start = 31 * 1024 + 19;
+                            let prefix: Vec<u8> =
+                                (0..body_start).map(|n| (n % 251) as u8).collect();
+                            socket.write_all(&prefix).await.unwrap();
+                        }
+                        if !first && action == 3 {
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                        }
+                        while !*released.borrow() && (first || action != 3) {
                             if released.changed().await.is_err() {
                                 return;
                             }
@@ -1317,7 +1389,7 @@ mod regression_tests {
                         } else {
                             end
                         };
-                        let bytes: Vec<u8> = (start..=stop).map(|n| (n % 251) as u8).collect();
+                        let bytes: Vec<u8> = (body_start..=stop).map(|n| (n % 251) as u8).collect();
                         let _ = socket.write_all(&bytes).await;
                         if first && interrupt {
                             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1333,7 +1405,7 @@ mod regression_tests {
             let id = item.id.clone();
             let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
             let state = downloads.clone();
-            let task = tokio::spawn(start_download_with_initial_range(
+            let mut task = tokio::spawn(start_download(
                 Arc::new(super::super::http_client().unwrap()),
                 state,
                 id,
@@ -1386,11 +1458,25 @@ mod regression_tests {
                 }
                 release.send(true).unwrap();
             }
-            tokio::time::timeout(Duration::from_secs(5), task)
-                .await
-                .unwrap()
-                .unwrap()
-                .unwrap();
+            if action == 3 {
+                let completed = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
+                release.send(true).unwrap();
+                match completed {
+                    Ok(result) => result.unwrap().unwrap(),
+                    Err(_) => {
+                        task.await.unwrap().unwrap();
+                        panic!(
+                            "Idle workers must finish the retained range before its stalled stream is released"
+                        );
+                    }
+                }
+            } else {
+                tokio::time::timeout(Duration::from_secs(5), task)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+            }
             assert_eq!(
                 std::fs::read(output).unwrap(),
                 (0..length).map(|n| (n % 251) as u8).collect::<Vec<_>>()
@@ -1400,6 +1486,15 @@ mod regression_tests {
             assert_eq!(item.downloaded_bytes, length);
             let mut actual = ranges.lock().unwrap().clone();
             assert_eq!(actual[0].0, 0);
+            if action == 3 {
+                actual[0].1 = 31 * 1024 + 19 - 1;
+                assert!(
+                    actual
+                        .iter()
+                        .any(|(start, _, validator)| *start == 31 * 1024 + 19 && *validator),
+                    "Handoff must start after the acknowledged short buffer and retain If-Range"
+                );
+            }
             if requested > 1 {
                 assert_eq!(
                     actual[0],
@@ -1437,6 +1532,186 @@ mod regression_tests {
                 );
                 assert_eq!(item.num_segments, 1);
             }
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn initial_handoff_preserves_validator_cancel_and_pause() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        #[derive(Clone, Copy, Debug)]
+        enum Mode {
+            Changed,
+            Cancel,
+            Pause,
+        }
+        const LENGTH: u64 = 8 * 1024 * 1024 + 19;
+        const PREFIX: u64 = 2 * 1024 * 1024;
+        for mode in [Mode::Changed, Mode::Cancel, Mode::Pause] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file", listener.local_addr().unwrap());
+            let budget = super::super::gate::HostBudget::for_url(&url);
+            let ranges = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let observed = ranges.clone();
+            let (release_initial, initial_released) = tokio::sync::watch::channel(false);
+            let (release_remaining, remaining_released) = tokio::sync::watch::channel(false);
+            let server = tokio::spawn(async move {
+                loop {
+                    let (mut socket, _) = listener.accept().await.unwrap();
+                    let observed = observed.clone();
+                    let mut initial_released = initial_released.clone();
+                    let mut remaining_released = remaining_released.clone();
+                    tokio::spawn(async move {
+                        let mut request = Vec::new();
+                        loop {
+                            let mut byte = [0];
+                            if socket.read(&mut byte).await.unwrap_or(0) == 0 {
+                                return;
+                            }
+                            request.push(byte[0]);
+                            if request.ends_with(b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        let request = String::from_utf8(request).unwrap();
+                        let (start, end) = request
+                            .lines()
+                            .find_map(|line| line.strip_prefix("range: bytes="))
+                            .unwrap()
+                            .split_once('-')
+                            .unwrap();
+                        let start: u64 = start.parse().unwrap();
+                        let end = end.parse::<u64>().unwrap().min(LENGTH - 1);
+                        let first = {
+                            let mut ranges = observed.lock().unwrap();
+                            let first = ranges.is_empty();
+                            ranges.push((start, end, request.contains(r#"if-range: "fixed""#)));
+                            first
+                        };
+                        let handoff = !first && start < PREFIX;
+                        let etag = if handoff && matches!(mode, Mode::Changed) {
+                            "changed"
+                        } else {
+                            "fixed"
+                        };
+                        let header = format!(
+                            "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{end}/{LENGTH}\r\nETag: \"{etag}\"\r\nConnection: close\r\n\r\n",
+                            end - start + 1
+                        );
+                        if socket.write_all(header.as_bytes()).await.is_err() {
+                            return;
+                        }
+                        let mut body_start = start;
+                        if first {
+                            body_start = 31 * 1024 + 19;
+                            let bytes: Vec<u8> = (0..body_start).map(|n| (n % 251) as u8).collect();
+                            if socket.write_all(&bytes).await.is_err() {
+                                return;
+                            }
+                            if initial_released.wait_for(|value| *value).await.is_err() {
+                                return;
+                            }
+                        } else if handoff
+                            && !matches!(mode, Mode::Changed)
+                            && remaining_released.wait_for(|value| *value).await.is_err()
+                        {
+                            return;
+                        }
+                        let bytes: Vec<u8> = (body_start..=end).map(|n| (n % 251) as u8).collect();
+                        let _ = socket.write_all(&bytes).await;
+                    });
+                }
+            });
+            let directory = tempfile::tempdir().unwrap();
+            let output = directory.path().join("handoff.bin");
+            let item = crate::download::types::DownloadItem::new(url, output.clone(), 0);
+            let paused = item.pause_flag.clone();
+            let cancelled = item.cancel_flag.clone();
+            let id = item.id.clone();
+            let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+            let task = tokio::spawn(start_download(
+                Arc::new(super::super::http_client().unwrap()),
+                downloads.clone(),
+                id,
+            ));
+            if !matches!(mode, Mode::Changed) {
+                tokio::time::timeout(Duration::from_secs(2), async {
+                    while !ranges
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|(start, _, validator)| *start < PREFIX && *validator)
+                    {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .expect("A real handoff request must arrive before manipulating its state");
+                if matches!(mode, Mode::Cancel) {
+                    cancelled.store(true, Ordering::Relaxed);
+                } else {
+                    paused.store(true, Ordering::Relaxed);
+                    tokio::time::timeout(Duration::from_secs(1), async {
+                        while budget.counts().0 != 0 {
+                            tokio::time::sleep(Duration::from_millis(10)).await;
+                        }
+                    })
+                    .await
+                    .unwrap();
+                    let sent = ranges.lock().unwrap().len();
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    assert_eq!(
+                        ranges.lock().unwrap().len(),
+                        sent,
+                        "Paused handoff workers cannot send another request"
+                    );
+                    release_remaining.send(true).unwrap();
+                    paused.store(false, Ordering::Relaxed);
+                }
+            }
+            let result = tokio::time::timeout(Duration::from_secs(2), task)
+                .await
+                .unwrap()
+                .unwrap();
+            release_initial.send(true).unwrap();
+            release_remaining.send(true).unwrap();
+            assert_eq!(budget.counts().0, 0, "{mode:?} must release all leases");
+            let item = downloads.lock().unwrap()[0].clone();
+            match mode {
+                Mode::Changed => {
+                    assert!(result.unwrap_err().to_string().contains("file changed"));
+                    assert_ne!(item.status, Status::Completed);
+                }
+                Mode::Cancel => {
+                    result.unwrap();
+                    assert_eq!(item.status, Status::Cancelled);
+                    assert!(item.downloaded_bytes < LENGTH);
+                    let sent = ranges.lock().unwrap().len();
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    assert_eq!(
+                        ranges.lock().unwrap().len(),
+                        sent,
+                        "Cancelled handoff workers cannot remain detached"
+                    );
+                }
+                Mode::Pause => {
+                    result.unwrap();
+                    assert_eq!(item.status, Status::Completed);
+                    assert_eq!(item.downloaded_bytes, LENGTH);
+                    assert_eq!(
+                        std::fs::read(output).unwrap(),
+                        (0..LENGTH).map(|n| (n % 251) as u8).collect::<Vec<_>>()
+                    );
+                }
+            }
+            assert!(
+                ranges
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .skip(1)
+                    .all(|(_, _, validator)| *validator)
+            );
             server.abort();
         }
     }
@@ -2027,7 +2302,9 @@ mod regression_tests {
             let item = crate::download::types::DownloadItem::new(
                 url,
                 directory.path().join("file.zip"),
-                1,
+                // Force separate metadata/data requests to exercise a change
+                // between requests; a complete retained response cannot change.
+                4,
             );
             let id = item.id.clone();
             let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
@@ -2064,7 +2341,9 @@ mod regression_tests {
             .unwrap()
             .split_once('-')
             .unwrap();
-        let (start, end): (usize, usize) = (start.parse().unwrap(), end.parse().unwrap());
+        let start: usize = start.parse().unwrap();
+        // A bounded HTTP range may legally extend beyond EOF.
+        let end = end.parse::<usize>().unwrap().min(SIZE - 1);
         result.insert(
             "content-length",
             (end - start + 1).to_string().parse().unwrap(),
@@ -2151,6 +2430,7 @@ mod regression_tests {
     #[tokio::test]
     async fn cancel_while_paused_exits_without_reporting_completion_or_deleting_file() {
         let (url, source) = source().await;
+        let budget = super::super::gate::HostBudget::for_url(&url);
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("cancelled.bin");
         let item = crate::download::types::DownloadItem::new(url, path.clone(), 1);
@@ -2184,6 +2464,11 @@ mod regression_tests {
         assert_eq!(item.downloaded_bytes, 0);
         assert!(item.completed_at.is_none());
         assert!(path.exists(), "cancelling must not delete downloaded files");
+        assert_eq!(
+            budget.counts().0,
+            0,
+            "Early cancellation must release the retained response"
+        );
         source.abort();
     }
     #[tokio::test]

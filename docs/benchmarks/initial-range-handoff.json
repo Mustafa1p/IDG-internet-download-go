@@ -1,0 +1,232 @@
+{
+  "status": "unreleased source candidate; current published version remains v1.6.7 f8cd699",
+  "base_revision": "dc621c68a97f1828c4590c944ccc545a735de61c",
+  "source_sha256": {
+    "src/download/engine.rs": "799d7570ba5f5e910e5226d773e543c7ba549331549a6a5881edbad85acc4f86",
+    "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+    "src/download/request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+    "src/download/segment.rs": "ff7a796398d69d62d0b43730999b7805b3a4c0f21ebeba4dc80b507459671c51",
+    "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+    "examples/idg-get.rs": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed"
+  },
+  "candidate_sha256": "0f5b3c955b3b9c63babc5735ca23ed526528a3479f1056ead23599608602202a",
+  "baseline_sha256": "e5db6bb888201cf85c0e8d7fff38ac3db02613405414d557f2bcb38c8b8aac19",
+  "verification": {
+    "app_tests_per_architecture": 90,
+    "native_tests_per_architecture": 2,
+    "ignored_external_tests_per_architecture": 9,
+    "clippy": "both architectures pass with warnings denied",
+    "evidence_tool_tests": 20
+  },
+  "gzip": [
+    {
+      "tool": "baseline",
+      "command": [
+        "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-f8cd699.exe",
+        "http://127.0.0.1:51738/download.bin",
+        "X:\\github projects\\IDG-internet-download-go\\target\\perf-gzip-prefix-refined-verification\\baseline\\download.bin",
+        "0"
+      ],
+      "exit_code": 0,
+      "actual_size": 3881,
+      "expected_size": 3881,
+      "actual_sha256": "7e9f92663734decf682427924519643fc3b7d2dbd0f091e0f267baacb6080669",
+      "expected_sha256": "7e9f92663734decf682427924519643fc3b7d2dbd0f091e0f267baacb6080669",
+      "verified": true
+    },
+    {
+      "tool": "candidate",
+      "command": [
+        "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-handoff-refined.exe",
+        "http://127.0.0.1:51747/download.bin",
+        "X:\\github projects\\IDG-internet-download-go\\target\\perf-gzip-prefix-refined-verification\\candidate\\download.bin",
+        "0"
+      ],
+      "exit_code": 0,
+      "actual_size": 3881,
+      "expected_size": 3881,
+      "actual_sha256": "7e9f92663734decf682427924519643fc3b7d2dbd0f091e0f267baacb6080669",
+      "expected_sha256": "7e9f92663734decf682427924519643fc3b7d2dbd0f091e0f267baacb6080669",
+      "verified": true
+    }
+  ],
+  "short_range_limits": [
+    {
+      "tool": "baseline",
+      "refusal": 0,
+      "exit_code": 0,
+      "requests": [
+        "bytes=0-0",
+        "bytes=524288-1048575",
+        "bytes=0-524287",
+        "bytes=1048576-1572863",
+        "bytes=2097152-2621439",
+        "bytes=3145728-3670015",
+        "bytes=3670016-4194303",
+        "bytes=1572864-2097151",
+        "bytes=2621440-3145727"
+      ],
+      "actual_size": 4194304,
+      "expected_size": 4194304,
+      "actual_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "expected_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "verified": true
+    },
+    {
+      "tool": "candidate",
+      "refusal": 0,
+      "exit_code": 0,
+      "requests": [
+        "bytes=0-2097151",
+        "bytes=0-0",
+        "bytes=0-524287",
+        "bytes=524288-1048575",
+        "bytes=1048576-1572863",
+        "bytes=2621440-3145727",
+        "bytes=1572864-2097151",
+        "bytes=3145728-3670015",
+        "bytes=3670016-4194303",
+        "bytes=2097152-2621439"
+      ],
+      "actual_size": 4194304,
+      "expected_size": 4194304,
+      "actual_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "expected_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "verified": true
+    },
+    {
+      "tool": "baseline",
+      "refusal": 403,
+      "exit_code": 0,
+      "requests": [
+        "bytes=0-0",
+        "bytes=524288-1048575",
+        "bytes=0-524287",
+        "bytes=1048576-1572863",
+        "bytes=2097152-2621439",
+        "bytes=2621440-3145727",
+        "bytes=3145728-3670015",
+        "bytes=1572864-2097151",
+        "bytes=3670016-4194303"
+      ],
+      "actual_size": 4194304,
+      "expected_size": 4194304,
+      "actual_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "expected_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "verified": true
+    },
+    {
+      "tool": "candidate",
+      "refusal": 403,
+      "exit_code": 0,
+      "requests": [
+        "bytes=0-2097151",
+        "bytes=0-0",
+        "bytes=524288-1048575",
+        "bytes=0-524287",
+        "bytes=1048576-1572863",
+        "bytes=1572864-2097151",
+        "bytes=2621440-3145727",
+        "bytes=3145728-3670015",
+        "bytes=3670016-4194303",
+        "bytes=2097152-2621439"
+      ],
+      "actual_size": 4194304,
+      "expected_size": 4194304,
+      "actual_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "expected_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "verified": true
+    },
+    {
+      "tool": "baseline",
+      "refusal": 413,
+      "exit_code": 0,
+      "requests": [
+        "bytes=0-0",
+        "bytes=0-524287",
+        "bytes=524288-1048575",
+        "bytes=1048576-1572863",
+        "bytes=1572864-2097151",
+        "bytes=2097152-2621439",
+        "bytes=3145728-3670015",
+        "bytes=2621440-3145727",
+        "bytes=3670016-4194303"
+      ],
+      "actual_size": 4194304,
+      "expected_size": 4194304,
+      "actual_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "expected_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "verified": true
+    },
+    {
+      "tool": "candidate",
+      "refusal": 413,
+      "exit_code": 0,
+      "requests": [
+        "bytes=0-2097151",
+        "bytes=0-0",
+        "bytes=524288-1048575",
+        "bytes=0-524287",
+        "bytes=1048576-1572863",
+        "bytes=1572864-2097151",
+        "bytes=3670016-4194303",
+        "bytes=3145728-3670015",
+        "bytes=2097152-2621439",
+        "bytes=2621440-3145727"
+      ],
+      "actual_size": 4194304,
+      "expected_size": 4194304,
+      "actual_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "expected_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "verified": true
+    },
+    {
+      "tool": "baseline",
+      "refusal": 503,
+      "exit_code": 0,
+      "requests": [
+        "bytes=0-0",
+        "bytes=524288-1048575",
+        "bytes=0-524287",
+        "bytes=1048576-1572863",
+        "bytes=2097152-2621439",
+        "bytes=2621440-3145727",
+        "bytes=3145728-3670015",
+        "bytes=3670016-4194303",
+        "bytes=1572864-2097151"
+      ],
+      "actual_size": 4194304,
+      "expected_size": 4194304,
+      "actual_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "expected_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "verified": true
+    },
+    {
+      "tool": "candidate",
+      "refusal": 503,
+      "exit_code": 0,
+      "requests": [
+        "bytes=0-2097151",
+        "bytes=0-0",
+        "bytes=524288-1048575",
+        "bytes=0-524287",
+        "bytes=1048576-1572863",
+        "bytes=1572864-2097151",
+        "bytes=3145728-3670015",
+        "bytes=3670016-4194303",
+        "bytes=2097152-2621439",
+        "bytes=2621440-3145727"
+      ],
+      "actual_size": 4194304,
+      "expected_size": 4194304,
+      "actual_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "expected_sha256": "9c120433194387dca433979f92c8016c2c0abb76cc5b1aa2cd94881bf49a56e2",
+      "verified": true
+    }
+  ],
+  "limitations": [
+    "Fresh timing comparisons of this corrected default source are pending.",
+    "Packaged GUI/tray/cold-start remains unverified.",
+    "No new release or universal performance claim."
+  ]
+}

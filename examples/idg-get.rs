@@ -1,6 +1,6 @@
 //! Thin CLI around the exact download modules used by the desktop.
 //! cargo run --release --example idg-get -- URL OUTPUT_FILE [CONNECTIONS]
-//! Optional --http1, --http2, --no-pool, --http2-fixed and --reuse-prefix policies are diagnostics only.
+//! Optional --http1, --http2, --no-pool and --http2-fixed policies are diagnostics only.
 //! With no diagnostic flag, this uses the desktop's production HTTP policy.
 #![allow(dead_code)]
 
@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     let url = args.next().ok_or_else(|| {
         anyhow::anyhow!(
-            "Usage: idg-get URL OUTPUT_FILE [CONNECTIONS] [--http1|--http2|--no-pool|--http2-fixed|--reuse-prefix]"
+            "Usage: idg-get URL OUTPUT_FILE [CONNECTIONS] [--http1|--http2|--no-pool|--http2-fixed]"
         )
     })?;
     let path = PathBuf::from(
@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
         "CONNECTIONS must be 0 (automatic) or 1..32"
     );
     let builder = match policy.as_deref() {
-        None | Some("--http1") | Some("--reuse-prefix") => download::http_client_builder(),
+        None | Some("--http1") => download::http_client_builder(),
         Some("--http2") => download::http_transport_builder(),
         Some("--no-pool") => download::http_transport_builder().pool_max_idle_per_host(0),
         Some("--http2-fixed") => download::http_transport_builder()
@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
             .http2_initial_connection_window_size(32 * 1024 * 1024),
         Some(_) => {
             anyhow::bail!(
-                "Unknown diagnostic policy; use --http1, --http2, --no-pool, --http2-fixed or --reuse-prefix"
+                "Unknown diagnostic policy; use --http1, --http2, --no-pool or --http2-fixed"
             )
         }
     };
@@ -72,11 +72,7 @@ async fn main() -> anyhow::Result<()> {
             }
         })
     });
-    let result = if policy.as_deref() == Some("--reuse-prefix") {
-        download::engine::start_download_with_initial_range(client, downloads.clone(), id).await
-    } else {
-        download::engine::start_download(client, downloads.clone(), id).await
-    };
+    let result = download::engine::start_download(client, downloads.clone(), id).await;
     if let Some(reporter) = reporter {
         reporter.abort();
     }

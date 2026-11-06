@@ -66,12 +66,19 @@ impl Control<'_> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReplayPolicy {
+    Never,
+    Caller,
+    Capacity,
+}
+
 pub struct Spec {
     method: Method,
     url: String,
     headers: HeaderMap,
     body: Option<String>,
-    replayable: bool,
+    replay: ReplayPolicy,
 }
 impl Spec {
     pub fn get(url: &str) -> Self {
@@ -80,7 +87,7 @@ impl Spec {
             url: url.into(),
             headers: HeaderMap::new(),
             body: None,
-            replayable: true,
+            replay: ReplayPolicy::Capacity,
         }
     }
     pub fn form(url: &str, body: String) -> Self {
@@ -89,14 +96,21 @@ impl Spec {
             url: url.into(),
             headers: HeaderMap::new(),
             body: Some(body),
-            replayable: false,
+            replay: ReplayPolicy::Never,
         }
     }
     /// Generated/token-bearing GETs must not be used to test capacity or be
     /// replayed after ambiguous connection loss. Intent survives redirects.
     pub fn single_use(mut self) -> Self {
-        self.replayable = false;
+        self.replay = ReplayPolicy::Never;
         self
+    }
+    /// One attempt per redirect hop. This safe GET may test recovered capacity,
+    /// but the caller owns fallback/retry after a connection failure.
+    pub fn get_once(url: &str) -> Self {
+        let mut spec = Self::get(url);
+        spec.replay = ReplayPolicy::Caller;
+        spec
     }
     pub fn header(mut self, name: &str, value: impl AsRef<str>) -> Result<Self> {
         self.headers.insert(
@@ -243,7 +257,8 @@ impl RequestContext {
             }
             visited.push((spec.method.clone(), url.clone()));
             let budget = HostBudget::for_url(url.as_str());
-            let allow_probe = spec.replayable && matches!(spec.method, Method::GET | Method::HEAD);
+            let allow_probe = spec.replay != ReplayPolicy::Never
+                && matches!(spec.method, Method::GET | Method::HEAD);
             let (response, permit, elapsed) = loop {
                 // No network deadline runs while another file owns the capacity.
                 let permit = tokio::select! {
@@ -306,7 +321,7 @@ impl RequestContext {
                     Ok(response) => break (response, permit, started.elapsed()),
                     Err(error) => {
                         let pressure = connection_closed(&error) && permit.connection_closed();
-                        if pressure && allow_probe {
+                        if pressure && allow_probe && spec.replay == ReplayPolicy::Capacity {
                             // A confirmed capacity refusal is queue time. GET/HEAD
                             // can try another admitted connection without burning
                             // the caller's failure budget; forms are never replayed.
@@ -557,6 +572,22 @@ mod tests {
             0,
             "A single-use GET must not probe occupied capacity"
         );
+        let trial = tokio::time::timeout(
+            Duration::from_secs(1),
+            context.send(
+                Spec::get_once(&format!("{base}/always-closed")),
+                Control::default(),
+            ),
+        )
+        .await
+        .expect("A safe caller-controlled GET may test occupied capacity");
+        assert!(trial.is_err());
+        assert_eq!(
+            permanent_closes.load(Ordering::Relaxed),
+            1,
+            "A caller-controlled trial must return its first connection failure without automatic replay"
+        );
+        assert_eq!(single_use.load(Ordering::Relaxed), 0);
         release.send(true).unwrap();
         assert_eq!(response.bytes().await.unwrap().as_ref(), b"data");
         drop(permit);
@@ -585,7 +616,7 @@ mod tests {
             result.is_err(),
             "Without healthy peers, closed connections remain a bounded failure"
         );
-        assert_eq!(permanent_closes.load(Ordering::Relaxed), 1);
+        assert_eq!(permanent_closes.load(Ordering::Relaxed), 2);
         server.abort();
     }
 

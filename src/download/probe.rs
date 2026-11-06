@@ -123,14 +123,14 @@ pub async fn probe(client: &RequestContext, url: &str) -> Result<ProbeResult> {
     probe_impl(client, url, false).await
 }
 
-/// Experimental transfer path: keep a bounded initial range as file data.
+/// Keep a length-proven bounded initial range as file data; validate ambiguous bodies through the original probe.
 pub async fn probe_with_initial_range(client: &RequestContext, url: &str) -> Result<ProbeResult> {
     probe_impl(client, url, true).await
 }
 
 const INITIAL_RANGE_END: u64 = super::connections::MIN_SEGMENT_BYTES - 1;
 
-async fn probe_impl(client: &RequestContext, url: &str, reuse: bool) -> Result<ProbeResult> {
+async fn probe_impl(client: &RequestContext, url: &str, mut reuse: bool) -> Result<ProbeResult> {
     anyhow::ensure!(
         !is_token_download(url),
         "This download requires a fresh website token. Open the source page and click its download button with the updated IDG browser extension enabled; the download.php URL alone cannot download the file."
@@ -140,10 +140,31 @@ async fn probe_impl(client: &RequestContext, url: &str, reuse: bool) -> Result<P
     }
     // One request establishes metadata and verifies real range semantics. A
     // separate HEAD adds an avoidable round trip and can disagree with GET.
-    let (leased, accepts_ranges) = if reuse {
-        initial_probe_impl(client, url, std::time::Duration::from_secs(5), true).await?
+    let initial = if reuse {
+        initial_probe_impl(client, url, std::time::Duration::from_secs(5), true).await
     } else {
-        initial_probe(client, url, std::time::Duration::from_secs(5)).await?
+        initial_probe(client, url, std::time::Duration::from_secs(5)).await
+    };
+    let (leased, accepts_ranges) = match initial {
+        Ok((leased, accepts_ranges))
+            if reuse
+                && ((leased.response.status() == StatusCode::PARTIAL_CONTENT
+                    && (!accepts_ranges || leased.response.content_length().is_none()))
+                    || prefix_refused(leased.response.status())) =>
+        {
+            // Decoding can hide the encoded length, and larger ranges can be
+            // refused. Restore the original body proof without losing learned
+            // host capacity or valid short/chunked range support.
+            let _budget = HostBudget::for_url(leased.response.url().as_str());
+            drop(leased);
+            reuse = false;
+            initial_probe(client, url, std::time::Duration::from_secs(5)).await?
+        }
+        Err(error) if reuse && !error.is::<InvalidRedirect>() => {
+            reuse = false;
+            initial_probe(client, url, std::time::Duration::from_secs(5)).await?
+        }
+        result => result?,
     };
     let LeasedResponse {
         response: resp,
@@ -224,7 +245,12 @@ async fn initial_probe_impl(
         let probing = async {
             let received = client
                 .send(
-                    Spec::get(url).header(
+                    (if reuse {
+                        Spec::get_once(url)
+                    } else {
+                        Spec::get(url)
+                    })
+                    .header(
                         "range",
                         if reuse {
                             std::borrow::Cow::Owned(format!("bytes=0-{INITIAL_RANGE_END}"))
@@ -277,6 +303,7 @@ async fn initial_probe_impl(
             Ok::<_, anyhow::Error>((LeasedResponse { response, permit }, verified))
         };
         match probing.await {
+            result if reuse => return result,
             Ok((response, _))
                 if matches!(
                     response.response.status().as_u16(),
@@ -339,6 +366,10 @@ fn initial_range(headers: &reqwest::header::HeaderMap) -> Option<(u64, u64)> {
     let end = end.parse::<u64>().ok()?;
     let total = total.parse::<u64>().ok()?.checked_sub(1)?;
     (end == total.min(INITIAL_RANGE_END)).then_some((total + 1, end))
+}
+
+fn prefix_refused(status: StatusCode) -> bool {
+    !status.is_success()
 }
 
 /// Token-only endpoints must be submitted through the original browser form.
@@ -850,6 +881,182 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ambiguous_initial_lengths_preserve_decoded_files_and_chunked_ranges() {
+        use axum::{Router, body::Body, response::IntoResponse, routing::get};
+        use std::sync::{Arc, Mutex};
+        // gzip.compress(payload, mtime=0), kept inline to require no external tool.
+        const ENCODED: &[u8] = &[
+            31, 139, 8, 0, 0, 0, 0, 0, 2, 10, 237, 199, 193, 9, 128, 48, 12, 64, 209, 187, 83, 100,
+            1, 215, 16, 143, 30, 186, 64, 104, 3, 6, 52, 45, 53, 224, 250, 238, 33, 255, 221, 222,
+            230, 151, 201, 235, 121, 138, 134, 88, 212, 222, 172, 201, 94, 202, 33, 211, 198, 180,
+            199, 34, 53, 189, 199, 226, 247, 232, 51, 53, 114, 109, 154, 74, 41, 165, 148, 82, 74,
+            41, 165, 148, 254, 179, 31, 230, 128, 204, 67, 41, 15, 0, 0,
+        ];
+        let mut payload = b"File with an encoded HTTP representation\n".to_vec();
+        for _ in 0..256 {
+            payload.extend_from_slice(b"important-data\n");
+        }
+        for compressed in [false, true] {
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let observed = requests.clone();
+            let router = Router::new().route(
+                "/file.bin",
+                get(move |request: reqwest::header::HeaderMap| {
+                    let observed = observed.clone();
+                    async move {
+                        let body: &[u8] = if compressed {
+                            ENCODED
+                        } else {
+                            b"chunked static file"
+                        };
+                        let range = request.get("range").map(|v| v.to_str().unwrap().to_owned());
+                        observed.lock().unwrap().push(range.clone());
+                        let mut headers = reqwest::header::HeaderMap::new();
+                        let data = if let Some(value) = &range {
+                            let (start, end) = value
+                                .strip_prefix("bytes=")
+                                .unwrap()
+                                .split_once('-')
+                                .unwrap();
+                            let start: usize = start.parse().unwrap();
+                            let end = end.parse::<usize>().unwrap().min(body.len() - 1);
+                            headers.insert(
+                                "content-range",
+                                format!("bytes {start}-{end}/{}", body.len())
+                                    .parse()
+                                    .unwrap(),
+                            );
+                            body[start..=end].to_vec()
+                        } else {
+                            body.to_vec()
+                        };
+                        if compressed {
+                            headers.insert("content-encoding", "gzip".parse().unwrap());
+                            headers
+                                .insert("content-length", data.len().to_string().parse().unwrap());
+                        }
+                        let stream = futures::stream::once(async move {
+                            Ok::<_, std::io::Error>(bytes::Bytes::from(data))
+                        });
+                        (
+                            if range.is_some() {
+                                StatusCode::PARTIAL_CONTENT
+                            } else {
+                                StatusCode::OK
+                            },
+                            headers,
+                            Body::from_stream(stream),
+                        )
+                            .into_response()
+                    }
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file.bin", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let result = probe_with_initial_range(
+                &context(super::super::http_client().unwrap(), &url),
+                &url,
+            )
+            .await
+            .unwrap();
+            assert!(
+                result.initial_range_end.is_none(),
+                "Ambiguous decoded lengths cannot be treated as retained partial data"
+            );
+            if compressed {
+                assert!(!result.accepts_ranges);
+                assert_eq!(result.content_length, None);
+                assert_eq!(
+                    result
+                        .response
+                        .unwrap()
+                        .response
+                        .bytes()
+                        .await
+                        .unwrap()
+                        .as_ref(),
+                    payload.as_slice()
+                );
+                assert_eq!(requests.lock().unwrap().last(), Some(&None));
+            } else {
+                assert!(
+                    result.accepts_ranges,
+                    "A body-validated chunked source keeps parallel range support"
+                );
+                assert_eq!(
+                    result.content_length,
+                    Some(b"chunked static file".len() as u64)
+                );
+                assert!(result.response.is_none());
+                assert_eq!(
+                    *requests.lock().unwrap(),
+                    vec![Some("bytes=0-2097151".into()), Some("bytes=0-0".into())]
+                );
+            }
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn inconclusive_prefix_preserves_servers_with_short_range_support() {
+        use axum::{Router, response::IntoResponse, routing::get};
+        use std::sync::{Arc, Mutex};
+        for status in [
+            206, 304, 400, 401, 403, 404, 405, 408, 413, 416, 429, 500, 501, 502, 503, 504,
+        ] {
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let observed = requests.clone();
+            let router = Router::new().route(
+                "/file.bin",
+                get(move |headers: reqwest::header::HeaderMap| {
+                    let observed = observed.clone();
+                    async move {
+                        let range = headers.get("range").unwrap().to_str().unwrap();
+                        observed.lock().unwrap().push(range.to_owned());
+                        if range == "bytes=0-2097151" {
+                            if status == 206 {
+                                return (
+                                    StatusCode::PARTIAL_CONTENT,
+                                    [("content-range", "bytes 0-524287/4194304")],
+                                    vec![b'x'; 512 * 1024],
+                                )
+                                    .into_response();
+                            }
+                            return StatusCode::from_u16(status).unwrap().into_response();
+                        }
+                        assert_eq!(range, "bytes=0-0");
+                        (
+                            StatusCode::PARTIAL_CONTENT,
+                            [("content-range", "bytes 0-0/4194304")],
+                            "x",
+                        )
+                            .into_response()
+                    }
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/file.bin", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let result = probe_with_initial_range(
+                &context(super::super::http_client().unwrap(), &url),
+                &url,
+            )
+            .await
+            .unwrap();
+            assert!(
+                result.supports_multipart(),
+                "A rejected/inconclusive larger prefix must preserve proven short ranges: {status}"
+            );
+            assert_eq!(result.content_length, Some(4 * 1024 * 1024));
+            assert!(result.initial_range_end.is_none());
+            assert!(result.response.is_none());
+            assert_eq!(*requests.lock().unwrap(), ["bytes=0-2097151", "bytes=0-0"]);
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
     async fn queued_server_capacity_does_not_consume_the_probe_deadline() {
         use axum::{Router, routing::get};
         let requests = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -920,7 +1127,10 @@ mod tests {
                         if range.is_none() || mode == 3 {
                             return (StatusCode::OK, "complete").into_response();
                         }
-                        assert_eq!(range.as_deref(), Some("bytes=0-2097151"));
+                        assert!(matches!(
+                            range.as_deref(),
+                            Some("bytes=0-2097151" | "bytes=0-0")
+                        ));
                         let mut headers = reqwest::header::HeaderMap::new();
                         if mode != 6 {
                             headers.insert(
@@ -962,21 +1172,32 @@ mod tests {
             let url = format!("http://{}/file.bin", listener.local_addr().unwrap());
             let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
             let client = context(super::super::http_client().unwrap(), &url);
-            let (response, verified) =
+            let invalid = !matches!(mode, 0 | 3 | 4);
+            let (response, verified) = if invalid {
+                let result = probe_with_initial_range(&client, &url).await.unwrap();
+                assert!(result.initial_range_end.is_none());
+                (result.response.unwrap(), result.accepts_ranges)
+            } else {
                 initial_probe_impl(&client, &url, std::time::Duration::from_millis(250), true)
                     .await
-                    .unwrap();
+                    .unwrap()
+            };
             assert_eq!(verified, mode == 0 || mode == 4);
             assert_eq!(
                 response.response.bytes().await.unwrap().as_ref(),
                 b"complete"
             );
             let actual = requests.lock().unwrap();
-            assert_eq!(actual.len(), if matches!(mode, 0 | 3 | 4) { 1 } else { 2 });
-            if actual.len() == 2 {
+            assert_eq!(actual.len(), if invalid { 3 } else { 1 });
+            if invalid {
                 assert_eq!(
-                    actual[1], None,
-                    "Invalid range metadata must fall back to an un-ranged full stream"
+                    actual[1],
+                    Some("bytes=0-0".into()),
+                    "An inconclusive prefix must preserve the original body proof"
+                );
+                assert_eq!(
+                    actual[2], None,
+                    "Invalid legacy metadata must fall back to an un-ranged full stream"
                 );
             }
             server.abort();

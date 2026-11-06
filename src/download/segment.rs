@@ -53,12 +53,34 @@ fn terminal(error: anyhow::Error) -> anyhow::Error {
     TerminalFailure(error).into()
 }
 
+/// Cooperative completion: the old stream is closed and every preceding byte
+/// is disk-acknowledged. The orchestrator may safely redistribute this remainder.
+#[derive(Debug)]
+pub(super) struct YieldedRange {
+    pub start: u64,
+    pub end: u64,
+}
+
+impl std::fmt::Display for YieldedRange {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "Range yielded at acknowledged byte {}",
+            self.start
+        )
+    }
+}
+
+impl std::error::Error for YieldedRange {}
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
 /// Arguments passed to a single segment worker.
 pub struct SegmentArgs {
+    /// Only a replayable retained initial range may yield to idle siblings.
+    pub handoff: Option<Arc<AtomicBool>>,
     /// Local capacity already reserved for a retained initial partial response.
     pub initial_permit: Option<tokio::sync::OwnedSemaphorePermit>,
     pub gate: Arc<ConnectionGate>,
@@ -129,6 +151,11 @@ async fn run_segment_with_idle_timeout(
         if args.end.is_some_and(|end| resume_at > end) {
             return Ok(());
         }
+        if args.response.is_none()
+            && let Some(remaining) = pending_handoff(&args, resume_at)
+        {
+            return Err(remaining.into());
+        }
         let response = args.response.take();
         let streaming_export =
             super::probe::is_mail_export(&args.url) || (args.end.is_none() && response.is_some());
@@ -152,6 +179,9 @@ async fn run_segment_with_idle_timeout(
         match result {
             Ok(()) => return Ok(()),
             Err(e) => {
+                if e.is::<YieldedRange>() {
+                    return Err(e);
+                }
                 if e.downcast_ref::<TerminalFailure>().is_some() {
                     return Err(e);
                 }
@@ -251,17 +281,24 @@ async fn download_range(
     } = match response {
         Some(response) => response,
         None => {
-            context
-                .send(
-                    spec,
-                    Control {
-                        cancel: Some(cancel),
-                        pause: release_on_pause.then_some(pause),
-                        network_timeout: Some(idle_timeout),
-                        ..Control::default()
-                    },
-                )
-                .await
+            let sending = context.send(
+                spec,
+                Control {
+                    cancel: Some(cancel),
+                    pause: release_on_pause.then_some(pause),
+                    network_timeout: Some(idle_timeout),
+                    ..Control::default()
+                },
+            );
+            let result = if args.handoff.is_some() {
+                tokio::select! {
+                    result = sending => result,
+                    remaining = wait_for_handoff(args, *cursor) => return Err(remaining.into()),
+                }
+            } else {
+                sending.await
+            };
+            result
                 .map_err(|error| {
                     if error.is::<InvalidRedirect>() {
                         terminal(error)
@@ -348,12 +385,20 @@ async fn download_range(
 
     loop {
         let chunk_result = tokio::select! {
+            biased;
+            // Consume bytes already available before considering a handoff.
+            // This avoids replaying a fast response whose peers finished first.
             chunk = stream.next() => chunk,
             _ = clock.tick() => {
                 anyhow::ensure!(!cancel.load(Ordering::Relaxed), "cancelled waiting for response body");
                 if release_on_pause && pause.load(Ordering::Relaxed) {
                     write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
                     return Err(PausedRange.into());
+                }
+                if let Some(mut remaining) = pending_handoff(args, *cursor) {
+                    write_buffer(file, cursor, &mut buffered, on_progress.as_ref()).await?;
+                    remaining.start = *cursor;
+                    return Err(remaining.into());
                 }
                 if network_stalled(&mut last_network, pause, idle_timeout) {
                     // Resume only after every validated short buffer is written.
@@ -460,6 +505,22 @@ async fn download_range(
         bail!("Response ended before the requested range was complete");
     }
     Ok(())
+}
+
+fn pending_handoff(args: &SegmentArgs, cursor: u64) -> Option<YieldedRange> {
+    let flag = args.handoff.as_ref()?;
+    let end = args.end?;
+    (flag.load(Ordering::Relaxed) && args.bandwidth.rate() == 0)
+        .then_some(YieldedRange { start: cursor, end })
+}
+
+async fn wait_for_handoff(args: &SegmentArgs, cursor: u64) -> YieldedRange {
+    loop {
+        if let Some(remaining) = pending_handoff(args, cursor) {
+            return remaining;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 fn network_stalled(
@@ -641,6 +702,7 @@ mod tests {
                 let acknowledged = Arc::new(AtomicU64::new(0));
                 let progress = acknowledged.clone();
                 let args = SegmentArgs {
+                    handoff: None,
                     initial_permit: None,
                     gate: Arc::new(ConnectionGate::new(1)),
                     if_range: Some("\"fixed\"".into()),
@@ -883,6 +945,7 @@ mod tests {
                 let acknowledged = Arc::new(AtomicU64::new(0));
                 let progress = acknowledged.clone();
                 let args = SegmentArgs {
+                    handoff: None,
                     initial_permit: None,
                     gate: Arc::new(ConnectionGate::new(1)),
                     if_range: (!export).then(|| "\"fixed\"".into()),
