@@ -11,12 +11,13 @@ The goal is to make IDG (the download manager in the referenced benchmark image)
 - A 15-second network idle watchdog for verified resumable ranges. Validated short buffers are acknowledged before reconnecting. User pauses, rate limiting and disk writes do not count as network inactivity. Non-replayable streams keep the longer timeout and are not replayed.
 - Completion requires the actual acknowledged byte count to match a known source length. HEAD/GET size changes previously produced falsely completed padded files; shorter and larger changed responses now fail visibly. Unknown-length successful streams receive their actual final size.
 - Shared authenticated/default client settings; cookies and validators remain attached during reconnection.
+- Permanent authorization, representation and destination errors stop without useless retries. The engine owns its workers in a JoinSet, aborts and drains siblings on failure, and keeps internal cleanup distinct from user cancellation.
 
 ## Verification completed
 
-Current candidate: `cargo fmt`, warning-free clippy and full Rust bin suites on x64 and x86. Each architecture passed 61 app/engine tests and two native-host tests; nine explicit external/tool-dependent tests remain ignored.
+Current candidate: formatting, warning-free clippy and full Rust bin suites on x64 and x86. Each architecture passed 62 app/engine tests and two native-host tests; nine explicit external/tool-dependent tests remain ignored.
 
-New real-socket regressions cover cancellation in all network phases; range-probe recovery; exact HTTP/1 and HTTP/2 bytes; stalled-header/body reconnection with retained cookies/If-Range; short-buffer resume at the acknowledged offset; pauses; speed limits; bounded persistent failures; changed full-response lengths; and fast workers claiming queued work while the first slow range is pending.
+New real-socket regressions cover cancellation in all network phases; range-probe recovery; exact HTTP/1 and HTTP/2 bytes; stalled-header/body reconnection with retained cookies/If-Range; short-buffer resume at the acknowledged offset; pauses; speed limits; bounded persistent failures; changed full-response lengths; and fast workers claiming queued work while the first slow range is pending. A malformed-range/stalled-siblings regression failed before the new terminal-error/JoinSet handling and now returns within about 0.01 seconds. Read-only destinations and HTTP 403 make one request; HTTP 408 still retries successfully over both HTTP/1 and HTTP/2.
 
 The optimized CLI also passed a black-box size-change test: known 4096-byte source versus 2048/8192-byte GET bodies fails; an unchanged 4096-byte file completes exactly. Reproduction and verification are retained in `target/perf-size-change-reproduction.json` and `target/perf-size-change-verification.json`.
 
@@ -32,8 +33,9 @@ All numbers below are successful-transfer medians. Failures are retained and dis
 | Independent HTTP/2, E, n=3 | 15.95 MiB/s, 3/3 | aria2c 36.04, Prism 27.37; not selected |
 | HTTP/1 queue up to 4 work units/connection, E, n=3 | 28.48 MiB/s, 3/3 | Static same-policy reference 10.48; aria2c 37.27; Prism 24.79 |
 | HTTP/1 queue up to 8 work units/connection, E, n=3 | 39.41 MiB/s, 3/3 | Previous queue 30.66; aria2c 34.07; Prism 26.49 |
+| Actual default policy, E, n=7, commit 726f23d | 45.99 MiB/s, 7/7 | Original IDG 12.86; curl 42.31; aria2c 39.95; Prism 25.04; all 7/7 |
 
-The latest n=3 result motivates the production candidate, but requires larger and broader verification. Internet conditions varied substantially, including curl stalls/timeouts. No significance claim is made.
+The n=7 E result led this same-machine batch. The later terminal-error/JoinSet refinement preserves the scheduler and transport policy, but must be measured as its own build; do not silently combine source identities. Broader verification remains required. Internet conditions varied substantially, including curl stalls/timeouts. No significance claim is made.
 
 Raw files:
 
@@ -45,6 +47,7 @@ Raw files:
 - `target/perf-20261106-independent-e.json` (terminal session 47982)
 - `target/perf-20261106-queued-http1-e.json` (terminal session 68056)
 - `target/perf-20261106-queued8-http1-e.json` (terminal session 81905)
+- `target/perf-20261106-validation-e.json` and `...-summary.json` (terminal session 28087), all 35 trials recorded for commit 726f23d.
 
 Each run has a fresh destination, exact-size/SHA-256 verification, rotated tool order, retained logs and executable hashes. The harness now captures complete candidate source/patch snapshots. Do not overwrite prior results. Preserve all failed trials.
 
@@ -63,6 +66,8 @@ Preserved executables:
 Primary discussion that motivated a tested connection-policy experiment, not proof of our root cause: https://github.com/seanmonstar/reqwest/discussions/2778 .
 
 ## Outstanding work and completion audit
+
+The preceding E validation session `28087` is terminal and must not be restarted. The next validation will run A–D and a fresh E batch for the refined build. Runtime checkpoint: `target/performance-active.json`.
 
 - Run a larger interleaved E comparison against curl, aria2c, Prism and the preserved original IDG using the actual default policy.
 - Refresh Aâ€“D measurements with the selected candidate; confirm peak localhost performance, server-limited throughput, connection caps and fault recovery are preserved.

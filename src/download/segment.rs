@@ -27,6 +27,27 @@ use bytes::Bytes;
 use futures::StreamExt;
 use reqwest::Client;
 
+/// Retrying cannot repair invalid representations, rejected credentials or a
+/// failed destination writer. Keep the underlying error available to callers.
+#[derive(Debug)]
+struct TerminalFailure(anyhow::Error);
+
+impl std::fmt::Display for TerminalFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.0)
+    }
+}
+
+impl std::error::Error for TerminalFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.0.as_ref())
+    }
+}
+
+fn terminal(error: anyhow::Error) -> anyhow::Error {
+    TerminalFailure(error).into()
+}
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -65,8 +86,8 @@ pub struct SegmentArgs {
 /// Run a segment worker to completion, retrying up to `max_retries` times.
 ///
 /// # Errors
-/// Returns an error after `max_retries` failed attempts, or immediately if
-/// the segment is cancelled.
+/// Returns an error after `max_retries` failed attempts, or immediately for
+/// cancellation, invalid representations, rejected credentials or disk errors.
 pub async fn run_segment(args: SegmentArgs, max_retries: u32) -> Result<()> {
     run_segment_with_idle_timeout(args, max_retries, Duration::from_secs(15)).await
 }
@@ -98,6 +119,9 @@ async fn run_segment_with_idle_timeout(
         match result {
             Ok(()) => return Ok(()),
             Err(e) => {
+                if e.downcast_ref::<TerminalFailure>().is_some() {
+                    return Err(e);
+                }
                 // Generated exports cannot be resumed by byte offset or replayed
                 // reliably. Report the original error instead of appending a new export.
                 if streaming_export {
@@ -216,12 +240,23 @@ async fn download_range(
     }
     let _permit = permit;
     if !resp.status().is_success() {
-        bail!("server returned HTTP {}", resp.status());
+        let error = anyhow::anyhow!("server returned HTTP {}", resp.status());
+        return Err(
+            if resp.status().is_client_error()
+                && resp.status() != reqwest::StatusCode::REQUEST_TIMEOUT
+            {
+                terminal(error)
+            } else {
+                error
+            },
+        );
     }
-    super::probe::validate_file_response(resp.headers(), url)?;
+    super::probe::validate_file_response(resp.headers(), url).map_err(terminal)?;
 
     if (end.is_some() || start > 0) && resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-        bail!("The file changed or the server ignored its byte range. Add a fresh download link.");
+        return Err(terminal(anyhow::anyhow!(
+            "The file changed or the server ignored its byte range. Add a fresh download link."
+        )));
     }
     if end.is_some() || start > 0 {
         let actual = resp
@@ -238,21 +273,23 @@ async fn download_range(
                 .and_then(|v| v.split_once('-'))
                 .is_some_and(|(offset, _)| offset.parse::<u64>().ok() == Some(start)),
         };
-        anyhow::ensure!(
-            correct,
-            "Server returned an incorrect Content-Range; refusing to mix file bytes"
-        );
+        if !correct {
+            return Err(terminal(anyhow::anyhow!(
+                "Server returned an incorrect Content-Range; refusing to mix file bytes"
+            )));
+        }
         if let Some(validator) = &args.if_range {
             let header = if validator.starts_with('"') {
                 "etag"
             } else {
                 "last-modified"
             };
-            if let Some(actual) = resp.headers().get(header).and_then(|v| v.to_str().ok()) {
-                anyhow::ensure!(
-                    actual == validator,
+            if let Some(actual) = resp.headers().get(header).and_then(|v| v.to_str().ok())
+                && actual != validator
+            {
+                return Err(terminal(anyhow::anyhow!(
                     "The file changed during download; add a fresh download link"
-                );
+                )));
             }
         }
     }
@@ -387,7 +424,8 @@ async fn write_buffer(
     *buffered = file
         .write_at(*cursor, std::mem::take(buffered))
         .await
-        .context("write failed")?;
+        .context("write failed")
+        .map_err(terminal)?;
     *cursor += count;
     buffered.clear();
     on_progress(count);
@@ -406,12 +444,33 @@ mod tests {
     };
     use std::sync::{Mutex, atomic::AtomicU64};
 
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Fault {
+        StalledHeaders,
+        StalledBody,
+        PausedBody,
+        RateLimited,
+        PermanentStall,
+        ReadOnlyDestination,
+        Forbidden,
+        RequestTimeout,
+    }
+
     #[tokio::test]
     async fn idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits() {
         const SIZE: u64 = 2048;
         const PREFIX: u64 = 193;
         for http2 in [false, true] {
-            for phase in 0..5 {
+            for fault in [
+                Fault::StalledHeaders,
+                Fault::StalledBody,
+                Fault::PausedBody,
+                Fault::RateLimited,
+                Fault::PermanentStall,
+                Fault::ReadOnlyDestination,
+                Fault::Forbidden,
+                Fault::RequestTimeout,
+            ] {
                 let requests = Arc::new(Mutex::new(Vec::new()));
                 let seen = requests.clone();
                 let pause = Arc::new(AtomicBool::new(false));
@@ -442,12 +501,22 @@ mod tests {
                                 seen.push(start);
                                 seen.len() == 1
                             };
-                            if (first && phase == 0) || phase == 4 {
+                            if fault == Fault::Forbidden {
+                                return StatusCode::FORBIDDEN.into_response();
+                            }
+                            if first && fault == Fault::RequestTimeout {
+                                return StatusCode::REQUEST_TIMEOUT.into_response();
+                            }
+                            if (first && fault == Fault::StalledHeaders)
+                                || fault == Fault::PermanentStall
+                            {
                                 std::future::pending::<()>().await;
                             }
                             let content: Vec<u8> = (start..SIZE).map(|n| (n % 251) as u8).collect();
-                            let body = if first && matches!(phase, 1 | 2) {
-                                if phase == 2 {
+                            let body = if first
+                                && matches!(fault, Fault::StalledBody | Fault::PausedBody)
+                            {
+                                if fault == Fault::PausedBody {
                                     pause.store(true, Ordering::Relaxed);
                                     signal.notify_one();
                                 }
@@ -488,8 +557,14 @@ mod tests {
                 });
                 let directory = tempfile::tempdir().unwrap();
                 let output = directory.path().join("resumed.bin");
-                let file = std::fs::File::create(&output).unwrap();
-                file.set_len(SIZE).unwrap();
+                let file = if fault == Fault::ReadOnlyDestination {
+                    std::fs::write(&output, b"keep").unwrap();
+                    std::fs::File::open(&output).unwrap()
+                } else {
+                    let file = std::fs::File::create(&output).unwrap();
+                    file.set_len(SIZE).unwrap();
+                    file
+                };
                 let writer = Arc::new(DownloadWriter::new(file).unwrap());
                 let mut headers = reqwest::header::HeaderMap::new();
                 headers.insert("cookie", "session=retained".parse().unwrap());
@@ -506,7 +581,7 @@ mod tests {
                     if_range: Some("\"fixed\"".into()),
                     total_size: Some(SIZE),
                     bandwidth: Arc::new(super::super::bandwidth::BandwidthLimiter::new(
-                        if phase == 3 { 1024 } else { 0 },
+                        if fault == Fault::RateLimited { 1024 } else { 0 },
                     )),
                     response: None,
                     client: Arc::new(builder.build().unwrap()),
@@ -526,7 +601,7 @@ mod tests {
                     2,
                     Duration::from_millis(100),
                 ));
-                if phase == 2 {
+                if fault == Fault::PausedBody {
                     tokio::time::timeout(Duration::from_secs(1), ready.notified())
                         .await
                         .unwrap();
@@ -542,7 +617,7 @@ mod tests {
                     .await
                     .unwrap()
                     .unwrap();
-                if phase == 4 {
+                if fault == Fault::PermanentStall {
                     let error = outcome.unwrap_err().to_string();
                     assert!(
                         error.contains("failed after 3 retries")
@@ -550,6 +625,30 @@ mod tests {
                     );
                     assert_eq!(*requests.lock().unwrap(), vec![0, 0, 0]);
                     assert_eq!(acknowledged.load(Ordering::Relaxed), 0);
+                    writer.finish().await.unwrap();
+                    server.abort();
+                    continue;
+                }
+                if matches!(fault, Fault::ReadOnlyDestination | Fault::Forbidden) {
+                    let error = outcome.unwrap_err().to_string();
+                    assert!(error.contains(if fault == Fault::Forbidden {
+                        "403"
+                    } else {
+                        "write failed"
+                    }));
+                    assert_eq!(
+                        *requests.lock().unwrap(),
+                        vec![0],
+                        "Permanent failures must not repeat network requests"
+                    );
+                    assert_eq!(acknowledged.load(Ordering::Relaxed), 0);
+                    assert_eq!(
+                        writer.finish().await.is_err(),
+                        fault == Fault::ReadOnlyDestination
+                    );
+                    if fault == Fault::ReadOnlyDestination {
+                        assert_eq!(std::fs::read(output).unwrap(), b"keep");
+                    }
                     server.abort();
                     continue;
                 }
@@ -562,9 +661,9 @@ mod tests {
                 );
                 assert_eq!(
                     *requests.lock().unwrap(),
-                    match phase {
-                        0 => vec![0, 0],
-                        1 | 2 => vec![0, PREFIX],
+                    match fault {
+                        Fault::StalledHeaders | Fault::RequestTimeout => vec![0, 0],
+                        Fault::StalledBody | Fault::PausedBody => vec![0, PREFIX],
                         _ => vec![0],
                     }
                 );

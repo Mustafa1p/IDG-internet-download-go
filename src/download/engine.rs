@@ -5,10 +5,10 @@
 //! ```text
 //! 1. HEAD probe  →  Content-Length + Accept-Ranges
 //! 2. Pre-allocate the output file (avoids filesystem fragmentation)
-//! 3. Divide the file into N equal byte ranges
-//! 4. Spawn N async tasks, each issuing Range: bytes=X-Y
+//! 3. Plan a bounded queue of smaller, non-overlapping byte ranges
+//! 4. Schedule range tasks behind a gate of N concurrent requests
 //! 5. All tasks write into the same file at their own offsets (no copy needed)
-//! 6. Wait for all tasks; mark Completed or Failed
+//! 6. Stop on a terminal error, or sync verified bytes before completion
 //! ```
 //!
 //! # Evidence from IDMan.exe
@@ -19,7 +19,6 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use futures::future::join_all;
 use tokio::fs::OpenOptions;
 
 use crate::download::{
@@ -205,59 +204,59 @@ pub async fn start_download(
 
     let acknowledged = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let mut initial_response = probe_result.response.take();
-    let tasks: Vec<_> = segments
-        .into_iter()
-        .enumerate()
-        .map(|(seg_id, (start, end))| {
-            let client = client.clone();
-            let url = final_url.clone();
-            let file = file.clone();
-            let cancel = cancel.clone();
-            let pause = pause.clone();
-            let downloads = downloads.clone();
-            let acknowledged = acknowledged.clone();
-            let id = id.clone();
+    let mut tasks = tokio::task::JoinSet::new();
+    for (seg_id, (start, end)) in segments.into_iter().enumerate() {
+        let client = client.clone();
+        let url = final_url.clone();
+        let file = file.clone();
+        let cancel = cancel.clone();
+        let pause = pause.clone();
+        let downloads = downloads.clone();
+        let acknowledged = acknowledged.clone();
+        let id = id.clone();
 
-            let args = SegmentArgs {
-                gate: gate.clone(),
-                if_range: probe_result.if_range.clone(),
-                total_size: probe_result.content_length,
-                bandwidth: bandwidth.clone(),
-                response: initial_response.take(),
-                client: client.clone(),
-                id: seg_id,
-                url,
-                start,
-                end: if probe_result.content_length.is_some() && probe_result.accepts_ranges {
-                    Some(end)
-                } else {
-                    None
-                },
-                file,
-                cancel,
-                pause,
-                on_progress: Box::new(move |bytes| {
-                    acknowledged.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
-                    with_item(&downloads, &id, |item| item.record_progress(bytes));
-                }),
-            };
+        let args = SegmentArgs {
+            gate: gate.clone(),
+            if_range: probe_result.if_range.clone(),
+            total_size: probe_result.content_length,
+            bandwidth: bandwidth.clone(),
+            response: initial_response.take(),
+            client: client.clone(),
+            id: seg_id,
+            url,
+            start,
+            end: if probe_result.content_length.is_some() && probe_result.accepts_ranges {
+                Some(end)
+            } else {
+                None
+            },
+            file,
+            cancel,
+            pause,
+            on_progress: Box::new(move |bytes| {
+                acknowledged.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+                with_item(&downloads, &id, |item| item.record_progress(bytes));
+            }),
+        };
 
-            tokio::spawn(async move { run_segment(args, MAX_RETRIES).await })
-        })
-        .collect();
+        tasks.spawn(async move { run_segment(args, MAX_RETRIES).await });
+    }
 
     // ── Step 5 & 6: Wait and finalise ─────────────────────────────────────────
-    let results = join_all(tasks).await;
-
-    for result in results {
-        let outcome = result.context("segment task panicked")?;
-        if let Err(e) = outcome {
-            // If the user cancelled, we exit cleanly without an error.
-            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
-                break;
-            }
-            return Err(e);
+    while let Some(result) = tasks.join_next().await {
+        let error = match result {
+            Ok(Ok(())) => continue,
+            Ok(Err(error)) => error,
+            Err(error) => anyhow::Error::new(error).context("segment task panicked"),
+        };
+        // Own and drain all network workers instead of leaving detached
+        // requests running after the caller reports the transfer failed.
+        tasks.abort_all();
+        while tasks.join_next().await.is_some() {}
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
         }
+        return Err(error);
     }
 
     if cancel.load(std::sync::atomic::Ordering::Relaxed) {
@@ -363,6 +362,72 @@ mod regression_tests {
     use std::time::Duration;
 
     const SIZE: usize = 256 * 1024 + 19;
+
+    #[tokio::test]
+    async fn invalid_range_stops_siblings_without_waiting_for_their_network_timeouts() {
+        const LENGTH: u64 = 8 * 1024 * 1024;
+        let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let requests = seen.clone();
+        let router = Router::new().route(
+            "/file",
+            get(move |method: Method, headers: HeaderMap| {
+                let requests = requests.clone();
+                async move {
+                    let mut response = HeaderMap::new();
+                    response.insert("content-length", LENGTH.to_string().parse().unwrap());
+                    response.insert("accept-ranges", "bytes".parse().unwrap());
+                    if method == Method::HEAD {
+                        return (response, Body::empty()).into_response();
+                    }
+                    let range = headers["range"].to_str().unwrap();
+                    if range == "bytes=0-0" {
+                        response.insert("content-length", "1".parse().unwrap());
+                        response.insert(
+                            "content-range",
+                            format!("bytes 0-0/{LENGTH}").parse().unwrap(),
+                        );
+                        return (StatusCode::PARTIAL_CONTENT, response, vec![0u8]).into_response();
+                    }
+                    if requests.fetch_add(1, Ordering::Relaxed) > 0 {
+                        std::future::pending::<()>().await;
+                    }
+                    response.insert("content-range", "bytes 1-2/3".parse().unwrap());
+                    response.insert("content-length", "2".parse().unwrap());
+                    (StatusCode::PARTIAL_CONTENT, response, vec![0u8; 2]).into_response()
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/file", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let item =
+            crate::download::types::DownloadItem::new(url, directory.path().join("invalid.bin"), 4);
+        let cancel = item.cancel_flag.clone();
+        let id = item.id.clone();
+        let downloads: Downloads = Arc::new(std::sync::Mutex::new(vec![item]));
+        let error = tokio::time::timeout(
+            Duration::from_secs(1),
+            start_download(
+                Arc::new(super::super::http_client().unwrap()),
+                downloads.clone(),
+                id,
+            ),
+        )
+        .await
+        .expect("Permanent range errors must not wait on stalled siblings")
+        .unwrap_err();
+        assert!(error.to_string().contains("Content-Range"), "{error:#}");
+        assert!(
+            !cancel.load(Ordering::Relaxed),
+            "Internal sibling cleanup is not a user cancellation"
+        );
+        assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
+        assert_eq!(downloads.lock().unwrap()[0].downloaded_bytes, 0);
+        server.abort();
+    }
 
     #[tokio::test]
     async fn fast_workers_take_more_ranges_while_a_slow_range_is_still_pending() {
