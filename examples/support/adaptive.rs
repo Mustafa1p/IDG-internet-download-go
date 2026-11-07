@@ -23,7 +23,7 @@ impl Adaptive {
             baseline: 0.0,
             previous_bytes: 0,
             sampled: Instant::now(),
-            window: Duration::from_millis(200 + headers_ms.min(200) as u64),
+            window: Duration::from_millis(80 + headers_ms.min(200) as u64),
             trial: false,
             settled: maximum == 0,
             decisions: Vec::new(),

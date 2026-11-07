@@ -1,0 +1,210 @@
+{
+  "scope": "Experimental shorter sampling window, compared interleaved with its preserved 200 ms baseline and actual v1.6.8 production-engine CLI. No desktop policy change.",
+  "identity": {
+    "x64_binary": "target/perf-idg-hedged-adaptive-fast-window.exe",
+    "x64_sha256": "d4b51e07f77c478324a7dedfe0c6f54d873c02d292bb826a640e0cb19069573f",
+    "x86_binary": "target/perf-idg-hedged-adaptive-fast-window-x86.exe",
+    "x86_sha256": "0b27ca3a96f4003fd0c39944aaf3b715098b3a4c5e5e43505c57c98f7026e5fd",
+    "source_sha256": {
+      "examples/idg-hedged.rs": "5e0f55dc1cda53a5d970421ca96f4f4ac917dc8e42f3970e8b970fba57b1c34f",
+      "examples/support/coverage.rs": "4d0045e85af6faeb36d681be4a4fa7d51fda8f4701d07d4633d44dc9f2ba5b87",
+      "examples/support/adaptive.rs": "3e97b768e8fc63457bb3f73a07e9006362ad52a8111b3d5f09b91a98166235c6",
+      "scripts/verify_hedged_stream.py": "3d8b5fafbca5acc4cdb01aefbde7ba20f22a6350ea38fa941722bf104bc8bf7e",
+      "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+      "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+      "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+      "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+      "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+      "src/download/engine.rs": "f27872b05e0c3aa8a1e208426125319377ed7b4728c5d4f585f96cc5b234d4b2",
+      "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+      "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+      "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+      "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+      "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+      "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+      "src/download/request.rs": "34bda79c58e45e5f39cadcd06d5d6a52c5e65956f39fe6b4884cef42217cc55b",
+      "src/download/segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+      "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+      "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+    },
+    "adaptive_baseline": {
+      "x64_binary": "target/perf-idg-hedged-adaptive-refusal.exe",
+      "x64_sha256": "20ae94c81b2acba937fbe6c429e6e8a6e2bb37d76a4eeca488f012c929a3869b",
+      "x86_binary": "target/perf-idg-hedged-adaptive-refusal-x86.exe",
+      "x86_sha256": "5f1aefa0acfa651a7e1f9fa66678a8ebcbab92baa29d801dfcb31de3645c2bd5",
+      "source_sha256": {
+        "examples/idg-hedged.rs": "5e0f55dc1cda53a5d970421ca96f4f4ac917dc8e42f3970e8b970fba57b1c34f",
+        "examples/support/coverage.rs": "4d0045e85af6faeb36d681be4a4fa7d51fda8f4701d07d4633d44dc9f2ba5b87",
+        "examples/support/adaptive.rs": "4241d4663c59157213a539142efea21c90f11585a0cc37f6aee0713cf476abfa",
+        "scripts/verify_hedged_stream.py": "3d8b5fafbca5acc4cdb01aefbde7ba20f22a6350ea38fa941722bf104bc8bf7e",
+        "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+        "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+        "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+        "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+        "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+        "src/download/engine.rs": "f27872b05e0c3aa8a1e208426125319377ed7b4728c5d4f585f96cc5b234d4b2",
+        "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+        "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+        "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+        "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+        "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+        "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+        "src/download/request.rs": "34bda79c58e45e5f39cadcd06d5d6a52c5e65956f39fe6b4884cef42217cc55b",
+        "src/download/segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+        "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+        "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+      }
+    },
+    "production_control": {
+      "binary": "target/v168-idg-get-x64.exe",
+      "sha256": "a751aa585f2cacc727db02cdcb8fb9349d283b20234d1f2b829e5da126332408",
+      "source_revision": "777ab94d8b733477acf9dcbd1dddfbe43b94849c",
+      "version": "1.6.8"
+    }
+  },
+  "checks": [
+    {
+      "path": "target/perf-hedged-adaptive-fast-window-clippy.log",
+      "sha256": "7b283f0180ed87f15d180ce059b596c4db3c06de17214d9bb3d2d3763f568d82",
+      "tail": "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.82s\n"
+    },
+    {
+      "path": "target/perf-hedged-adaptive-fast-window-x86-clippy.log",
+      "sha256": "7128cb5f5142cd3ade485232de2e8a673e6bd50422a187cc1037995c4926545c",
+      "tail": "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.76s\n"
+    }
+  ],
+  "limitations": [
+    "The sampling floor changes from 200 to 80 ms; the added initial-header component still caps at 200 ms. Other helper control logic is unchanged.",
+    "All 36 timed files verify. Three rotating repetitions cover all order positions per cohort; D random faults are independent, not paired by seed.",
+    "The shorter window improves C/D relative to the preserved adaptive baseline, but still loses D against v1.6.8 and Rust against zero helpers. B is mixed against the adaptive baseline. No general speed superiority or desktop adoption is accepted.",
+    "C is a scaled 32 MiB exploration; B/D use standard sizes. Public E uses official publisher size/SHA-256 checks. F/G are not remeasured here.",
+    "The standalone baseline-only command is a separate 8 MiB functional smoke and is not pooled into comparative timing medians. Its later parser correction changes argument validation/metadata only; each timing cohort retains its original harness snapshot/hash.",
+    "Seven affected automatic-mode wire cases pass on each architecture; no new full 33-case claim.",
+    "Known decoded lengths up to 1 TiB and strong ETag helpers remain diagnostic constraints. Desktop pause/cancel integration is absent.",
+    "Published v1.6.8 remains 777ab94 with verified deployed packages and both actual updater paths. Its GUI/tray/cold-start limitation remains."
+  ],
+  "raw_bundle": {
+    "path": "hedged-stream-fast-window.raw.json.gz",
+    "sha256": "efe11249f6581f82329ce0731a87b3e9c593f1d6b9e935031ae0bb1dad7f32dd",
+    "uncompressed_sha256": "b038572715224b1138c0775a4075057c500451a80c94f089a6490942e29c5839",
+    "format": "gzip-compressed UTF-8 JSON"
+  },
+  "runtime": [
+    {
+      "path": "target/perf-20261107-hedged-adaptive-fast-window-runtime.json",
+      "sha256": "881550d961e60f38bc76b2555115337d1e835c64ebaccbe465bb50c5ae9f8ffd",
+      "cases": 7,
+      "verified": 7
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-fast-window-x86-runtime.json",
+      "sha256": "2fa2126c6a1d98725ce0d1ca0851b88b3d352b27b23fc203efdd73287cee73c2",
+      "cases": 7,
+      "verified": 7
+    }
+  ],
+  "cohorts": [
+    {
+      "path": "target/perf-20261107-hedged-adaptive-fast-window-c-cap.json",
+      "sha256": "b1f3b648755f347f7b4b0c5cb46ab8ad5654666dda6489dfb972643a7e34aabc",
+      "summary": {
+        "IDG": {
+          "count": 3,
+          "median_seconds": 4.12230729998555,
+          "minimum_seconds": 4.113140400033444,
+          "maximum_seconds": 4.173310699989088
+        },
+        "IDG-adaptive": {
+          "count": 3,
+          "median_seconds": 4.130561299971305,
+          "minimum_seconds": 4.128495699958876,
+          "maximum_seconds": 4.135931400000118
+        },
+        "IDG-adaptive-baseline": {
+          "count": 3,
+          "median_seconds": 4.256434299983084,
+          "minimum_seconds": 4.241982799954712,
+          "maximum_seconds": 4.256620500003919
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-fast-window-d-manual.json",
+      "sha256": "0304c0eca40705896404ea252cb70c522762accf640184ceb0ed49d49f20f700",
+      "summary": {
+        "IDG": {
+          "count": 3,
+          "median_seconds": 5.993537700036541,
+          "minimum_seconds": 5.954492000048049,
+          "maximum_seconds": 6.207764399936423
+        },
+        "IDG-adaptive": {
+          "count": 3,
+          "median_seconds": 6.348848400055431,
+          "minimum_seconds": 6.347721200087108,
+          "maximum_seconds": 6.458625099970959
+        },
+        "IDG-adaptive-baseline": {
+          "count": 3,
+          "median_seconds": 6.735319499974139,
+          "minimum_seconds": 6.712170299957506,
+          "maximum_seconds": 8.040643699932843
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-fast-window-b-counts.json",
+      "sha256": "19465393be750ddd3bc583e8e825bb3401f0484f8fb698360135f190550811c0",
+      "summary": {
+        "IDG": {
+          "count": 3,
+          "median_seconds": 1.3647374999709427,
+          "minimum_seconds": 1.3639329000143334,
+          "maximum_seconds": 1.3758295000297949
+        },
+        "IDG-adaptive": {
+          "count": 3,
+          "median_seconds": 1.2957050000550225,
+          "minimum_seconds": 1.2136060999473557,
+          "maximum_seconds": 1.350790600059554
+        },
+        "IDG-adaptive-baseline": {
+          "count": 3,
+          "median_seconds": 1.2829746000934392,
+          "minimum_seconds": 1.2635583999799564,
+          "maximum_seconds": 1.3398049999959767
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-fast-window-public-e.json",
+      "sha256": "63bf4aa43bedbddf4aeb3dca73b7d74cfced5574fcdeb49b38a925e7c1fb0afb",
+      "summary": {
+        "IDG-adaptive": {
+          "count": 3,
+          "median_seconds": 1.376751699950546,
+          "minimum_seconds": 1.3120709999930114,
+          "maximum_seconds": 1.3995561000192538
+        },
+        "IDG-hedged-0": {
+          "count": 3,
+          "median_seconds": 1.3183639999479055,
+          "minimum_seconds": 1.2797973999986425,
+          "maximum_seconds": 1.3352856000419706
+        },
+        "curl": {
+          "count": 3,
+          "median_seconds": 1.336772800073959,
+          "minimum_seconds": 1.3050327999517322,
+          "maximum_seconds": 1.339939400088042
+        }
+      }
+    }
+  ],
+  "standalone_baseline_smoke": {
+    "path": "target/perf-20261107-hedged-baseline-only-smoke.json",
+    "sha256": "89f4e54ac62ae07d667a6cc517fa1b2b772ec1a841faeb793906557297ea826a",
+    "verified": true
+  }
+}
