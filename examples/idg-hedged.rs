@@ -34,6 +34,15 @@ impl std::fmt::Display for NetworkStall {
 }
 impl std::error::Error for NetworkStall {}
 
+#[derive(Debug)]
+struct CapacityRefusal(reqwest::StatusCode);
+impl std::fmt::Display for CapacityRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Server temporarily refused capacity (HTTP {})", self.0)
+    }
+}
+impl std::error::Error for CapacityRefusal {}
+
 async fn pump(
     response: reqwest::Response,
     start: u64,
@@ -45,10 +54,21 @@ async fn pump(
     let mut buffered = Vec::with_capacity(CHUNK as usize);
     let mut last_flush = Instant::now();
     loop {
-        if coverage.complete() {
+        if coverage.covers(start, end) {
             return Ok(());
         }
-        let next = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
+        let reading = tokio::time::timeout(Duration::from_secs(15), stream.next());
+        tokio::pin!(reading);
+        let result = loop {
+            tokio::select! {
+                biased;
+                result = &mut reading => break result,
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                    if coverage.covers(start, end) { return Ok(()); }
+                }
+            }
+        };
+        let next = match result {
             Ok(Some(Ok(bytes))) => bytes,
             Ok(None) => break,
             result => {
@@ -99,24 +119,30 @@ struct Helpers {
     failures: AtomicUsize,
     requests: AtomicUsize,
     reconnects: AtomicUsize,
+    capacity_retries: AtomicUsize,
 }
 
 impl Helpers {
     async fn run(&self) -> Result<()> {
-        let threshold = CHUNK.min(self.coverage.size / 8);
-        while self.coverage.bytes() < threshold && !self.primary_finished.load(Ordering::Acquire) {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
         while !self.coverage.complete() {
             // Claim each tail group once. Retry that group's acknowledged
             // remainder locally, avoiding repeated scans of completed groups.
             let group = self.next_group.fetch_add(1, Ordering::Relaxed);
-            if group >= self.coverage.chunk_count().div_ceil(GROUP_CHUNKS) {
-                break;
-            }
-            let stop = self.coverage.chunk_count() - group * GROUP_CHUNKS;
-            let first = stop.saturating_sub(GROUP_CHUNKS);
-            let end = (stop as u64 * CHUNK).min(self.coverage.size);
+            let (first, stop, end, _steal) =
+                if group < self.coverage.chunk_count().div_ceil(GROUP_CHUNKS) {
+                    let stop = self.coverage.chunk_count() - group * GROUP_CHUNKS;
+                    (
+                        stop.saturating_sub(GROUP_CHUNKS),
+                        stop,
+                        (stop as u64 * CHUNK).min(self.coverage.size),
+                        None,
+                    )
+                } else {
+                    let Some(claim) = self.coverage.claim_missing() else {
+                        break;
+                    };
+                    (claim.index, claim.index + 1, claim.end, Some(claim))
+                };
             let mut consecutive = 0u32;
             while let Some(start) = self.coverage.first_missing(first, stop) {
                 if self.coverage.complete() {
@@ -129,14 +155,21 @@ impl Helpers {
                         if error.is::<DiskFailure>() {
                             return Err(error);
                         }
-                        if error.is::<reqwest::Error>() || error.is::<NetworkStall>() {
+                        if error.is::<reqwest::Error>()
+                            || error.is::<NetworkStall>()
+                            || error.is::<CapacityRefusal>()
+                        {
                             let next = self.coverage.first_missing(first, stop).unwrap_or(end);
                             let progressed = next > start;
                             consecutive = if progressed { 0 } else { consecutive + 1 };
                             if consecutive <= 10 {
-                                self.reconnects.fetch_add(1, Ordering::Relaxed);
+                                if error.is::<CapacityRefusal>() {
+                                    self.capacity_retries.fetch_add(1, Ordering::Relaxed);
+                                } else {
+                                    self.reconnects.fetch_add(1, Ordering::Relaxed);
+                                }
                                 eprintln!(
-                                    "[IDG diagnostic] helper reconnect after acknowledged byte {next}, consecutive={consecutive}"
+                                    "[IDG diagnostic] helper retry after acknowledged byte {next}, consecutive={consecutive}"
                                 );
                                 if !progressed {
                                     tokio::time::sleep(Duration::from_millis(
@@ -160,22 +193,43 @@ impl Helpers {
     }
 
     async fn range(&self, start: u64, end: u64) -> Result<()> {
+        let admitted = Arc::new(AtomicBool::new(false));
+        let sending = self.request.send(
+            Spec::get(&self.url)
+                .header("range", format!("bytes={start}-{}", end - 1))?
+                .header("if-range", self.etag.to_str()?)?
+                .observe_admission(admitted.clone()),
+            Control {
+                network_timeout: Some(Duration::from_secs(20)),
+                ..Default::default()
+            },
+        );
+        tokio::pin!(sending);
         let LeasedResponse {
             response,
             permit: _permit,
-        } = self
-            .request
-            .send(
-                Spec::get(&self.url)
-                    .header("range", format!("bytes={start}-{}", end - 1))?
-                    .header("if-range", self.etag.to_str()?)?,
-                Control {
-                    network_timeout: Some(Duration::from_secs(20)),
-                    ..Default::default()
-                },
-            )
-            .await?
-            .leased;
+        } = loop {
+            tokio::select! {
+                biased;
+                result = &mut sending => break result?.leased,
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                    // Another stream can fill a queued helper's prefix. Drop
+                    // the superseded request and rebuild its exact remainder.
+                    let first = (start / CHUNK) as usize;
+                    let stop = end.div_ceil(CHUNK) as usize;
+                    let next = self.coverage.first_missing(first, stop).unwrap_or(end);
+                    if next == end || (next > start && !admitted.load(Ordering::Acquire)) {
+                        return Ok(());
+                    }
+                }
+            }
+        };
+        if matches!(
+            response.status(),
+            reqwest::StatusCode::TOO_MANY_REQUESTS | reqwest::StatusCode::SERVICE_UNAVAILABLE
+        ) {
+            return Err(CapacityRefusal(response.status()).into());
+        }
         anyhow::ensure!(
             response.status() == reqwest::StatusCode::PARTIAL_CONTENT,
             "Optional range returned HTTP {}",
@@ -293,6 +347,7 @@ async fn main() -> Result<()> {
             failures: AtomicUsize::new(0),
             requests: AtomicUsize::new(0),
             reconnects: AtomicUsize::new(0),
+            capacity_retries: AtomicUsize::new(0),
         })
     });
     let mut tasks = tokio::task::JoinSet::new();
@@ -304,25 +359,35 @@ async fn main() -> Result<()> {
         if let Some(helpers) = primary_helpers {
             helpers.primary_finished.store(true, Ordering::Release);
         }
-        outcome
+        (true, outcome)
     });
     for _ in 0..effective {
         let helpers = helpers.as_ref().unwrap().clone();
-        tasks.spawn(async move { helpers.run().await });
+        tasks.spawn(async move { (false, helpers.run().await) });
     }
     let mut failures = Vec::new();
+    let mut primary_replacements = 0;
     while !coverage.complete() {
         let Some(result) = tasks.join_next().await else {
             break;
         };
         match result {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) if error.is::<DiskFailure>() => {
+            Ok((_, Ok(()))) => {}
+            Ok((_, Err(error))) if error.is::<DiskFailure>() => {
                 tasks.abort_all();
                 while tasks.join_next().await.is_some() {}
                 return Err(error);
             }
-            Ok(Err(error)) => failures.push(error.to_string()),
+            Ok((primary, Err(error))) => {
+                failures.push(error.to_string());
+                if primary && let Some(helpers) = helpers.as_ref() {
+                    // Replace the failed original with one range worker. Its
+                    // response/lease has closed, so total concurrency stays N+1.
+                    primary_replacements += 1;
+                    let helpers = helpers.clone();
+                    tasks.spawn(async move { (false, helpers.run().await) });
+                }
+            }
             Err(error) => {
                 tasks.abort_all();
                 while tasks.join_next().await.is_some() {}
@@ -346,7 +411,8 @@ async fn main() -> Result<()> {
         "effective_helpers":effective,"helper_requests":helpers.as_ref().map_or(0,|h|h.requests.load(Ordering::Relaxed)),
         "optional_failures":helpers.as_ref().map_or(0,|h|h.failures.load(Ordering::Relaxed)),
         "helper_reconnects":helpers.as_ref().map_or(0,|h|h.reconnects.load(Ordering::Relaxed)),
-        "primary_or_task_failures":failures.len(),"headers_ms":headers_ms,"policy":"diagnostic_hedged_fixed_helpers"})
+        "capacity_retries":helpers.as_ref().map_or(0,|h|h.capacity_retries.load(Ordering::Relaxed)),
+        "primary_replacements":primary_replacements,"primary_or_task_failures":failures.len(),"headers_ms":headers_ms,"policy":"diagnostic_hedged_fixed_helpers"})
     );
     Ok(())
 }

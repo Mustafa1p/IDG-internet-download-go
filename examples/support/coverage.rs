@@ -2,7 +2,7 @@
 use crate::download::writer::DownloadWriter;
 use std::sync::{
     Arc,
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 pub const CHUNK: u64 = 1024 * 1024;
@@ -10,6 +10,18 @@ pub const CHUNK: u64 = 1024 * 1024;
 struct Chunk {
     next: AtomicU64,
     serial: tokio::sync::Mutex<()>,
+    stealing: AtomicBool,
+}
+
+pub struct StealClaim<'a> {
+    chunk: &'a Chunk,
+    pub index: usize,
+    pub end: u64,
+}
+impl Drop for StealClaim<'_> {
+    fn drop(&mut self) {
+        self.chunk.stealing.store(false, Ordering::Release);
+    }
 }
 
 #[cfg(test)]
@@ -113,6 +125,7 @@ impl Coverage {
                 .map(|i| Chunk {
                     next: AtomicU64::new(i as u64 * CHUNK),
                     serial: tokio::sync::Mutex::new(()),
+                    stealing: AtomicBool::new(false),
                 })
                 .collect(),
             file,
@@ -135,6 +148,35 @@ impl Coverage {
             let next = self.chunks[i].next.load(Ordering::Acquire);
             (next < ((i as u64 + 1) * CHUNK).min(self.size)).then_some(next)
         })
+    }
+
+    pub fn covers(&self, start: u64, end: u64) -> bool {
+        if start == 0 && end == self.size {
+            return self.complete();
+        }
+        ((start / CHUNK) as usize..end.div_ceil(CHUNK) as usize).all(|index| {
+            self.chunks[index].next.load(Ordering::Acquire) >= ((index as u64 + 1) * CHUNK).min(end)
+        })
+    }
+
+    /// One idle helper can hedge each unfinished chunk. The original group
+    /// keeps its valid response; only acknowledged unique writes count.
+    pub fn claim_missing(&self) -> Option<StealClaim<'_>> {
+        for (index, chunk) in self.chunks.iter().enumerate().rev() {
+            let end = ((index as u64 + 1) * CHUNK).min(self.size);
+            if chunk.next.load(Ordering::Acquire) < end
+                && chunk
+                    .stealing
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+                    .is_ok()
+            {
+                if chunk.next.load(Ordering::Acquire) < end {
+                    return Some(StealClaim { chunk, index, end });
+                }
+                chunk.stealing.store(false, Ordering::Release);
+            }
+        }
+        None
     }
 
     pub fn chunk_count(&self) -> usize {

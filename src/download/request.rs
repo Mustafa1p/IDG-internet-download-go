@@ -79,6 +79,7 @@ pub struct Spec {
     headers: HeaderMap,
     body: Option<String>,
     replay: ReplayPolicy,
+    admission: Option<Arc<AtomicBool>>,
 }
 impl Spec {
     pub fn get(url: &str) -> Self {
@@ -88,6 +89,7 @@ impl Spec {
             headers: HeaderMap::new(),
             body: None,
             replay: ReplayPolicy::Capacity,
+            admission: None,
         }
     }
     pub fn form(url: &str, body: String) -> Self {
@@ -97,12 +99,21 @@ impl Spec {
             headers: HeaderMap::new(),
             body: Some(body),
             replay: ReplayPolicy::Never,
+            admission: None,
         }
     }
     /// Generated/token-bearing GETs must not be used to test capacity or be
     /// replayed after ambiguous connection loss. Intent survives redirects.
     pub fn single_use(mut self) -> Self {
         self.replay = ReplayPolicy::Never;
+        self
+    }
+    /// Observe queue versus network dispatch without changing replay intent.
+    /// Each new attempt resets the signal while waiting for origin capacity.
+    #[allow(dead_code)] // Used by the experimental shared-coverage downloader.
+    pub fn observe_admission(mut self, signal: Arc<AtomicBool>) -> Self {
+        signal.store(false, Ordering::Release);
+        self.admission = Some(signal);
         self
     }
     /// One attempt per redirect hop. This safe GET may test recovered capacity,
@@ -260,12 +271,18 @@ impl RequestContext {
             let allow_probe = spec.replay != ReplayPolicy::Never
                 && matches!(spec.method, Method::GET | Method::HEAD);
             let (response, permit, elapsed) = loop {
+                if let Some(signal) = &spec.admission {
+                    signal.store(false, Ordering::Release);
+                }
                 // No network deadline runs while another file owns the capacity.
                 let permit = tokio::select! {
                     permit = budget.acquire_request(allow_probe) => permit,
                     error = control.interrupted() => return Err(error),
                 };
                 control.check()?;
+                if let Some(signal) = &spec.admission {
+                    signal.store(true, Ordering::Release);
+                }
                 let origin = url.origin().ascii_serialization();
                 let mut headers = HeaderMap::new();
                 for (name, value) in &self.headers {

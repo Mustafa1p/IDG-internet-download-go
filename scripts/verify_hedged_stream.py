@@ -19,8 +19,11 @@ CASES = [
     ("plain-zero", "plain", 0, True),
     ("plain-one", "plain", 1, True),
     ("plain-four", "plain", 4, True),
+    ("slow-front-helper", "slow-front", 1, True),
     ("refused-403", "403", 1, True),
     ("refused-413", "413", 4, True),
+    ("transient-503", "transient-503", 1, True),
+    ("transient-429", "transient-429", 1, True),
     ("ignored-range", "ignore", 4, True),
     ("wrong-range", "wrong-range", 4, True),
     ("changed-validator", "changed", 4, True),
@@ -28,7 +31,7 @@ CASES = [
     ("changed-after-progress", "changed-after-progress", 1, True),
     ("refused-after-progress", "refused-after-progress", 1, True),
     ("short-primary-recovered", "short-primary", 1, True),
-    ("short-primary-alone", "short-primary", 0, False),
+    ("short-primary-serial", "short-primary", 0, True),
     ("short-both", "short-both", 1, True),
     ("no-progress", "no-progress", 1, False),
     ("no-etag", "no-etag", 4, True),
@@ -51,7 +54,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--cases", nargs="+", choices=[case[0] for case in CASES])
     args = parser.parse_args()
+    if args.cases and len(args.cases) != len(set(args.cases)):
+        raise ValueError("Use unique case labels")
     binary = args.binary.resolve()
     output = args.output.resolve()
     work = output.parent / (output.stem + "-files")
@@ -76,6 +82,7 @@ def main():
         "binary_sha256": digest(binary),
         "source_sha256": {n: digest(ROOT / n) for n in source_paths},
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "case_selection": args.cases or [case[0] for case in CASES],
         "cases": [],
     }
 
@@ -84,9 +91,13 @@ def main():
 
     save()
     for label, mode, helpers, expected_success in CASES:
-        payload = b"" if mode == "empty" else DATA
+        if args.cases and label not in args.cases:
+            continue
+        payload = b"" if mode == "empty" else DATA[:256 * 1024] if mode == "slow-front" else DATA
         requests = []
         lock = threading.Lock()
+        capacity_ready = threading.Event()
+        helper_ready = threading.Event()
 
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
@@ -115,8 +126,14 @@ def main():
                     status = 401
                 with lock:
                     ranged_number = sum(bool(r["range"]) for r in requests) + bool(ranged)
+                    if ranged:
+                        helper_ready.set()
                     if ranged and mode == "refused-after-progress" and ranged_number > 1:
                         status = 403
+                    if ranged and mode in ("transient-503", "transient-429") and ranged_number <= 2:
+                        status = int(mode.rsplit("-", 1)[1])
+                    if ranged and mode in ("transient-503", "transient-429") and ranged_number <= 2:
+                        capacity_ready.set()
                     requests.append({
                         "range": ranged, "start": start, "end": end, "status": status,
                         "if_range": self.headers.get("If-Range"),
@@ -126,6 +143,8 @@ def main():
                 changed = bool(ranged and (mode == "changed" or mode == "changed-after-progress" and ranged_number > 1))
                 if changed:
                     content = bytes(value ^ 0xFF for value in content)
+                if ranged and mode == "slow-front":
+                    time.sleep(0.2)
                 self.send_response(status)
                 self.send_header("Connection", "close")
                 self.send_header("Content-Type", "text/html" if mode == "html" else "application/octet-stream")
@@ -141,8 +160,12 @@ def main():
                     range_start = start + (1 if ranged and mode == "wrong-range" else 0)
                     self.send_header("Content-Range", f"bytes {range_start}-{end}/{len(payload)}")
                 self.end_headers()
-                if not ranged and mode in ("short-primary", "short-both", "no-progress"):
+                if not ranged and mode in ("short-primary", "short-both", "no-progress", "transient-503", "transient-429"):
                     self.wfile.write(content[:193])
+                    if mode in ("transient-503", "transient-429"):
+                        # Release the occupied original slot before expecting
+                        # retries under the learned one-connection budget.
+                        capacity_ready.wait(2)
                     return
                 if ranged and (mode in ("short-helper", "short-both", "no-progress")
                                or mode in ("changed-after-progress", "refused-after-progress") and ranged_number == 1):
@@ -155,9 +178,12 @@ def main():
                     self.wfile.write(content)
                 else:
                     # Give the helpers a representative opportunity to arrive.
-                    for at in range(0, len(content), 32768):
-                        self.wfile.write(content[at:at + 32768])
-                        time.sleep(0.001)
+                    if mode == "slow-front":
+                        helper_ready.wait(5)
+                    step = 1024 if mode == "slow-front" else 32768
+                    for at in range(0, len(content), step):
+                        self.wfile.write(content[at:at + step])
+                        time.sleep(0.01 if mode == "slow-front" else 0.001)
 
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         server.daemon_threads = True
@@ -174,14 +200,24 @@ def main():
         try:
             process = subprocess.run(command, capture_output=True, text=True,
                                      encoding="utf-8", errors="replace", timeout=25)
+        except subprocess.TimeoutExpired as error:
+            def decoded(value):
+                return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""
+            process = subprocess.CompletedProcess(command, -1, decoded(error.stdout),
+                                                  decoded(error.stderr) + "\nDiagnostic timed out")
         finally:
+            capacity_ready.set()
             server.shutdown()
             server.server_close()
             thread.join()
         actual = digest(destination) if destination.is_file() else None
         expected = hashlib.sha256(payload).hexdigest()
         stdout = process.stdout.strip()
-        summary = json.loads(stdout) if stdout.startswith("{") else None
+        try:
+            summary = json.loads(stdout) if stdout.startswith("{") else None
+        except json.JSONDecodeError:
+            summary = None
+        metrics = summary if isinstance(summary, dict) else {}
         row = {
             "case": label, "mode": mode, "requested_helpers": helpers,
             "expected_success": expected_success, "exit_code": process.returncode,
@@ -192,11 +228,11 @@ def main():
         verified = (process.returncode == 0) == expected_success
         if expected_success:
             verified &= actual == expected and row["actual_size"] == len(payload)
-            verified &= summary is not None and summary["bytes"] == len(payload)
+            verified &= metrics.get("bytes") == len(payload)
             if helpers and mode not in ("empty", "no-etag", "weak-etag"):
                 verified &= any(r["range"] for r in requests)
             if mode in ("empty", "no-etag", "weak-etag"):
-                verified &= summary["effective_helpers"] == 0 and not any(r["range"] for r in requests)
+                verified &= metrics.get("effective_helpers") == 0 and not any(r["range"] for r in requests)
             if mode == "auth":
                 verified &= all(r["authenticated"] for r in requests)
         else:
@@ -206,11 +242,17 @@ def main():
         if mode in ("html", "partial-initial"):
             verified &= not destination.exists()
         if mode == "no-progress":
-            verified &= sum(bool(r["range"]) for r in requests) == 11
+            verified &= sum(bool(r["range"]) for r in requests) == 22
         if mode in ("short-helper", "short-both", "changed-after-progress", "refused-after-progress") and expected_success:
-            verified &= summary["helper_reconnects"] > 0
+            verified &= metrics.get("helper_reconnects", 0) > 0
         if mode in ("changed-after-progress", "refused-after-progress"):
-            verified &= summary["optional_failures"] == 1
+            verified &= metrics.get("optional_failures") == 1
+        if mode in ("transient-503", "transient-429"):
+            verified &= metrics.get("capacity_retries", 0) >= 2
+            verified &= sum(bool(r["range"]) for r in requests) >= 3
+            verified &= any(r["range"] and r["status"] == 206 for r in requests)
+        if mode == "slow-front":
+            verified &= sum(bool(r["range"]) for r in requests) == 1
         row["verified"] = bool(verified)
         result["cases"].append(row)
         save()
