@@ -45,21 +45,22 @@ def main():
     p.add_argument("--idg-baseline-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed"], default="production", help="Diagnostic policy for a preserved IDG CLI that supports it")
     p.add_argument("--idg-mode", choices=["production", "http1", "http2", "no-pool", "http2-fixed", "reuse-prefix"], default="production", help="Candidate CLI diagnostic policy; production is the actual desktop policy")
     p.add_argument("--idg-baseline", type=Path, help="Preserved IDG executable for interleaved before/after comparisons")
+    p.add_argument("--idg-hedged-baseline", type=Path, help="Preserved adaptive diagnostic for interleaved comparisons")
     p.add_argument("--idg-hedged", type=Path, help="Experimental full-stream helper executable; not the desktop policy")
     p.add_argument("--hedged-helpers", type=int, choices=range(32), default=1, metavar="0..31")
     p.add_argument("--idg-connections", type=int, choices=range(33), metavar="0..32", help="Diagnostic candidate override; 0 tests the app's automatic connection policy")
     p.add_argument("--idg-baseline-connections", type=int, choices=range(33), metavar="0..32", help="Diagnostic baseline override; recorded separately from the standard workload")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--scenarios", nargs="+", choices=SCENARIOS, default=list("ABCD"))
-    p.add_argument("--tools", nargs="+", choices=["curl", "aria2c", "Prism", "IDG", "IDG-baseline", "IDG-hedged", *[f"IDG-hedged-{n}" for n in range(32)]], default=["curl", "aria2c", "Prism", "IDG"])
+    p.add_argument("--tools", nargs="+", choices=["curl", "aria2c", "Prism", "IDG", "IDG-baseline", "IDG-hedged", "IDG-adaptive", "IDG-adaptive-baseline", *[f"IDG-hedged-{n}" for n in range(32)]], default=["curl", "aria2c", "Prism", "IDG"])
     p.add_argument("--repeats", type=int, default=3)
     p.add_argument("--curl-repeats", type=int, help="Optional smaller curl reference sample; recorded explicitly")
     p.add_argument("--size-factor", type=float, default=1.0, help="Exploration only; published A-D use 1.0")
     p.add_argument("--trace-idg", action="store_true", help="Retain per-second progress diagnostics in candidate IDG logs")
     p.add_argument("--timeout", type=float, default=600)
     args = p.parse_args()
-    hedged_counts = {tool: (args.hedged_helpers if tool == "IDG-hedged" else int(tool.rsplit("-", 1)[1]))
-                     for tool in args.tools if tool == "IDG-hedged" or tool.startswith("IDG-hedged-")}
+    hedged_counts = {tool: (args.hedged_helpers if tool in ("IDG-hedged", "IDG-adaptive", "IDG-adaptive-baseline") else int(tool.rsplit("-", 1)[1]))
+                     for tool in args.tools if tool in ("IDG-hedged", "IDG-adaptive", "IDG-adaptive-baseline") or tool.startswith("IDG-hedged-")}
     assert args.repeats > 0 and args.size_factor > 0
     assert not any(s in HTTPS_SOURCES for s in args.scenarios) or args.size_factor == 1, "Internet file sizes are fixed"
     publisher_references = verify_sources(args.scenarios)
@@ -70,9 +71,11 @@ def main():
         assert args.idg_baseline, "--idg-baseline is required for IDG-baseline trials"
         binaries["IDG-baseline"] = args.idg_baseline.resolve()
     if hedged_counts:
-        assert args.idg_hedged, "--idg-hedged is required for the diagnostic tool"
         for tool in hedged_counts:
-            binaries[tool] = args.idg_hedged.resolve()
+            flag = "--idg-hedged-baseline" if tool == "IDG-adaptive-baseline" else "--idg-hedged"
+            candidate_binary = args.idg_hedged_baseline if tool == "IDG-adaptive-baseline" else args.idg_hedged
+            assert candidate_binary, f"{flag} is required for {tool}"
+            binaries[tool] = candidate_binary.resolve()
     for tool in args.tools:
         assert binaries[tool].is_file(), binaries[tool]
     assert server.is_file(), server
@@ -89,7 +92,7 @@ def main():
                     *[ROOT / "scripts" / name for name in ("benchmark.py", "benchmark_process.py", "benchmark_sources.py", "process_metrics.py")],
                     *sorted((ROOT / "src/download").glob("*.rs"))]
     if hedged_counts:
-        source_paths.extend([ROOT / "examples/idg-hedged.rs", ROOT / "examples/support/coverage.rs"])
+        source_paths.extend([ROOT / "examples/idg-hedged.rs", ROOT / "examples/support/coverage.rs", ROOT / "examples/support/adaptive.rs"])
     for source in source_paths:
         destination = snapshot / source.relative_to(ROOT)
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -114,8 +117,10 @@ def main():
     result["driver_sha256"] = digest(ROOT / "examples/idg-get.rs")
     result["source_snapshot"] = str(snapshot.relative_to(output.parent))
     result["hedged_diagnostic"] = ({"helpers_by_tool": hedged_counts,
-        "policy": "diagnostic_hedged_fixed_helpers",
-        "sources": {n: digest(ROOT / n) for n in ["examples/idg-hedged.rs", "examples/support/coverage.rs"]}}
+        "source_snapshot_scope": "Current candidate sources; preserved baselines use their own recorded source snapshot and executable hash.",
+        "policy": "diagnostic_hedged_mixed_helpers" if any(t.startswith("IDG-adaptive") for t in hedged_counts) else "diagnostic_hedged_fixed_helpers",
+        "policy_by_tool": {t: "diagnostic_hedged_adaptive_helpers" if t.startswith("IDG-adaptive") else "diagnostic_hedged_fixed_helpers" for t in hedged_counts},
+        "sources": {n: digest(ROOT / n) for n in ["examples/idg-hedged.rs", "examples/support/coverage.rs", "examples/support/adaptive.rs"]}}
         if hedged_counts else None)
     result["harness_sha256"] = digest(ROOT / "scripts/benchmark.py")
     result["tracked_worktree_changes"] = subprocess.check_output(["git", "diff", "--name-only"], cwd=ROOT, text=True).splitlines()
@@ -175,7 +180,7 @@ def main():
                     command.append("--" + args.idg_baseline_mode)
             elif tool in hedged_counts:
                 requested_connections = hedged_counts[tool] + 1
-                command = [str(binaries[tool]), url, str(destination), "--helpers", str(hedged_counts[tool])]
+                command = [str(binaries[tool]), url, str(destination), "--auto-helpers" if tool.startswith("IDG-adaptive") else "--helpers", str(hedged_counts[tool])]
             elif tool == "Prism":
                 command = [str(prism), url, "-c", str(connections), "-o", str(directory)]
             elif tool == "aria2c":
@@ -203,7 +208,7 @@ def main():
                    "sync_error": sync_error, "command": command, "server_command": server_command,
                    "resources": measurement["resources"], "source_url": url,
                    "trace_idg": args.trace_idg and tool == "IDG",
-                   "candidate_policy": args.idg_mode if tool == "IDG" else args.idg_baseline_mode if tool == "IDG-baseline" else "diagnostic_hedged_fixed_helpers" if tool in hedged_counts else None,
+                   "candidate_policy": args.idg_mode if tool == "IDG" else args.idg_baseline_mode if tool == "IDG-baseline" else "diagnostic_hedged_adaptive_helpers" if tool.startswith("IDG-adaptive") else "diagnostic_hedged_fixed_helpers" if tool in hedged_counts else None,
                    "requested_helpers": hedged_counts.get(tool),
                    "log": str((directory / "tool.log").relative_to(output.parent))}
             result["runs"].append(row)

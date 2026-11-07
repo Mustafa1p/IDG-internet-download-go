@@ -1,0 +1,77 @@
+{
+  "scope": "Experimental helper reliability feedback; excluded from stable v1.6.8 source.",
+  "problem": "The original stream accelerates after three helpers receive terminal 403. A rate-only controller accepted that coincidental improvement and sent a fourth refused request.",
+  "change": "Terminal optional failures stop new capacity trials and roll back to the previously accepted target; keep the original response and exact acknowledged coverage.",
+  "identity": {
+    "x64_binary": "target/perf-idg-hedged-adaptive-refusal.exe",
+    "x64_sha256": "20ae94c81b2acba937fbe6c429e6e8a6e2bb37d76a4eeca488f012c929a3869b",
+    "x86_binary": "target/perf-idg-hedged-adaptive-refusal-x86.exe",
+    "x86_sha256": "5f1aefa0acfa651a7e1f9fa66678a8ebcbab92baa29d801dfcb31de3645c2bd5",
+    "source_sha256": {
+      "examples/idg-hedged.rs": "5e0f55dc1cda53a5d970421ca96f4f4ac917dc8e42f3970e8b970fba57b1c34f",
+      "examples/support/coverage.rs": "4d0045e85af6faeb36d681be4a4fa7d51fda8f4701d07d4633d44dc9f2ba5b87",
+      "examples/support/adaptive.rs": "4241d4663c59157213a539142efea21c90f11585a0cc37f6aee0713cf476abfa",
+      "scripts/verify_hedged_stream.py": "3d8b5fafbca5acc4cdb01aefbde7ba20f22a6350ea38fa941722bf104bc8bf7e",
+      "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+      "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+      "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+      "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+      "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+      "src/download/engine.rs": "f27872b05e0c3aa8a1e208426125319377ed7b4728c5d4f585f96cc5b234d4b2",
+      "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+      "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+      "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+      "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+      "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+      "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+      "src/download/request.rs": "34bda79c58e45e5f39cadcd06d5d6a52c5e65956f39fe6b4884cef42217cc55b",
+      "src/download/segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+      "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+      "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+    }
+  },
+  "checks": [
+    {
+      "path": "target/perf-hedged-adaptive-refusal-clippy.log",
+      "sha256": "707f6c86e5fab2435512e83d167c0e7ff2719c45fab25e96323225147328f7b0",
+      "tail": "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.38s\n"
+    },
+    {
+      "path": "target/perf-hedged-adaptive-refusal-x86-clippy.log",
+      "sha256": "d07f65bd513ff0c83c78b1bc2d62d8b5e4ab6e1c9fc65e03893cb8f3166971b7",
+      "tail": "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.44s\n"
+    }
+  ],
+  "limitations": [
+    "Seven affected automatic-mode real-wire cases pass per architecture. The previous a84df75 full 32-case suite passed both architectures; no new full-suite or speed-ranking claim.",
+    "The original and both corrected executables complete the exact accelerating source. The fixed regression verifies the unnecessary fourth 403 request is eliminated.",
+    "No desktop policy, release version or stable package changes."
+  ],
+  "raw_bundle": {
+    "path": "hedged-stream-refusal-feedback.raw.json.gz",
+    "sha256": "38847a5c343272fdea835ae7b83f702a4e079818d478ccdbecb2a92f1cff546b",
+    "uncompressed_sha256": "936961733a136b2b72d4646427efe0b77291ac3e6afa485cf68aaeed141f4807",
+    "format": "gzip-compressed UTF-8 JSON"
+  },
+  "runtime": [
+    {
+      "path": "target/perf-20261107-hedged-adaptive-refusal-runtime.json",
+      "sha256": "e62aab982e013dfa19baf5cfaf5403dcb9a0f1de33b5d6c007108db6f2030f49",
+      "cases": 7,
+      "verified": 7
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-refusal-x86-runtime.json",
+      "sha256": "0a3a1f231b3b52fffbdaadcdba60a2088e92c3e033dfb4ee3d775c2ef4241668",
+      "cases": 7,
+      "verified": 7
+    }
+  ],
+  "reproduction": {
+    "path": "target/perf-20261107-hedged-adaptive-refusal-acceleration-reproduction.json",
+    "sha256": "74ea4a9b1505f3745339bfcff0eb63895b9b5d6fbb599e2362221c04850913e4",
+    "verified": false,
+    "refused_range_requests": 4
+  },
+  "corrected_refused_range_requests": 3
+}
