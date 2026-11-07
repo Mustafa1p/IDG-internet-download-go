@@ -1,0 +1,37 @@
+{
+  "version": "1.6.8",
+  "architecture": "x64",
+  "source_revision": "777ab94d8b733477acf9dcbd1dddfbe43b94849c",
+  "prism_revision": "c25f3c795c962323982effcb0220fcbbe75ee2a3",
+  "idg_engine_binary_sha256": "a751aa585f2cacc727db02cdcb8fb9349d283b20234d1f2b829e5da126332408",
+  "tools": {
+    "Prism": "1.1.7",
+    "aria2c": "1.37.0",
+    "curl": "8.21.0 Schannel"
+  },
+  "attempts": 76,
+  "verified": 72,
+  "completion": {
+    "IDG": {
+      "verified": 21,
+      "attempted": 21
+    },
+    "Prism": {
+      "verified": 21,
+      "attempted": 21
+    },
+    "aria2c": {
+      "verified": 18,
+      "attempted": 21
+    },
+    "curl": {
+      "verified": 12,
+      "attempted": 13
+    }
+  },
+  "input_sha256": {
+    "local": "d071ab1b777567ec9c0291f66ab1012e7d50495cd2035987973a4d84d4098644",
+    "public": "df3d3ce18935c3a5ff6d3b88dfb0ee26add6cf9c01f1a645eeb746677fd94f47"
+  },
+  "scope": "Fresh production-engine benchmark; no experimental helper policy. Local curl n=1; every other group n=3. GUI/Automatic mode are outside this measurement."
+}
