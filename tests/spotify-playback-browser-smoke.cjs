@@ -1,6 +1,7 @@
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { chromium } = require(require.resolve('playwright-core', { paths: [process.cwd(), path.resolve('target/browser-check')] }));
+const { waitForHandoff } = require('./browser-handoff.cjs');
 (async () => {
   const context = await chromium.launchPersistentContext(path.resolve(`target/browser-check/spotify-playback-${Date.now()}`), {
     executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true,
@@ -8,10 +9,11 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
   });
   try {
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+    let deliveredCount = 0;
     await worker.evaluate(async () => {
       await settingsReady;
       globalThis.requests=[];
-      sendDownloadToIDG=async (...args)=>{requests.push(args);return {ok:true};};
+      sendDownloadToIDG=async (...args)=>{ await new Promise(resolve => setTimeout(resolve, 100));requests.push(args);return {ok:true};};
     });
     const A='3PsejBjTRczNY88SlcWUyg', B='3uCdelPvIjIA0q0V6KRWFY', C='0000000000000000000003';
     const canonical=id=>`https://open.spotify.com/track/${id}`;
@@ -23,7 +25,7 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(pageUrl);
     const action=page.getByRole('button',{name:'Download this media with IDG'});
-    const last=async()=> (await worker.evaluate(()=>requests)).at(-1)[0];
+    const last=async()=> (await waitForHandoff(worker, ++deliveredCount)).at(-1)[0];
     await action.click();assert.equal(await last(),canonical(A));
     // The song changes; the collection URL and its old uri parameter stay fixed.
     await page.locator('footer a').evaluate((link,id)=>{link.href='/track/'+id;link.firstChild.data='Song B';},B);

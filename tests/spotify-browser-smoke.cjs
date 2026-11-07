@@ -1,6 +1,7 @@
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { chromium } = require(require.resolve('playwright-core', { paths: [process.cwd(), path.resolve('target/browser-check')] }));
+const { waitForHandoff } = require('./browser-handoff.cjs');
 (async () => {
   const extension = path.resolve('extension');
   const context = await chromium.launchPersistentContext(path.resolve(`target/browser-check/spotify-${Date.now()}`), {
@@ -9,10 +10,11 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
   });
   try {
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+    let deliveredCount = 0;
     await worker.evaluate(async () => {
       await settingsReady;
       globalThis.fixtureRequests = [];
-      sendDownloadToIDG = async (...args) => { fixtureRequests.push(args); return { ok: true }; };
+      sendDownloadToIDG = async (...args) => { await new Promise(resolve => setTimeout(resolve, 100)); fixtureRequests.push(args); return { ok: true }; };
     });
     await context.route('https://open.spotify.com/**', route => route.fulfill({ contentType: 'text/html',
       body: '<!doctype html><title>Spotify without audio or video</title><main><h1>Track fixture</h1></main>' }));
@@ -25,12 +27,12 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
     assert.equal(await action.count(), 1);
     await action.click();
     await page.getByText('Opened in IDG', { exact: true }).waitFor();
-    assert.equal((await worker.evaluate(() => fixtureRequests))[0][0], url);
+    assert.equal((await waitForHandoff(worker, ++deliveredCount, 'fixtureRequests'))[0][0], url);
     const next = 'https://open.spotify.com/track/0000000000000000000001';
     await page.evaluate(url => history.pushState({}, '', url), next);
     await page.getByText('Download with IDG', { exact: true }).waitFor();
     await action.click();
-    assert.equal((await worker.evaluate(() => fixtureRequests)).at(-1)[0], next);
+    assert.equal((await waitForHandoff(worker, ++deliveredCount, 'fixtureRequests')).at(-1)[0], next);
     await page.getByRole('button', { name: 'Hide IDG download button for this video' }).click();
     assert.equal(await action.count(), 0);
     await page.evaluate(() => history.pushState({}, '', '/search'));
@@ -43,14 +45,14 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
     await page.evaluate(url => history.pushState({}, '', url), collectionShare);
     await page.getByText('Download with IDG', { exact: true }).waitFor();
     await action.click();
-    assert.equal((await worker.evaluate(() => fixtureRequests)).at(-1)[0], 'https://open.spotify.com/track/3PsejBjTRczNY88SlcWUyg');
+    assert.equal((await waitForHandoff(worker, ++deliveredCount, 'fixtureRequests')).at(-1)[0], 'https://open.spotify.com/track/3PsejBjTRczNY88SlcWUyg');
     await page.evaluate(url => {
       history.pushState({}, '', '/collection/tracks');
       document.body.insertAdjacentHTML('beforeend', `<main><a href="/track/0000000000000000000009">Unrelated listed song</a></main><div data-testid="now-playing-widget"><a href="${url}">Playing song</a></div>`);
     }, url);
     await page.getByText('Download with IDG', { exact: true }).waitFor();
     await action.click();
-    assert.equal((await worker.evaluate(() => fixtureRequests)).at(-1)[0], url);
+    assert.equal((await waitForHandoff(worker, ++deliveredCount, 'fixtureRequests')).at(-1)[0], url);
     await page.evaluate(() => document.querySelector('[data-testid="now-playing-widget"]').remove());
     await page.getByText('Open a Spotify track', { exact: true }).waitFor();
     await page.evaluate(url => history.pushState({}, '', url), url);

@@ -1,5 +1,6 @@
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { waitForHandoff: waitForDelivered } = require('./browser-handoff.cjs');
 const { chromium } = require(require.resolve('playwright-core', { paths: [process.cwd(), path.resolve('target/browser-check')] }));
 (async () => {
   const context = await chromium.launchPersistentContext(path.resolve(`target/browser-check/spotify-rows-${Date.now()}`), {
@@ -35,13 +36,7 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
       <script>window.rowClicks=0;document.querySelectorAll('[role=row]').forEach(row=>row.addEventListener('click',()=>window.rowClicks++));</script>` }));
     const page = await context.newPage();
     const waitForHandoff = async (button, expectedCount) => {
-      await worker.evaluate(async expected => {
-        const deadline = Date.now() + 5000;
-        while (requests.length < expected && Date.now() < deadline) {
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
-        if (requests.length !== expected) throw new Error(`Expected ${expected} delivered requests, received ${requests.length}`);
-      }, expectedCount);
+      await waitForDelivered(worker, expectedCount);
       await page.waitForFunction(element => !element.disabled,
         await button.elementHandle(), { timeout: 5000 });
     };

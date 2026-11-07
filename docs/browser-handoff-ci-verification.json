@@ -1,0 +1,82 @@
+{
+  "scope": "CI cache fallback and asynchronous browser test reliability; no production extension change.",
+  "trigger": {
+    "run": 42327376093,
+    "x64_job": 128265683054,
+    "conclusion": "failure: Spotify browser fixture read previous delivery; x86 cancelled by matrix failure"
+  },
+  "cache_proof": {
+    "x64": {
+      "job": 128265683054,
+      "restored_key": "Windows-x64-cargo-382fdbcea88013d7911398ad113ff6024aa4850976644d71ea3c3b48243afe25"
+    },
+    "x86": {
+      "job": 128265682815,
+      "restored_key": "Windows-x86-cargo-382fdbcea88013d7911398ad113ff6024aa4850976644d71ea3c3b48243afe25"
+    },
+    "matching_rule": "https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#cache-key-matching"
+  },
+  "reproduction": [
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-browser-delay-reproduction.log",
+      "sha256": "b0ce8a0fc5add0f85826e719207b698a63786fdc3bac94dc5aebbbedfb3806ba",
+      "text": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY'\n- 'https://open.spotify.com/track/0000000000000000000001'\n\n    at X:\\github projects\\IDG-internet-download-go\\target\\ci-cache-fix\\tests\\spotify-browser-smoke.cjs:33:12 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: 'https://open.spotify.com/track/3uCdelPvIjIA0q0V6KRWFY',\n  expected: 'https://open.spotify.com/track/0000000000000000000001',\n  operator: 'strictEqual'\n}\n"
+    },
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-library-browser-delay-reproduction.log",
+      "sha256": "77060bd0856d3ec835e7d043828364d8b833768a45f0c3b67715b64b5db0c8f8",
+      "text": "TypeError: Cannot read properties of undefined (reading '0')\n    at X:\\github projects\\IDG-internet-download-go\\target\\ci-cache-fix\\tests\\spotify-library-browser-smoke.cjs:32:61\n"
+    },
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-page-browser-delay-reproduction.log",
+      "sha256": "7a1414d47db634d63748a6df9d397d915ec22b6dfc38c5075d9ba0d2763cac19",
+      "text": "TypeError: Cannot read properties of undefined (reading '0')\n    at X:\\github projects\\IDG-internet-download-go\\target\\ci-cache-fix\\tests\\spotify-page-browser-smoke.cjs:43:64\n"
+    },
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-playback-browser-delay-reproduction.log",
+      "sha256": "0da8accfa984f0a83c0db4d2ce6e4b05edff4f57032b3545986de2e63db031b5",
+      "text": "TypeError: Cannot read properties of undefined (reading '0')\n    at last (X:\\github projects\\IDG-internet-download-go\\target\\ci-cache-fix\\tests\\spotify-playback-browser-smoke.cjs:26:70)\n    at async X:\\github projects\\IDG-internet-download-go\\target\\ci-cache-fix\\tests\\spotify-playback-browser-smoke.cjs:27:39\n"
+    }
+  ],
+  "verification": [
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-browser-handoff-verification.log",
+      "sha256": "26449b2d6024d16a86e7a1d2da0c526357340f58f32a89917445c57ddc887e89",
+      "text": "PASS: Spotify button without audio/video, SPA URL handoff, one button only, dismissal, visible setup error, Liked Songs uri query and playing-track resolution without guessing list tracks, and site pause/resume.\n"
+    },
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-library-browser-handoff-verification.log",
+      "sha256": "cb2131be9c0256ba8fd8bcc958a0d4167d5818fb7b84f7f8d32af03588fe7d42",
+      "text": "PASS: Your Library download-all buttons for playlists and Liked Songs, full-collection links without playback uri, artists/main-page links excluded, speaker preserved, virtualized-row cleanup, scroll clipping, pause/resume.\n"
+    },
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-page-browser-handoff-verification.log",
+      "sha256": "ba0acc4778b5f98cb80210e7f13ed2074659ceee7f7fdd658caabacd7d7ee514",
+      "text": "PASS: linkless React-prop rows/player/library, exact same-click reused row, fixed page URL with changing playback, ambiguous IDs rejected, credential fields/getters untouched, and current-page diagnostics.\n"
+    },
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-playback-browser-handoff-verification.log",
+      "sha256": "c2d2ca6b3f4bb874e30bdfddb8722733b28d3b2ddf9772fed28d9703cbcfefa6",
+      "text": "PASS: unchanged Spotify collection URL, stale uri ignored after playback change, footer priority over stale sidebar, both link/title update orders, text-only and MediaSession changes, data-track-uri, missing-player safety.\n"
+    },
+    {
+      "path": "X:\\github projects\\IDG-internet-download-go\\target\\ci-spotify-row-handoff-verification.log",
+      "sha256": "7efc80917779b070d2410e8cd7fec0cc2556be9fc46d7a9454f13ec111a89d73",
+      "text": "PASS: seven Spotify row buttons after durations, native menus preserved, each exact row track handed off independently of playback and the collection URL, URI rows, same-click reused-row changes, scroll clipping, no floating duplicate, site pause/resume.\n"
+    }
+  ],
+  "source_sha256": {
+    ".github/workflows/release.yml": "b1c7a91162358fa6b190796a128dd8eb5f8269fd735704f92a71b9529523a4b9",
+    "tests/browser-handoff.cjs": "a68c38d7746160026ab90db5f9f7c13e63c27ad5a566bd7312aa5c837749cea0",
+    "tests/spotify-browser-smoke.cjs": "036ee8c3e9c5d57c00eca6c932b0cb3bf2f748e7b139e1f8864074fa1750ba0c",
+    "tests/spotify-library-browser-smoke.cjs": "32c46d0688c71af4a8f322362efcf56a618ba34b3d4ded197d92eb7d6077abec",
+    "tests/spotify-page-browser-smoke.cjs": "1b1aede1acb5d73d58fbb361aabb0fcf1c1a50a2866dddc07dc9309d81a441c3",
+    "tests/spotify-playback-browser-smoke.cjs": "1e84ae4c98d9968cabb9c99df53e479c538d6a73eb051d0ed15d4b41a42c78ca",
+    "tests/spotify-row-browser-smoke.cjs": "1541f4833d92b4948a26ed239708d5c658af3e791e977dccd67fb766900b768e"
+  },
+  "limitations": [
+    "All four affected fixtures fail with representative 100 ms delivery delay before assertion repair and pass with the shared delivered-count wait. The existing row fixture also passes using that helper and its enabled-button wait.",
+    "Actual fallback restores were observed on both architectures, but the original workflow did not pass because of the separate browser fixture race. Fresh complete CI for the test fix is pending.",
+    "Live Spotify accounts, production extension logic and stable v1.6.8 are unchanged by this maintenance fix."
+  ]
+}

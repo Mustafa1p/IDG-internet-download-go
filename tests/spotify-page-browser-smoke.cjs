@@ -1,6 +1,7 @@
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { chromium } = require(require.resolve('playwright-core', { paths: [process.cwd(), path.resolve('target/browser-check')] }));
+const { waitForHandoff } = require('./browser-handoff.cjs');
 (async () => {
   const context = await chromium.launchPersistentContext(path.resolve(`target/browser-check/spotify-page-${Date.now()}`), {
     executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true,
@@ -9,10 +10,11 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
   });
   try {
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+    let deliveredCount = 0;
     await worker.evaluate(async () => {
       await settingsReady;
       globalThis.requests = [];
-      sendDownloadToIDG = async (...args) => { requests.push(args); return { ok: true }; };
+      sendDownloadToIDG = async (...args) => { await new Promise(resolve => setTimeout(resolve, 100)); requests.push(args); return { ok: true }; };
     });
     const a = '3PsejBjTRczNY88SlcWUyg', b = '3uCdelPvIjIA0q0V6KRWFY', playlist = '0000000000000000000001';
     await context.route('https://open.spotify.com/**', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html>
@@ -40,18 +42,18 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
     await first.waitFor();
     assert.equal(await page.locator('[data-idg-spotify-row]:not([data-idg-spotify-library])').count(), 1);
     await first.click();
-    assert.equal((await worker.evaluate(() => requests)).at(-1)[0], `https://open.spotify.com/track/${a}`);
+    assert.equal((await waitForHandoff(worker, ++deliveredCount)).at(-1)[0], `https://open.spotify.com/track/${a}`);
     await page.getByRole('button', { name: 'Download all Liked Songs with IDG' }).click();
-    assert.equal((await worker.evaluate(() => requests)).at(-1)[0], 'https://open.spotify.com/collection/tracks');
+    assert.equal((await waitForHandoff(worker, ++deliveredCount)).at(-1)[0], 'https://open.spotify.com/collection/tracks');
     await page.getByRole('button', { name: 'Download all My playlist with IDG' }).click();
-    assert.equal((await worker.evaluate(() => requests)).at(-1)[0], `https://open.spotify.com/playlist/${playlist}`);
+    assert.equal((await waitForHandoff(worker, ++deliveredCount)).at(-1)[0], `https://open.spotify.com/playlist/${playlist}`);
     // React props change without any link or browser URL changing. Read again
     // synchronously on the genuine click, before a scan can refresh the cache.
     await page.evaluate(id => document.addEventListener('click', () => {
       document.getElementById('song').__reactProps$test={track:{uri:'spotify:track:'+id}};
     }, { once: true, capture: true }), b);
     await first.click();
-    assert.equal((await worker.evaluate(() => requests)).at(-1)[0], `https://open.spotify.com/track/${b}`);
+    assert.equal((await waitForHandoff(worker, ++deliveredCount)).at(-1)[0], `https://open.spotify.com/track/${b}`);
     await page.evaluate(() => document.getElementById('song').remove());
     await page.getByRole('button', { name: 'Download this media with IDG', exact: true }).waitFor();
     await page.evaluate(id => {
@@ -60,7 +62,7 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
     }, b);
     await page.waitForFunction(() => document.getElementById('player').getAttribute('data-idg-spotify-uri')?.endsWith('3uCdelPvIjIA0q0V6KRWFY'));
     await page.getByRole('button', { name: 'Download this media with IDG', exact: true }).click();
-    assert.equal((await worker.evaluate(() => requests)).at(-1)[0], `https://open.spotify.com/track/${b}`);
+    assert.equal((await waitForHandoff(worker, ++deliveredCount)).at(-1)[0], `https://open.spotify.com/track/${b}`);
     assert.equal(await page.evaluate(() => window.getterReads), 0);
     assert.ok(page.url().includes(a), 'page URL remains on the original song');
     // Query the same diagnostic response used by the popup in the active tab.
