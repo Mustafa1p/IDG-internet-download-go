@@ -1,0 +1,3516 @@
+{
+  "scope": "Rejected single-wave range scheduling prototypes; not accepted as a production speed gain.",
+  "reason": "A source accepting the 2 MiB initial range can reject later ranges above 512 KiB. The preserved bounded queue completes exactly; the coarse prototype fails HTTP 413. Controlled latency gains do not justify this compatibility regression. Public HTTPS results are mixed.",
+  "identities": [
+    {
+      "git_head": "cd0481f6a734e70e284575b2f691168293085a31",
+      "working_patch_sha256": "6590d4556923a97406387f14811243eb1557ea2b2a5372fe21ee11e950ed4743",
+      "snapshot": "target\\perf-single-wave-prototype-source",
+      "binary": "target\\perf-idg-single-wave-prototype.exe",
+      "binary_sha256": "b3bfec10ac5f2faca45da49303c3f16152c906c2d771a8fbf8b111c1c11310b8",
+      "source_sha256": {
+        "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+        "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+        "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+        "examples/idg-get.rs": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+        "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+        "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+        "src/download/engine.rs": "070e0944bc97b19518a5a95d9a4cb351330e687bfb31cac4acb493ff8eadbbf6",
+        "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+        "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+        "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+        "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+        "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+        "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+        "src/download/request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+        "src/download/segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+        "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+        "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+      }
+    },
+    {
+      "git_head": "cd0481f6a734e70e284575b2f691168293085a31",
+      "working_patch_sha256": "41464343a7ecd74210d07575bdc3e9d91811b60d4380835e6f6f0e24313fc584",
+      "snapshot": "target\\perf-single-wave-half-idle-source",
+      "binary": "target\\perf-idg-single-wave-half-idle.exe",
+      "binary_sha256": "d6ec39e0bbc9f776b896f29858954964bbfe8743541174db081057e58f958752",
+      "source_sha256": {
+        "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+        "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+        "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+        "examples/idg-get.rs": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+        "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+        "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+        "src/download/engine.rs": "d738a62863e0e628e45ff23a0e4b829e733aa391113362fc91226395035fe2f3",
+        "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+        "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+        "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+        "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+        "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+        "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+        "src/download/request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+        "src/download/segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+        "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+        "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+      }
+    },
+    {
+      "git_head": "cd0481f6a734e70e284575b2f691168293085a31",
+      "binary": "target\\perf-idg-bounded-handoff.exe",
+      "binary_sha256": "e4c7b9852f091fef80ce3331ab4cd6894441a1387d44e12f6ad8e58d828048f4",
+      "source_sha256": {
+        "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+        "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+        "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+        "examples/idg-get.rs": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+        "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+        "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+        "src/download/engine.rs": "fc1cbe501e0c881619600836c58022751622763a6ddf1ee1f5759348e04d3ec2",
+        "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+        "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+        "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+        "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+        "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+        "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+        "src/download/request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+        "src/download/segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+        "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+        "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "file": "target/perf-20261107-single-wave-4m-80.json",
+      "sha256": "59202a13110350a4ea5a3839dfd0c34c019897f6e4f99386938acbd1cc049e5e",
+      "evidence": {
+        "configuration": {
+          "baseline": "target\\perf-idg-bounded-handoff.exe",
+          "candidate": "target\\perf-idg-single-wave-prototype.exe",
+          "output": "target\\perf-20261107-single-wave-4m-80.json",
+          "repeats": 3,
+          "latency_ms": 80.0,
+          "size_kib": 4096,
+          "connections": 0,
+          "candidate_policy": "production",
+          "per_connection_mib": 0,
+          "first_range_mib": 0,
+          "slow_range_start_kib": 0
+        },
+        "fixture_sha256": "316c9cfc0ccc1a2074397904c01d1f05d266c9043a7ecf1fbf73661aaac605a3",
+        "content_generator": "SHAKE256(IDG latency fixture v2)",
+        "latency_ms": 80.0,
+        "size": 4194304,
+        "expected_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+        "binaries": {
+          "baseline": "e4c7b9852f091fef80ce3331ab4cd6894441a1387d44e12f6ad8e58d828048f4",
+          "candidate": "b3bfec10ac5f2faca45da49303c3f16152c906c2d771a8fbf8b111c1c11310b8"
+        },
+        "runs": [
+          {
+            "tool": "baseline",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26114/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-4m-80-files\\1-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.28016480000223964,
+            "durable_seconds": 0.28145159990526736,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16408576,
+              "peak_commit_bytes": 9957376,
+              "page_faults": 5649,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 146816887
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26117/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-4m-80-files\\1-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.20255340007133782,
+            "durable_seconds": 0.20384139998350292,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16801792,
+              "peak_commit_bytes": 9957376,
+              "page_faults": 5404,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 158046472
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26120/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-4m-80-files\\2-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.2000527000054717,
+            "durable_seconds": 0.20143180002924055,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16576512,
+              "peak_commit_bytes": 10301440,
+              "page_faults": 5488,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.0625,
+              "cpu_cycles": 147456394
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26123/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-4m-80-files\\2-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.27741759992204607,
+            "durable_seconds": 0.2787502999417484,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16527360,
+              "peak_commit_bytes": 9797632,
+              "page_faults": 5486,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 142307695
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26127/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-4m-80-files\\3-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.30101399996783584,
+            "durable_seconds": 0.302377299987711,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 16551936,
+              "peak_commit_bytes": 9793536,
+              "page_faults": 5632,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.046875,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 147024167
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26130/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-4m-80-files\\3-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              }
+            ],
+            "actual_sha256": "509667ef01150dfd56a8f8369ea8927d47ebf495c0d02f8c6064dcf8534277a1",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.19859819998964667,
+            "durable_seconds": 0.20082539995200932,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 17006592,
+              "peak_commit_bytes": 10108928,
+              "page_faults": 5321,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 141070304
+            }
+          }
+        ],
+        "finished_utc": "2026-11-06T23:50:54Z"
+      }
+    },
+    {
+      "file": "target/perf-20261107-single-wave-8m-capped-80.json",
+      "sha256": "d8fdd76e40f083bffaf03f5fba03bf4b7a7c7d0d848c958ccb2a10ad2bc1828e",
+      "evidence": {
+        "configuration": {
+          "baseline": "target\\perf-idg-bounded-handoff.exe",
+          "candidate": "target\\perf-idg-single-wave-prototype.exe",
+          "output": "target\\perf-20261107-single-wave-8m-capped-80.json",
+          "repeats": 3,
+          "latency_ms": 80.0,
+          "size_kib": 8192,
+          "connections": 0,
+          "candidate_policy": "production",
+          "per_connection_mib": 3.0,
+          "first_range_mib": 0,
+          "slow_range_start_kib": 0
+        },
+        "fixture_sha256": "316c9cfc0ccc1a2074397904c01d1f05d266c9043a7ecf1fbf73661aaac605a3",
+        "content_generator": "SHAKE256(IDG latency fixture v2)",
+        "latency_ms": 80.0,
+        "size": 8388608,
+        "expected_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+        "binaries": {
+          "baseline": "e4c7b9852f091fef80ce3331ab4cd6894441a1387d44e12f6ad8e58d828048f4",
+          "candidate": "b3bfec10ac5f2faca45da49303c3f16152c906c2d771a8fbf8b111c1c11310b8"
+        },
+        "runs": [
+          {
+            "tool": "baseline",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26137/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-capped-80-files\\1-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5013504-5242879"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.138365300022997,
+            "durable_seconds": 1.1398603999987245,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15269888,
+              "peak_commit_bytes": 11223040,
+              "page_faults": 4865,
+              "cpu_user_seconds": 0.078125,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.109375,
+              "cpu_cycles": 234445347
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26142/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-capped-80-files\\1-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.8791965000564232,
+            "durable_seconds": 0.8805459000868723,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 14983168,
+              "peak_commit_bytes": 10801152,
+              "page_faults": 4323,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 210156951
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26147/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-capped-80-files\\2-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.8803841000190005,
+            "durable_seconds": 0.8818075999151915,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15003648,
+              "peak_commit_bytes": 10981376,
+              "page_faults": 4205,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.078125,
+              "cpu_cycles": 201142429
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26152/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-capped-80-files\\2-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5013504-5242879"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.240328999934718,
+            "durable_seconds": 1.241633899975568,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15249408,
+              "peak_commit_bytes": 11235328,
+              "page_faults": 4819,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 241000915
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26171/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-capped-80-files\\3-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3964928-4194303"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.139097800012678,
+            "durable_seconds": 1.1403664000099525,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15187968,
+              "peak_commit_bytes": 11059200,
+              "page_faults": 4915,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 223324752
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26176/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-capped-80-files\\3-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 0.8727157999528572,
+            "durable_seconds": 0.8749075999949127,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15114240,
+              "peak_commit_bytes": 11022336,
+              "page_faults": 4314,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.078125,
+              "cpu_total_seconds": 0.109375,
+              "cpu_cycles": 183962421
+            }
+          }
+        ],
+        "finished_utc": "2026-11-06T23:51:02Z"
+      }
+    },
+    {
+      "file": "target/perf-20261107-single-wave-8m-first-slow-80.json",
+      "sha256": "10b31a87e8ca365151539e91b3910ffc007f061a209ad76221ad9d674684fb54",
+      "evidence": {
+        "configuration": {
+          "baseline": "target\\perf-idg-bounded-handoff.exe",
+          "candidate": "target\\perf-idg-single-wave-prototype.exe",
+          "output": "target\\perf-20261107-single-wave-8m-first-slow-80.json",
+          "repeats": 3,
+          "latency_ms": 80.0,
+          "size_kib": 8192,
+          "connections": 0,
+          "candidate_policy": "production",
+          "per_connection_mib": 3.0,
+          "first_range_mib": 0.25,
+          "slow_range_start_kib": 0
+        },
+        "fixture_sha256": "316c9cfc0ccc1a2074397904c01d1f05d266c9043a7ecf1fbf73661aaac605a3",
+        "content_generator": "SHAKE256(IDG latency fixture v2)",
+        "latency_ms": 80.0,
+        "size": 8388608,
+        "expected_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+        "binaries": {
+          "baseline": "e4c7b9852f091fef80ce3331ab4cd6894441a1387d44e12f6ad8e58d828048f4",
+          "candidate": "b3bfec10ac5f2faca45da49303c3f16152c906c2d771a8fbf8b111c1c11310b8"
+        },
+        "runs": [
+          {
+            "tool": "baseline",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26185/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-first-slow-80-files\\1-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=294912-745471"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1196032-1646591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=745472-1196031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1646592-2097151"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.4939788999035954,
+            "durable_seconds": 1.4953061999985948,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15261696,
+              "peak_commit_bytes": 11132928,
+              "page_faults": 4990,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 228711228
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26191/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-first-slow-80-files\\1-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=696320-1163263"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=229376-696319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1163264-1630207"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1630208-2097151"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.2545608000364155,
+            "durable_seconds": 1.2567452000221238,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15007744,
+              "peak_commit_bytes": 10657792,
+              "page_faults": 4535,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 212568582
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26197/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-first-slow-80-files\\2-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=696320-1163263"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1163264-1630207"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=229376-696319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1630208-2097151"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.2532207999611273,
+            "durable_seconds": 1.254656899953261,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15151104,
+              "peak_commit_bytes": 11083776,
+              "page_faults": 4605,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 208967617
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26208/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-first-slow-80-files\\2-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1196032-1646591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=745472-1196031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=294912-745471"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1646592-2097151"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.5024492000229657,
+            "durable_seconds": 1.5048700000625104,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15249408,
+              "peak_commit_bytes": 11034624,
+              "page_faults": 5127,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 216625405
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26214/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-first-slow-80-files\\3-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=720896-1179647"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=262144-720895"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1179648-1638399"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1638400-2097151"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.544748799991794,
+            "durable_seconds": 1.5460833000252023,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15081472,
+              "peak_commit_bytes": 10985472,
+              "page_faults": 5138,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 230208278
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26224/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-first-slow-80-files\\3-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=696320-1163263"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=229376-696319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1163264-1630207"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=1630208-2097151"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.312799600069411,
+            "durable_seconds": 1.3143077000277117,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15003648,
+              "peak_commit_bytes": 10801152,
+              "page_faults": 4441,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 206697996
+            }
+          }
+        ],
+        "finished_utc": "2026-11-06T23:51:12Z"
+      }
+    },
+    {
+      "file": "target/perf-20261107-single-wave-8m-later-slow-80.json",
+      "sha256": "42ad27451364dd4afe6c03910d86b5aba49121befc5db474a71e97ac39850cb9",
+      "evidence": {
+        "configuration": {
+          "baseline": "target\\perf-idg-bounded-handoff.exe",
+          "candidate": "target\\perf-idg-single-wave-prototype.exe",
+          "output": "target\\perf-20261107-single-wave-8m-later-slow-80.json",
+          "repeats": 3,
+          "latency_ms": 80.0,
+          "size_kib": 8192,
+          "connections": 0,
+          "candidate_policy": "production",
+          "per_connection_mib": 3.0,
+          "first_range_mib": 0.25,
+          "slow_range_start_kib": 2048
+        },
+        "fixture_sha256": "316c9cfc0ccc1a2074397904c01d1f05d266c9043a7ecf1fbf73661aaac605a3",
+        "content_generator": "SHAKE256(IDG latency fixture v2)",
+        "latency_ms": 80.0,
+        "size": 8388608,
+        "expected_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+        "binaries": {
+          "baseline": "e4c7b9852f091fef80ce3331ab4cd6894441a1387d44e12f6ad8e58d828048f4",
+          "candidate": "b3bfec10ac5f2faca45da49303c3f16152c906c2d771a8fbf8b111c1c11310b8"
+        },
+        "runs": [
+          {
+            "tool": "baseline",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26231/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-later-slow-80-files\\1-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2359296-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.4200878998963162,
+            "durable_seconds": 1.4214351999107748,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15011840,
+              "peak_commit_bytes": 10997760,
+              "page_faults": 4682,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.046875,
+              "cpu_total_seconds": 0.078125,
+              "cpu_cycles": 213717581
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 1,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26237/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-later-slow-80-files\\1-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2260992-2744319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2744320-3227647"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3710976-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3227648-3710975"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.2267209000419825,
+            "durable_seconds": 1.2281108000315726,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15138816,
+              "peak_commit_bytes": 11112448,
+              "page_faults": 4470,
+              "cpu_user_seconds": 0.0,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.03125,
+              "cpu_cycles": 208964172
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26247/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-later-slow-80-files\\2-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2260992-2744319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2744320-3227647"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3227648-3710975"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3710976-4194303"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.1493476000614464,
+            "durable_seconds": 1.1508876000298187,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15073280,
+              "peak_commit_bytes": 10792960,
+              "page_faults": 4435,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.03125,
+              "cpu_total_seconds": 0.078125,
+              "cpu_cycles": 212107218
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 2,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26253/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-later-slow-80-files\\2-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2359296-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.418599999975413,
+            "durable_seconds": 1.4199295999715105,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 14835712,
+              "peak_commit_bytes": 10752000,
+              "page_faults": 4833,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.0625,
+              "cpu_total_seconds": 0.109375,
+              "cpu_cycles": 225405112
+            }
+          },
+          {
+            "tool": "baseline",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "http://127.0.0.1:26262/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-later-slow-80-files\\3-baseline\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-2621439"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-4718591"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2621440-3145727"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4718592-5242879"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6815744-7340031"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7864320-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5242880-5767167"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3145728-3670015"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=5767168-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-6815743"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=7340032-7864319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3670016-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2359296-2621439"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.413284600013867,
+            "durable_seconds": 1.41462700010743,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15060992,
+              "peak_commit_bytes": 10858496,
+              "page_faults": 4717,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.046875,
+              "cpu_cycles": 223066417
+            }
+          },
+          {
+            "tool": "candidate",
+            "repeat": 3,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "http://127.0.0.1:26267/fixture.bin",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-8m-later-slow-80-files\\3-candidate\\download.bin",
+              "0"
+            ],
+            "requests": [
+              {
+                "method": "GET",
+                "range": "bytes=0-2097151"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=4194304-6291455"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2097152-4194303"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=6291456-8388607"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2744320-3227647"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3227648-3710975"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=2260992-2744319"
+              },
+              {
+                "method": "GET",
+                "range": "bytes=3710976-4194303"
+              }
+            ],
+            "actual_sha256": "d99d2e37eca2c7b623bd8f7318cdb7960a9db21b36dc9b747eb7a819d84425ad",
+            "verified": true,
+            "exit_code": 0,
+            "process_seconds": 1.147536899894476,
+            "durable_seconds": 1.149721199995838,
+            "sync_error": null,
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 15286272,
+              "peak_commit_bytes": 11083776,
+              "page_faults": 4473,
+              "cpu_user_seconds": 0.015625,
+              "cpu_kernel_seconds": 0.0,
+              "cpu_total_seconds": 0.015625,
+              "cpu_cycles": 202163069
+            }
+          }
+        ],
+        "finished_utc": "2026-11-06T23:51:22Z"
+      }
+    },
+    {
+      "file": "target/perf-20261107-single-wave-half-vs-early-public.json",
+      "sha256": "14f4216976283f19c4e01f39b44c4747bd785d7a8eda6912ca7db77c34cb9e09",
+      "evidence": {
+        "schema": 2,
+        "started_utc": "2026-11-06T23:55:14Z",
+        "platform": "Windows-11-10.0.26300-SP0",
+        "logical_cpus": 32,
+        "idg_commit": "cd0481f6a734e70e284575b2f691168293085a31",
+        "prism_commit": "c25f3c795c962323982effcb0220fcbbe75ee2a3",
+        "size_factor": 1.0,
+        "repeats": 3,
+        "curl_repeats": 3,
+        "timing": "Process startup through completed file and external fsync; SHA-256 is outside timed interval; OS caches are not purged",
+        "binary_sha256": {
+          "IDG": "d6ec39e0bbc9f776b896f29858954964bbfe8743541174db081057e58f958752",
+          "IDG-baseline": "b3bfec10ac5f2faca45da49303c3f16152c906c2d771a8fbf8b111c1c11310b8"
+        },
+        "server_sha256": "302bd6ce2f2fe70bcc3ce685b6a6e1f4c71f0eb2cff7f3e696fad5921d45ce4d",
+        "runs": [
+          {
+            "scenario": "E",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.603468699962832,
+            "durable_seconds": 1.6047916999086738,
+            "verification_seconds": 0.040609900024719536,
+            "mib_per_second": 47.48784491443423,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\000-E-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 47480832,
+              "peak_commit_bytes": 57667584,
+              "page_faults": 15776,
+              "cpu_user_seconds": 0.28125,
+              "cpu_kernel_seconds": 0.15625,
+              "cpu_total_seconds": 0.4375,
+              "cpu_cycles": 2078722102
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\000-E-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.623609000002034,
+            "durable_seconds": 1.6251544000115246,
+            "verification_seconds": 0.04028890002518892,
+            "mib_per_second": 46.892836375850784,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\001-E-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 43933696,
+              "peak_commit_bytes": 55353344,
+              "page_faults": 16878,
+              "cpu_user_seconds": 0.34375,
+              "cpu_kernel_seconds": 0.28125,
+              "cpu_total_seconds": 0.625,
+              "cpu_cycles": 2020511782
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\001-E-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.4903590999310836,
+            "durable_seconds": 1.4917544999625534,
+            "verification_seconds": 0.03979880001861602,
+            "mib_per_second": 51.08622053236466,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\002-E-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 45056000,
+              "peak_commit_bytes": 55889920,
+              "page_faults": 16695,
+              "cpu_user_seconds": 0.15625,
+              "cpu_kernel_seconds": 0.1875,
+              "cpu_total_seconds": 0.34375,
+              "cpu_cycles": 1983199666
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\002-E-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.784611799987033,
+            "durable_seconds": 1.7860034999903291,
+            "verification_seconds": 0.03926729992963374,
+            "mib_per_second": 42.66962487231802,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\003-E-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 43970560,
+              "peak_commit_bytes": 53186560,
+              "page_faults": 17143,
+              "cpu_user_seconds": 0.203125,
+              "cpu_kernel_seconds": 0.453125,
+              "cpu_total_seconds": 0.65625,
+              "cpu_cycles": 2167662978
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\003-E-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.6928363000042737,
+            "durable_seconds": 1.694214400020428,
+            "verification_seconds": 0.03917700005695224,
+            "mib_per_second": 44.98137860492479,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\004-E-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 43515904,
+              "peak_commit_bytes": 55439360,
+              "page_faults": 16804,
+              "cpu_user_seconds": 0.15625,
+              "cpu_kernel_seconds": 0.21875,
+              "cpu_total_seconds": 0.375,
+              "cpu_cycles": 1972220005
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\004-E-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.584181199898012,
+            "durable_seconds": 1.5855885999044403,
+            "verification_seconds": 0.038435099995695055,
+            "mib_per_second": 48.06297129648085,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\005-E-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 45522944,
+              "peak_commit_bytes": 57794560,
+              "page_faults": 19010,
+              "cpu_user_seconds": 0.1875,
+              "cpu_kernel_seconds": 0.171875,
+              "cpu_total_seconds": 0.359375,
+              "cpu_cycles": 1947685588
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\005-E-3-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7916892000939697,
+            "durable_seconds": 0.7930435000453144,
+            "verification_seconds": 0.018458300037309527,
+            "mib_per_second": 43.72092814978075,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\006-F-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 35090432,
+              "peak_commit_bytes": 34557952,
+              "page_faults": 11445,
+              "cpu_user_seconds": 0.0625,
+              "cpu_kernel_seconds": 0.046875,
+              "cpu_total_seconds": 0.109375,
+              "cpu_cycles": 846059256
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\006-F-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.9189520999789238,
+            "durable_seconds": 0.920267999987118,
+            "verification_seconds": 0.017840699991211295,
+            "mib_per_second": 37.67663103097922,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\007-F-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 35725312,
+              "peak_commit_bytes": 35897344,
+              "page_faults": 12787,
+              "cpu_user_seconds": 0.109375,
+              "cpu_kernel_seconds": 0.1875,
+              "cpu_total_seconds": 0.296875,
+              "cpu_cycles": 840861173
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\007-F-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7370200000004843,
+            "durable_seconds": 0.7383437999524176,
+            "verification_seconds": 0.017972899950109422,
+            "mib_per_second": 46.95996348498667,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\008-F-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 38723584,
+              "peak_commit_bytes": 35368960,
+              "page_faults": 12115,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.09375,
+              "cpu_total_seconds": 0.140625,
+              "cpu_cycles": 856692220
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\008-F-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7370327999815345,
+            "durable_seconds": 0.7392592000542209,
+            "verification_seconds": 0.018403999973088503,
+            "mib_per_second": 46.901814522685385,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\009-F-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 36954112,
+              "peak_commit_bytes": 34779136,
+              "page_faults": 11721,
+              "cpu_user_seconds": 0.078125,
+              "cpu_kernel_seconds": 0.171875,
+              "cpu_total_seconds": 0.25,
+              "cpu_cycles": 799788398
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\009-F-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7008580999681726,
+            "durable_seconds": 0.7021707000676543,
+            "verification_seconds": 0.018156500067561865,
+            "mib_per_second": 49.37915791956447,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\010-F-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 34643968,
+              "peak_commit_bytes": 33243136,
+              "page_faults": 12191,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.109375,
+              "cpu_total_seconds": 0.15625,
+              "cpu_cycles": 831746685
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\010-F-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7299563999986276,
+            "durable_seconds": 0.7313321999972686,
+            "verification_seconds": 0.018169099930673838,
+            "mib_per_second": 47.41018908405965,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\011-F-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 37724160,
+              "peak_commit_bytes": 36401152,
+              "page_faults": 13610,
+              "cpu_user_seconds": 0.078125,
+              "cpu_kernel_seconds": 0.078125,
+              "cpu_total_seconds": 0.15625,
+              "cpu_cycles": 802975327
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\011-F-3-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.0902054000180215,
+            "durable_seconds": 1.0915698000462726,
+            "verification_seconds": 0.014198799966834486,
+            "mib_per_second": 24.602696320103345,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\012-G-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 29741056,
+              "peak_commit_bytes": 26112000,
+              "page_faults": 9055,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.09375,
+              "cpu_total_seconds": 0.140625,
+              "cpu_cycles": 668144172
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\012-G-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.0965533999260515,
+            "durable_seconds": 1.097889499971643,
+            "verification_seconds": 0.013730999897234142,
+            "mib_per_second": 24.46107764344956,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\013-G-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 27922432,
+              "peak_commit_bytes": 25071616,
+              "page_faults": 9916,
+              "cpu_user_seconds": 0.09375,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.109375,
+              "cpu_cycles": 707195874
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\013-G-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.1452417999971658,
+            "durable_seconds": 1.1474761998979375,
+            "verification_seconds": 0.013953500078059733,
+            "mib_per_second": 23.40402380905421,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\014-G-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 28635136,
+              "peak_commit_bytes": 26923008,
+              "page_faults": 9100,
+              "cpu_user_seconds": 0.15625,
+              "cpu_kernel_seconds": 0.09375,
+              "cpu_total_seconds": 0.25,
+              "cpu_cycles": 727253617
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\014-G-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.2431547000305727,
+            "durable_seconds": 1.2453778000781313,
+            "verification_seconds": 0.01418210007250309,
+            "mib_per_second": 21.56418743055283,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\015-G-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 27430912,
+              "peak_commit_bytes": 24453120,
+              "page_faults": 9523,
+              "cpu_user_seconds": 0.109375,
+              "cpu_kernel_seconds": 0.0625,
+              "cpu_total_seconds": 0.171875,
+              "cpu_cycles": 728374193
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\015-G-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.0827114999992773,
+            "durable_seconds": 1.0840625000419095,
+            "verification_seconds": 0.01408130000345409,
+            "mib_per_second": 24.773073786517056,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-half-idle.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\016-G-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 24272896,
+              "peak_commit_bytes": 22990848,
+              "page_faults": 8446,
+              "cpu_user_seconds": 0.078125,
+              "cpu_kernel_seconds": 0.125,
+              "cpu_total_seconds": 0.203125,
+              "cpu_cycles": 810140700
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\016-G-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.0778880000580102,
+            "durable_seconds": 1.0792844000970945,
+            "verification_seconds": 0.014173600007779896,
+            "mib_per_second": 24.882746660952755,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-half-vs-early-public-files\\017-G-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 25292800,
+              "peak_commit_bytes": 23203840,
+              "page_faults": 9090,
+              "cpu_user_seconds": 0.0625,
+              "cpu_kernel_seconds": 0.109375,
+              "cpu_total_seconds": 0.171875,
+              "cpu_cycles": 849843039
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-half-vs-early-public-files\\017-G-3-IDG-baseline\\tool.log"
+          }
+        ],
+        "publisher_references": {
+          "E": {
+            "checksum_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz.sha256",
+            "sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "metadata_sha256": "7f193cade27683b038df566e537c75f58b2630ee582179799be0ccd1259087dc",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          },
+          "F": {
+            "checksum_url": "https://nodejs.org/dist/v24.11.0/SHASUMS256.txt",
+            "sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "metadata_sha256": "ee1afe484a32496fd72c22f02acc80e28e6af559491b46cdfbd1c7a3922c42bd",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          },
+          "G": {
+            "checksum_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe.sigstore",
+            "sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "metadata_sha256": "13c08963683b048dc574418e0c1df136ce584c96105a571f0c68ccc61f4a1b74",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          }
+        },
+        "connection_overrides": {
+          "IDG": 0,
+          "IDG-baseline": 0
+        },
+        "workloads": {
+          "E": {
+            "size": 79909984,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "76.2 MiB public Rust archive over HTTPS",
+              "size": 79909984,
+              "url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+              "checksum_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz.sha256",
+              "checksum_format": "sha256"
+            }
+          },
+          "F": {
+            "size": 36356854,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "34.7 MiB official Node ZIP over HTTPS",
+              "size": 36356854,
+              "url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+              "checksum_url": "https://nodejs.org/dist/v24.11.0/SHASUMS256.txt",
+              "checksum_format": "sha256"
+            }
+          },
+          "G": {
+            "size": 28160096,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "26.9 MiB official Python installer over HTTPS",
+              "size": 28160096,
+              "url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+              "checksum_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe.sigstore",
+              "checksum_format": "sigstore-digest"
+            }
+          }
+        },
+        "production_sources": {
+          "src\\download\\bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+          "src\\download\\connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+          "src\\download\\engine.rs": "d738a62863e0e628e45ff23a0e4b829e733aa391113362fc91226395035fe2f3",
+          "src\\download\\gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+          "src\\download\\history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+          "src\\download\\media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+          "src\\download\\mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+          "src\\download\\music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+          "src\\download\\probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+          "src\\download\\request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+          "src\\download\\segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+          "src\\download\\types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+          "src\\download\\writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+        },
+        "driver_sha256": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+        "source_snapshot": "perf-20261107-single-wave-half-vs-early-public-files\\source-snapshot",
+        "harness_sha256": "835c9ce4a1252a2bc2e4f35fdde9c71df61f376c6b330cf24bef993835873f4f",
+        "tracked_worktree_changes": [
+          "src/download/engine.rs"
+        ],
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "finished_utc": "2026-11-06T23:55:36Z"
+      }
+    },
+    {
+      "file": "target/perf-20261107-single-wave-public-efg-auto.json",
+      "sha256": "5d7d972713e7d5f383da9dff0b10c1044225b606e6eac4ed5846e9bc91b87644",
+      "evidence": {
+        "schema": 2,
+        "started_utc": "2026-11-06T23:51:37Z",
+        "platform": "Windows-11-10.0.26300-SP0",
+        "logical_cpus": 32,
+        "idg_commit": "cd0481f6a734e70e284575b2f691168293085a31",
+        "prism_commit": "c25f3c795c962323982effcb0220fcbbe75ee2a3",
+        "size_factor": 1.0,
+        "repeats": 3,
+        "curl_repeats": 3,
+        "timing": "Process startup through completed file and external fsync; SHA-256 is outside timed interval; OS caches are not purged",
+        "binary_sha256": {
+          "IDG": "b3bfec10ac5f2faca45da49303c3f16152c906c2d771a8fbf8b111c1c11310b8",
+          "IDG-baseline": "e4c7b9852f091fef80ce3331ab4cd6894441a1387d44e12f6ad8e58d828048f4"
+        },
+        "server_sha256": "302bd6ce2f2fe70bcc3ce685b6a6e1f4c71f0eb2cff7f3e696fad5921d45ce4d",
+        "runs": [
+          {
+            "scenario": "E",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.6011949999956414,
+            "durable_seconds": 1.6025674999691546,
+            "verification_seconds": 0.03989199991337955,
+            "mib_per_second": 47.553753190864775,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\000-E-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 48103424,
+              "peak_commit_bytes": 58630144,
+              "page_faults": 16772,
+              "cpu_user_seconds": 0.234375,
+              "cpu_kernel_seconds": 0.1875,
+              "cpu_total_seconds": 0.421875,
+              "cpu_cycles": 1911867189
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\000-E-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.5309778000228107,
+            "durable_seconds": 1.5322377999546006,
+            "verification_seconds": 0.03891600004862994,
+            "mib_per_second": 49.736469996688754,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\001-E-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 37949440,
+              "peak_commit_bytes": 54878208,
+              "page_faults": 23523,
+              "cpu_user_seconds": 0.3125,
+              "cpu_kernel_seconds": 0.125,
+              "cpu_total_seconds": 0.4375,
+              "cpu_cycles": 2117965525
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\001-E-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.5949389999732375,
+            "durable_seconds": 1.5964304999215528,
+            "verification_seconds": 0.03990740003064275,
+            "mib_per_second": 47.736559386067334,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\002-E-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 35733504,
+              "peak_commit_bytes": 53686272,
+              "page_faults": 21074,
+              "cpu_user_seconds": 0.3125,
+              "cpu_kernel_seconds": 0.28125,
+              "cpu_total_seconds": 0.59375,
+              "cpu_cycles": 2047507985
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\002-E-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.6058243999723345,
+            "durable_seconds": 1.6071782000362873,
+            "verification_seconds": 0.04024600004777312,
+            "mib_per_second": 47.4173301775209,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\003-E-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 46870528,
+              "peak_commit_bytes": 58343424,
+              "page_faults": 17411,
+              "cpu_user_seconds": 0.28125,
+              "cpu_kernel_seconds": 0.140625,
+              "cpu_total_seconds": 0.421875,
+              "cpu_cycles": 1884988028
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\003-E-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.6483330000191927,
+            "durable_seconds": 1.6496850000694394,
+            "verification_seconds": 0.0390435999725014,
+            "mib_per_second": 46.195546035774456,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\004-E-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 42106880,
+              "peak_commit_bytes": 53342208,
+              "page_faults": 17679,
+              "cpu_user_seconds": 0.15625,
+              "cpu_kernel_seconds": 0.1875,
+              "cpu_total_seconds": 0.34375,
+              "cpu_cycles": 1980530089
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\004-E-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "E",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 79909984,
+            "requested_connections": 0,
+            "expected_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "actual_size": 79909984,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.5721442999783903,
+            "durable_seconds": 1.5745184000115842,
+            "verification_seconds": 0.03920020000077784,
+            "mib_per_second": 48.40089475275341,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\005-E-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 37335040,
+              "peak_commit_bytes": 54583296,
+              "page_faults": 22477,
+              "cpu_user_seconds": 0.234375,
+              "cpu_kernel_seconds": 0.125,
+              "cpu_total_seconds": 0.359375,
+              "cpu_cycles": 2140086895
+            },
+            "source_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\005-E-3-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7256833999417722,
+            "durable_seconds": 0.727014199947007,
+            "verification_seconds": 0.018191499984823167,
+            "mib_per_second": 47.69177532936656,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\006-F-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 35901440,
+              "peak_commit_bytes": 32673792,
+              "page_faults": 13119,
+              "cpu_user_seconds": 0.046875,
+              "cpu_kernel_seconds": 0.15625,
+              "cpu_total_seconds": 0.203125,
+              "cpu_cycles": 832375031
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\006-F-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.6875511000398546,
+            "durable_seconds": 0.6891145000699908,
+            "verification_seconds": 0.017671899986453354,
+            "mib_per_second": 50.3147124049926,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\007-F-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 25497600,
+              "peak_commit_bytes": 29368320,
+              "page_faults": 13654,
+              "cpu_user_seconds": 0.25,
+              "cpu_kernel_seconds": 0.125,
+              "cpu_total_seconds": 0.375,
+              "cpu_cycles": 1004250735
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\007-F-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8737345000263304,
+            "durable_seconds": 0.8750406999606639,
+            "verification_seconds": 0.018429200048558414,
+            "mib_per_second": 39.623983074947816,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\008-F-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 27774976,
+              "peak_commit_bytes": 29843456,
+              "page_faults": 14088,
+              "cpu_user_seconds": 0.078125,
+              "cpu_kernel_seconds": 0.046875,
+              "cpu_total_seconds": 0.125,
+              "cpu_cycles": 998882685
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\008-F-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7070156999398023,
+            "durable_seconds": 0.7085059999953955,
+            "verification_seconds": 0.01818969997111708,
+            "mib_per_second": 48.93762069108401,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\009-F-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 34693120,
+              "peak_commit_bytes": 33906688,
+              "page_faults": 11850,
+              "cpu_user_seconds": 0.078125,
+              "cpu_kernel_seconds": 0.109375,
+              "cpu_total_seconds": 0.1875,
+              "cpu_cycles": 863439217
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\009-F-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.7171476000221446,
+            "durable_seconds": 0.7185021999757737,
+            "verification_seconds": 0.0180151000386104,
+            "mib_per_second": 48.25677344662399,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\010-F-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 36818944,
+              "peak_commit_bytes": 35971072,
+              "page_faults": 13553,
+              "cpu_user_seconds": 0.0625,
+              "cpu_kernel_seconds": 0.109375,
+              "cpu_total_seconds": 0.171875,
+              "cpu_cycles": 855722247
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\010-F-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "F",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 36356854,
+            "requested_connections": 0,
+            "expected_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "actual_size": 36356854,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8811553999548778,
+            "durable_seconds": 0.8824869999662042,
+            "verification_seconds": 0.01783399994019419,
+            "mib_per_second": 39.28964153178422,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\011-F-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 26992640,
+              "peak_commit_bytes": 30355456,
+              "page_faults": 13814,
+              "cpu_user_seconds": 0.109375,
+              "cpu_kernel_seconds": 0.015625,
+              "cpu_total_seconds": 0.125,
+              "cpu_cycles": 1005462394
+            },
+            "source_url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\011-F-3-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 1,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.094086299999617,
+            "durable_seconds": 1.0954094000626355,
+            "verification_seconds": 0.013955399976111948,
+            "mib_per_second": 24.516459600582916,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\012-G-1-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 24932352,
+              "peak_commit_bytes": 22315008,
+              "page_faults": 9682,
+              "cpu_user_seconds": 0.125,
+              "cpu_kernel_seconds": 0.15625,
+              "cpu_total_seconds": 0.28125,
+              "cpu_cycles": 760020923
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\012-G-1-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 1,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.7705571999540552,
+            "durable_seconds": 1.7719150999328122,
+            "verification_seconds": 0.014053200022317469,
+            "mib_per_second": 15.15623423704256,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\013-G-1-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 22151168,
+              "peak_commit_bytes": 22532096,
+              "page_faults": 11380,
+              "cpu_user_seconds": 0.09375,
+              "cpu_kernel_seconds": 0.09375,
+              "cpu_total_seconds": 0.1875,
+              "cpu_cycles": 817027676
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\013-G-1-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 2,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8830232000909746,
+            "durable_seconds": 0.8853007000871003,
+            "verification_seconds": 0.014685400063171983,
+            "mib_per_second": 30.334958845160962,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\014-G-2-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 22638592,
+              "peak_commit_bytes": 23625728,
+              "page_faults": 11504,
+              "cpu_user_seconds": 0.09375,
+              "cpu_kernel_seconds": 0.125,
+              "cpu_total_seconds": 0.21875,
+              "cpu_cycles": 803799376
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\014-G-2-IDG-baseline\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 2,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.0402461999328807,
+            "durable_seconds": 1.0415947999572381,
+            "verification_seconds": 0.013743699993938208,
+            "mib_per_second": 25.78311672047221,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\015-G-2-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 23646208,
+              "peak_commit_bytes": 23334912,
+              "page_faults": 8170,
+              "cpu_user_seconds": 0.03125,
+              "cpu_kernel_seconds": 0.046875,
+              "cpu_total_seconds": 0.078125,
+              "cpu_cycles": 812852032
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\015-G-2-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 3,
+            "tool": "IDG",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 1.1594464000081643,
+            "durable_seconds": 1.1615643999539316,
+            "verification_seconds": 0.013808400020934641,
+            "mib_per_second": 23.120164756942867,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-single-wave-prototype.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\016-G-3-IDG\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 29032448,
+              "peak_commit_bytes": 26570752,
+              "page_faults": 9746,
+              "cpu_user_seconds": 0.140625,
+              "cpu_kernel_seconds": 0.078125,
+              "cpu_total_seconds": 0.21875,
+              "cpu_cycles": 725552285
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\016-G-3-IDG\\tool.log"
+          },
+          {
+            "scenario": "G",
+            "repeat": 3,
+            "tool": "IDG-baseline",
+            "size": 28160096,
+            "requested_connections": 0,
+            "expected_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "actual_size": 28160096,
+            "exit_code": 0,
+            "verified": true,
+            "process_seconds": 0.8600927999941632,
+            "durable_seconds": 0.8614557000109926,
+            "verification_seconds": 0.014074600068852305,
+            "mib_per_second": 31.174627206473513,
+            "sync_error": null,
+            "command": [
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-idg-bounded-handoff.exe",
+              "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "X:\\github projects\\IDG-internet-download-go\\target\\perf-20261107-single-wave-public-efg-auto-files\\017-G-3-IDG-baseline\\download.bin",
+              "0"
+            ],
+            "server_command": [],
+            "resources": {
+              "scope": "client process only; excludes descendants and test server",
+              "errors": [],
+              "peak_working_set_bytes": 22331392,
+              "peak_commit_bytes": 23744512,
+              "page_faults": 11458,
+              "cpu_user_seconds": 0.078125,
+              "cpu_kernel_seconds": 0.09375,
+              "cpu_total_seconds": 0.171875,
+              "cpu_cycles": 811460144
+            },
+            "source_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+            "trace_idg": false,
+            "candidate_policy": "production",
+            "log": "perf-20261107-single-wave-public-efg-auto-files\\017-G-3-IDG-baseline\\tool.log"
+          }
+        ],
+        "publisher_references": {
+          "E": {
+            "checksum_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz.sha256",
+            "sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+            "metadata_sha256": "7f193cade27683b038df566e537c75f58b2630ee582179799be0ccd1259087dc",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          },
+          "F": {
+            "checksum_url": "https://nodejs.org/dist/v24.11.0/SHASUMS256.txt",
+            "sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+            "metadata_sha256": "ee1afe484a32496fd72c22f02acc80e28e6af559491b46cdfbd1c7a3922c42bd",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          },
+          "G": {
+            "checksum_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe.sigstore",
+            "sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+            "metadata_sha256": "13c08963683b048dc574418e0c1df136ce584c96105a571f0c68ccc61f4a1b74",
+            "verification": "Pinned SHA-256 matched official publisher metadata over HTTPS"
+          }
+        },
+        "connection_overrides": {
+          "IDG": 0,
+          "IDG-baseline": 0
+        },
+        "workloads": {
+          "E": {
+            "size": 79909984,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "76.2 MiB public Rust archive over HTTPS",
+              "size": 79909984,
+              "url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz",
+              "sha256": "a18b3912905f154c34a7572954dda9e9849ac6411a1e02fa390bf742f918fbcb",
+              "checksum_url": "https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-pc-windows-msvc.tar.xz.sha256",
+              "checksum_format": "sha256"
+            }
+          },
+          "F": {
+            "size": 36356854,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "34.7 MiB official Node ZIP over HTTPS",
+              "size": 36356854,
+              "url": "https://nodejs.org/dist/v24.11.0/node-v24.11.0-win-x64.zip",
+              "sha256": "1054540bce22b54ec7e50ebc078ec5d090700a77657607a58f6a64df21f49fdd",
+              "checksum_url": "https://nodejs.org/dist/v24.11.0/SHASUMS256.txt",
+              "checksum_format": "sha256"
+            }
+          },
+          "G": {
+            "size": 28160096,
+            "seed": 0,
+            "requested_connections": 16,
+            "server_options": [],
+            "source": {
+              "label": "26.9 MiB official Python installer over HTTPS",
+              "size": 28160096,
+              "url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe",
+              "sha256": "78156ad0cf0ec4123bfb5333b40f078596ebf15f2d062a10144863680afbdefc",
+              "checksum_url": "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe.sigstore",
+              "checksum_format": "sigstore-digest"
+            }
+          }
+        },
+        "production_sources": {
+          "src\\download\\bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+          "src\\download\\connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+          "src\\download\\engine.rs": "070e0944bc97b19518a5a95d9a4cb351330e687bfb31cac4acb493ff8eadbbf6",
+          "src\\download\\gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+          "src\\download\\history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+          "src\\download\\media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+          "src\\download\\mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+          "src\\download\\music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+          "src\\download\\probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+          "src\\download\\request.rs": "8a1fc174871bf35b80604dc82bf02b25cbb9f06ea0b2cc751059a255bb87fa3a",
+          "src\\download\\segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+          "src\\download\\types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+          "src\\download\\writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+        },
+        "driver_sha256": "67f5258ff925e6e9d71f7b48c828600fc6130dbc90880642f22cd4eba85580ed",
+        "source_snapshot": "perf-20261107-single-wave-public-efg-auto-files\\source-snapshot",
+        "harness_sha256": "835c9ce4a1252a2bc2e4f35fdde9c71df61f376c6b330cf24bef993835873f4f",
+        "tracked_worktree_changes": [
+          "src/download/engine.rs"
+        ],
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "finished_utc": "2026-11-06T23:51:58Z"
+      }
+    }
+  ],
+  "asymmetric_cap": {
+    "fixture_source": "import hashlib,json,subprocess,threading\nfrom pathlib import Path\nfrom http.server import BaseHTTPRequestHandler,ThreadingHTTPServer\nROOT=Path(__file__).resolve().parents[1]; OUT=ROOT/\"target/asymmetric-range-cap-verification\"; OUT.mkdir(exist_ok=False)\nDATA=hashlib.shake_256(b\"IDG asymmetric range size cap\").digest(8*1024*1024); EXPECTED=hashlib.sha256(DATA).hexdigest(); rows=[]\nfor name,binary,success in [(\"bounded-queue\",\"perf-idg-bounded-handoff.exe\",True),(\"single-wave\",\"perf-idg-single-wave-prototype.exe\",False)]:\n seen=[]\n class Handler(BaseHTTPRequestHandler):\n  protocol_version=\"HTTP/1.1\"\n  def log_message(self,*args): pass\n  def do_GET(self):\n   start,end=map(int,self.headers[\"Range\"].removeprefix(\"bytes=\").split(\"-\"));end=min(end,len(DATA)-1)\n   allowed=(start==0 and end==2*1024*1024-1) or end-start+1<=512*1024\n   seen.append({\"start\":start,\"end\":end,\"status\":206 if allowed else 413})\n   self.send_response(206 if allowed else 413);self.send_header(\"Connection\",\"close\");self.send_header(\"Content-Length\",str(end-start+1 if allowed else 0))\n   if allowed:self.send_header(\"Content-Range\",f\"bytes {start}-{end}/{len(DATA)}\");self.send_header(\"ETag\",'\"fixed\"');self.send_header(\"Content-Type\",\"application/octet-stream\")\n   self.end_headers()\n   if allowed:\n    try:self.wfile.write(DATA[start:end+1])\n    except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass\n server=ThreadingHTTPServer((\"127.0.0.1\",0),Handler);server.daemon_threads=True;thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();dest=OUT/(name+\".bin\");exe=ROOT/\"target\"/binary\n try:r=subprocess.run([str(exe),f\"http://127.0.0.1:{server.server_port}/file.bin\",str(dest),\"0\"],capture_output=True,text=True,encoding=\"utf-8\",errors=\"replace\",timeout=20)\n finally:server.shutdown();server.server_close();thread.join()\n actual=hashlib.sha256(dest.read_bytes()).hexdigest() if dest.exists() else None\n row={\"case\":name,\"binary_sha256\":hashlib.sha256(exe.read_bytes()).hexdigest(),\"exit_code\":r.returncode,\"expected_success\":success,\"actual_sha256\":actual,\"expected_sha256\":EXPECTED,\"requests\":seen,\"stdout\":r.stdout,\"stderr\":r.stderr}\n assert (r.returncode==0)==success,row\n if success:assert actual==EXPECTED and dest.stat().st_size==len(DATA),row\n else:assert \"413\" in r.stderr,row\n row[\"verified\"]=True;rows.append(row)\n(OUT/\"results.json\").write_text(json.dumps({\"fixture_source\":Path(__file__).read_text(encoding=\"utf-8\"),\"results\":rows},indent=2)+\"\\n\",encoding=\"utf-8\")\nprint(json.dumps([{k:r[k] for k in [\"case\",\"exit_code\",\"expected_success\",\"verified\"]} for r in rows],indent=2))\n",
+    "results": [
+      {
+        "case": "bounded-queue",
+        "binary_sha256": "e4c7b9852f091fef80ce3331ab4cd6894441a1387d44e12f6ad8e58d828048f4",
+        "exit_code": 0,
+        "expected_success": true,
+        "actual_sha256": "39923f9d4835e6aaae614d8eb5b19d6fc07d482b3032dbe720337f684dda887c",
+        "expected_sha256": "39923f9d4835e6aaae614d8eb5b19d6fc07d482b3032dbe720337f684dda887c",
+        "requests": [
+          {
+            "start": 0,
+            "end": 2097151,
+            "status": 206
+          },
+          {
+            "start": 2097152,
+            "end": 2621439,
+            "status": 206
+          },
+          {
+            "start": 3145728,
+            "end": 3670015,
+            "status": 206
+          },
+          {
+            "start": 2621440,
+            "end": 3145727,
+            "status": 206
+          },
+          {
+            "start": 3670016,
+            "end": 4194303,
+            "status": 206
+          },
+          {
+            "start": 4194304,
+            "end": 4718591,
+            "status": 206
+          },
+          {
+            "start": 5767168,
+            "end": 6291455,
+            "status": 206
+          },
+          {
+            "start": 6291456,
+            "end": 6815743,
+            "status": 206
+          },
+          {
+            "start": 4718592,
+            "end": 5242879,
+            "status": 206
+          },
+          {
+            "start": 7340032,
+            "end": 7864319,
+            "status": 206
+          },
+          {
+            "start": 7864320,
+            "end": 8388607,
+            "status": 206
+          },
+          {
+            "start": 5242880,
+            "end": 5767167,
+            "status": 206
+          },
+          {
+            "start": 6815744,
+            "end": 7340031,
+            "status": 206
+          }
+        ],
+        "stdout": "{\"bytes\":8388608,\"connections\":4,\"path\":\"X:\\\\github projects\\\\IDG-internet-download-go\\\\target\\\\asymmetric-range-cap-verification\\\\bounded-queue.bin\",\"policy\":\"production\"}\n",
+        "stderr": "[IDG] starting download id=72c33107-732e-456d-b6f6-0b769da0188c segments=4 ranges=13 size=Some(8388608) protocol=HTTP/1.1 setup_ms=2\n[IDG] download complete id=72c33107-732e-456d-b6f6-0b769da0188c path=X:\\github projects\\IDG-internet-download-go\\target\\asymmetric-range-cap-verification\\bounded-queue.bin\n",
+        "verified": true
+      },
+      {
+        "case": "single-wave",
+        "binary_sha256": "b3bfec10ac5f2faca45da49303c3f16152c906c2d771a8fbf8b111c1c11310b8",
+        "exit_code": 1,
+        "expected_success": false,
+        "actual_sha256": "2daeb1f36095b44b318410b3f4e8b5d989dcc7bb023d1426c492dab0a3053e74",
+        "expected_sha256": "39923f9d4835e6aaae614d8eb5b19d6fc07d482b3032dbe720337f684dda887c",
+        "requests": [
+          {
+            "start": 0,
+            "end": 2097151,
+            "status": 206
+          },
+          {
+            "start": 2097152,
+            "end": 4194303,
+            "status": 413
+          },
+          {
+            "start": 4194304,
+            "end": 6291455,
+            "status": 413
+          },
+          {
+            "start": 6291456,
+            "end": 8388607,
+            "status": 413
+          }
+        ],
+        "stdout": "",
+        "stderr": "[IDG] starting download id=b5b22164-6231-4cf1-8d10-95cc934463f1 segments=4 ranges=4 size=Some(8388608) protocol=HTTP/1.1 setup_ms=2\nError: server returned HTTP 413 Payload Too Large\n\nCaused by:\n    server returned HTTP 413 Payload Too Large\n",
+        "verified": true
+      }
+    ]
+  }
+}
