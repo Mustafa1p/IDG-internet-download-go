@@ -1,7 +1,9 @@
 //! Experimental full stream with optional validated tail helpers.
 //! No production policy changes. Known length and strong ETag required for helpers.
-//! Usage: idg-hedged URL OUTPUT_FILE --helpers 0..31
+//! Usage: idg-hedged URL OUTPUT_FILE (--helpers | --auto-helpers) 0..31
 #![allow(dead_code)]
+#[path = "support/adaptive.rs"]
+mod adaptive;
 #[path = "support/coverage.rs"]
 mod coverage;
 #[path = "../src/download/mod.rs"]
@@ -15,9 +17,10 @@ use download::{
 };
 use futures::StreamExt;
 use std::{
+    collections::{BinaryHeap, HashSet},
     path::PathBuf,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
@@ -115,6 +118,7 @@ struct Helpers {
     url: String,
     etag: reqwest::header::HeaderValue,
     next_group: AtomicUsize,
+    returned_groups: Mutex<BinaryHeap<(usize, usize, u64)>>,
     primary_finished: AtomicBool,
     failures: AtomicUsize,
     requests: AtomicUsize,
@@ -122,13 +126,36 @@ struct Helpers {
     capacity_retries: AtomicUsize,
 }
 
+/// Cancellation returns a partially covered original group before fresh work.
+/// Permanent refusals disarm this lease rather than retrying blindly elsewhere.
+struct GroupLease<'a> {
+    helpers: &'a Helpers,
+    group: Option<(usize, usize, u64)>,
+}
+impl Drop for GroupLease<'_> {
+    fn drop(&mut self) {
+        if let Some((first, stop, end)) = self.group
+            && self.helpers.coverage.first_missing(first, stop).is_some()
+        {
+            self.helpers
+                .returned_groups
+                .lock()
+                .unwrap()
+                .push((first, stop, end));
+        }
+    }
+}
+
 impl Helpers {
     async fn run(&self) -> Result<()> {
         while !self.coverage.complete() {
             // Claim each tail group once. Retry that group's acknowledged
             // remainder locally, avoiding repeated scans of completed groups.
-            let group = self.next_group.fetch_add(1, Ordering::Relaxed);
-            let (first, stop, end, _steal) =
+            let returned = self.returned_groups.lock().unwrap().pop();
+            let (first, stop, end, _steal) = if let Some((first, stop, end)) = returned {
+                (first, stop, end, None)
+            } else {
+                let group = self.next_group.fetch_add(1, Ordering::Relaxed);
                 if group < self.coverage.chunk_count().div_ceil(GROUP_CHUNKS) {
                     let stop = self.coverage.chunk_count() - group * GROUP_CHUNKS;
                     (
@@ -142,7 +169,12 @@ impl Helpers {
                         break;
                     };
                     (claim.index, claim.index + 1, claim.end, Some(claim))
-                };
+                }
+            };
+            let mut lease = GroupLease {
+                helpers: self,
+                group: _steal.is_none().then_some((first, stop, end)),
+            };
             let mut consecutive = 0u32;
             while let Some(start) = self.coverage.first_missing(first, stop) {
                 if self.coverage.complete() {
@@ -153,6 +185,7 @@ impl Helpers {
                     Ok(()) => consecutive = 0,
                     Err(error) => {
                         if error.is::<DiskFailure>() {
+                            lease.group = None;
                             return Err(error);
                         }
                         if error.is::<reqwest::Error>()
@@ -180,6 +213,7 @@ impl Helpers {
                                 continue;
                             }
                         }
+                        lease.group = None;
                         self.failures.fetch_add(1, Ordering::Relaxed);
                         eprintln!("[IDG diagnostic] optional helper stopped: {error}");
                         // Refused/malformed representations never cause blind
@@ -268,9 +302,13 @@ async fn main() -> Result<()> {
         .next()
         .context("Usage: idg-hedged URL OUTPUT_FILE --helpers 0..31")?;
     let path = PathBuf::from(args.next().context("OUTPUT_FILE required")?);
+    let mode = args
+        .next()
+        .context("Explicit --helpers or --auto-helpers required")?;
+    let automatic = mode == "--auto-helpers";
     anyhow::ensure!(
-        args.next().as_deref() == Some("--helpers"),
-        "Explicit --helpers 0..31 required"
+        automatic || mode == "--helpers",
+        "Use --helpers or --auto-helpers 0..31"
     );
     let requested: usize = args.next().context("Helper count required")?.parse()?;
     anyhow::ensure!(
@@ -343,6 +381,7 @@ async fn main() -> Result<()> {
             url,
             etag,
             next_group: AtomicUsize::new(0),
+            returned_groups: Mutex::new(BinaryHeap::new()),
             primary_finished: AtomicBool::new(false),
             failures: AtomicUsize::new(0),
             requests: AtomicUsize::new(0),
@@ -350,6 +389,11 @@ async fn main() -> Result<()> {
             capacity_retries: AtomicUsize::new(0),
         })
     });
+    let mut adaptive = automatic.then(|| adaptive::Adaptive::new(effective, headers_ms));
+    let mut helper_handles: Vec<(usize, tokio::task::AbortHandle)> = Vec::new();
+    let mut expected_cancellations = HashSet::new();
+    let mut peak_helpers = 0;
+    let mut trial_cancellations = 0;
     let mut tasks = tokio::task::JoinSet::new();
     let primary_coverage = coverage.clone();
     let primary_helpers = helpers.clone();
@@ -361,15 +405,52 @@ async fn main() -> Result<()> {
         }
         (true, outcome)
     });
-    for _ in 0..effective {
+    for _ in 0..if automatic { 0 } else { effective } {
         let helpers = helpers.as_ref().unwrap().clone();
         tasks.spawn(async move { (false, helpers.run().await) });
     }
     let mut failures = Vec::new();
     let mut primary_replacements = 0;
     while !coverage.complete() {
-        let Some(result) = tasks.join_next().await else {
+        let result = if let Some(controller) = adaptive.as_mut() {
+            tokio::select! {
+                result = tasks.join_next_with_id() => result,
+                _ = tokio::time::sleep_until(controller.deadline()) => {
+                    if let Some(target) = controller.observe(coverage.bytes(), size) {
+                        // Cancel optional trial workers only. The original
+                        // stream and its valid response are never sacrificed.
+                        helper_handles.retain(|(index, handle)| {
+                            if *index < target { return true; }
+                            if !handle.is_finished() {
+                                expected_cancellations.insert(handle.id());
+                                trial_cancellations += 1;
+                                handle.abort();
+                            }
+                            false
+                        });
+                        for index in 0..target {
+                            if helper_handles.iter().any(|(slot, _)| *slot == index) { continue; }
+                            let helpers = helpers.as_ref().unwrap().clone();
+                            let handle = tasks.spawn(async move { (false, helpers.run().await) });
+                            helper_handles.push((index, handle));
+                        }
+                        peak_helpers = peak_helpers.max(target);
+                    }
+                    continue;
+                }
+            }
+        } else {
+            tasks.join_next_with_id().await
+        };
+        let Some(result) = result else {
             break;
+        };
+        let result = match result {
+            Ok((_, result)) => Ok(result),
+            Err(error) if error.is_cancelled() && expected_cancellations.remove(&error.id()) => {
+                continue;
+            }
+            Err(error) => Err(error),
         };
         match result {
             Ok((_, Ok(()))) => {}
@@ -408,11 +489,12 @@ async fn main() -> Result<()> {
     println!(
         "{}",
         serde_json::json!({"path":path,"bytes":coverage.bytes(),"requested_helpers":requested,
-        "effective_helpers":effective,"helper_requests":helpers.as_ref().map_or(0,|h|h.requests.load(Ordering::Relaxed)),
+        "effective_helpers":if automatic { peak_helpers } else { effective },"automatic":automatic,
+        "trial_cancellations":trial_cancellations,"automatic_decisions":adaptive.as_ref().map(|controller| &controller.decisions),"helper_requests":helpers.as_ref().map_or(0,|h|h.requests.load(Ordering::Relaxed)),
         "optional_failures":helpers.as_ref().map_or(0,|h|h.failures.load(Ordering::Relaxed)),
         "helper_reconnects":helpers.as_ref().map_or(0,|h|h.reconnects.load(Ordering::Relaxed)),
         "capacity_retries":helpers.as_ref().map_or(0,|h|h.capacity_retries.load(Ordering::Relaxed)),
-        "primary_replacements":primary_replacements,"primary_or_task_failures":failures.len(),"headers_ms":headers_ms,"policy":"diagnostic_hedged_fixed_helpers"})
+        "primary_replacements":primary_replacements,"primary_or_task_failures":failures.len(),"headers_ms":headers_ms,"policy":if automatic {"diagnostic_hedged_adaptive_helpers"} else {"diagnostic_hedged_fixed_helpers"}})
     );
     Ok(())
 }

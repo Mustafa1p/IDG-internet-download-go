@@ -16,6 +16,12 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 DATA = hashlib.shake_256(b"IDG full stream optional helper fixture v1").digest(8 * 1024 * 1024 + 19)
 CASES = [
+    ("adaptive-rollback-groups", "adaptive-rollback-groups", 15, True),
+    ("adaptive-small", "adaptive-small", 4, True),
+    ("adaptive-growth", "adaptive-growth", 4, True),
+    ("adaptive-shared-limit", "adaptive-shared-limit", 4, True),
+    ("adaptive-refusal", "adaptive-refusal", 4, True),
+    ("adaptive-original-stop", "short-primary", 4, True),
     ("plain-zero", "plain", 0, True),
     ("plain-one", "plain", 1, True),
     ("plain-four", "plain", 4, True),
@@ -66,7 +72,7 @@ def main():
     work.mkdir(parents=True)
     snapshot = work / "source"
     source_paths = [
-        "examples/idg-hedged.rs", "examples/support/coverage.rs",
+        "examples/idg-hedged.rs", "examples/support/coverage.rs", "examples/support/adaptive.rs",
         "scripts/verify_hedged_stream.py", "Cargo.toml", "Cargo.lock", "build.rs",
         *[str(p.relative_to(ROOT)).replace("\\", "/")
           for p in sorted((ROOT / "src/download").glob("*.rs"))],
@@ -93,9 +99,14 @@ def main():
     for label, mode, helpers, expected_success in CASES:
         if args.cases and label not in args.cases:
             continue
-        payload = b"" if mode == "empty" else DATA[:256 * 1024] if mode == "slow-front" else DATA
+        automatic = label.startswith("adaptive-")
+        payload = b"" if mode == "empty" else DATA[:256 * 1024] if mode in ("slow-front", "adaptive-small") else DATA
+        if mode == "adaptive-rollback-groups":
+            payload = hashlib.shake_256(b"IDG abandoned helper groups fixture v1").digest(32 * 1024 * 1024)
         requests = []
         lock = threading.Lock()
+        active, peak = 0, 0
+        shared_next = time.monotonic()
         capacity_ready = threading.Event()
         helper_ready = threading.Event()
 
@@ -112,19 +123,40 @@ def main():
                     self.close_connection = True
 
             def do_GET(self):
+                nonlocal active, peak
+                self.counted = True
+                with lock:
+                    active += 1
+                    peak = max(active, peak)
+                try:
+                    self.serve_get()
+                finally:
+                    self.release_admission()
+
+            def release_admission(self):
+                nonlocal active
+                with lock:
+                    if self.counted:
+                        active -= 1
+                        self.counted = False
+
+            def serve_get(self):
+                nonlocal shared_next
                 ranged = self.headers.get("Range")
                 start, end = 0, len(payload) - 1
                 if ranged:
                     start, end = map(int, ranged.removeprefix("bytes=").split("-"))
                     assert 0 <= start <= end < len(payload)
                 status = 206 if ranged or mode == "partial-initial" else 200
-                if ranged and mode in ("403", "413"):
-                    status = int(mode)
+                if ranged and mode in ("403", "413", "adaptive-refusal"):
+                    status = 403 if mode == "adaptive-refusal" else int(mode)
                 if ranged and mode == "ignore":
                     status, start, end = 200, 0, len(payload) - 1
                 if mode == "auth" and self.headers.get("Authorization") != "Basic OnBhc3M=":
                     status = 401
                 with lock:
+                    if mode == "adaptive-rollback-groups" and active > 4:
+                        status = 503
                     ranged_number = sum(bool(r["range"]) for r in requests) + bool(ranged)
                     if ranged:
                         helper_ready.set()
@@ -174,7 +206,7 @@ def main():
                     return
                 if chunked:
                     self.wfile.write(f"{len(content):x}\r\n".encode() + content + b"\r\n0\r\n\r\n")
-                elif ranged:
+                elif ranged and mode not in ("adaptive-growth", "adaptive-shared-limit", "adaptive-rollback-groups"):
                     self.wfile.write(content)
                 else:
                     # Give the helpers a representative opportunity to arrive.
@@ -182,8 +214,20 @@ def main():
                         helper_ready.wait(5)
                     step = 1024 if mode == "slow-front" else 32768
                     for at in range(0, len(content), step):
+                        if mode == "adaptive-shared-limit":
+                            with lock:
+                                due = max(time.monotonic(), shared_next)
+                                shared_next = due + len(content[at:at + step]) / (1024 * 1024)
+                            time.sleep(max(0, due - time.monotonic()))
+                        if mode == "adaptive-rollback-groups":
+                            time.sleep(0.015625)
+                            if at + step >= len(content):
+                                # End the logical body slot at its final write,
+                                # before another request can observe a sleeping
+                                # handler whose response is already complete.
+                                self.release_admission()
                         self.wfile.write(content[at:at + step])
-                        time.sleep(0.01 if mode == "slow-front" else 0.001)
+                        time.sleep(0 if mode == "adaptive-rollback-groups" else 0.03125 if mode in ("adaptive-growth", "adaptive-refusal") else 0.01 if mode == "slow-front" else 0.001)
 
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         server.daemon_threads = True
@@ -196,7 +240,7 @@ def main():
             destination.write_bytes(b"preserve existing user content")
         auth = ":pass@" if mode == "auth" else ""
         command = [str(binary), f"http://{auth}127.0.0.1:{server.server_port}/fixture.bin",
-                   str(destination), "--helpers", str(helpers)]
+                   str(destination), "--auto-helpers" if automatic else "--helpers", str(helpers)]
         try:
             process = subprocess.run(command, capture_output=True, text=True,
                                      encoding="utf-8", errors="replace", timeout=25)
@@ -221,6 +265,7 @@ def main():
         row = {
             "case": label, "mode": mode, "requested_helpers": helpers,
             "expected_success": expected_success, "exit_code": process.returncode,
+            "automatic": automatic, "peak_active_requests": peak,
             "actual_size": destination.stat().st_size if destination.is_file() else None,
             "actual_sha256": actual, "expected_size": len(payload), "expected_sha256": expected,
             "requests": requests, "summary": summary, "stdout": process.stdout, "stderr": process.stderr,
@@ -229,7 +274,7 @@ def main():
         if expected_success:
             verified &= actual == expected and row["actual_size"] == len(payload)
             verified &= metrics.get("bytes") == len(payload)
-            if helpers and mode not in ("empty", "no-etag", "weak-etag"):
+            if helpers and not automatic and mode not in ("empty", "no-etag", "weak-etag"):
                 verified &= any(r["range"] for r in requests)
             if mode in ("empty", "no-etag", "weak-etag"):
                 verified &= metrics.get("effective_helpers") == 0 and not any(r["range"] for r in requests)
@@ -253,6 +298,36 @@ def main():
             verified &= any(r["range"] and r["status"] == 206 for r in requests)
         if mode == "slow-front":
             verified &= sum(bool(r["range"]) for r in requests) == 1
+        if automatic:
+            # A server handler can still be writing buffered bytes after the
+            # client has closed a redundant response. Its peak is retained as
+            # an observation, not equated with live client worker slots.
+            verified &= metrics.get("automatic") is True
+            verified &= metrics.get("effective_helpers", helpers + 1) <= helpers
+            verified &= sum(not r["range"] for r in requests) == 1
+            verified &= all(d["helpers"] <= helpers for d in metrics.get("automatic_decisions", []))
+            if mode == "adaptive-rollback-groups":
+                successful = [r for r in requests if r["range"] and r["status"] == 206]
+                # After the original tail groups, abandoned middle work must
+                # precede the low front group already approached by the original.
+                later_groups = [r for r in successful[3:] if r["end"] - r["start"] + 1 > 1024 * 1024]
+                verified &= bool(later_groups) and later_groups[0]["start"] >= 8 * 1024 * 1024
+                verified &= any(d["action"] == "rollback" for d in metrics.get("automatic_decisions", []))
+                verified &= metrics.get("trial_cancellations", 0) >= 1
+            elif mode == "adaptive-small":
+                verified &= not any(r["range"] for r in requests)
+                verified &= metrics.get("effective_helpers") == 0
+            elif mode == "adaptive-growth":
+                verified &= metrics.get("effective_helpers", 0) >= 2 and peak >= 3
+            elif mode == "adaptive-shared-limit":
+                verified &= any(r["range"] and r["status"] == 206 for r in requests)
+                verified &= any(d["action"] == "rollback" for d in metrics.get("automatic_decisions", []))
+                verified &= metrics.get("trial_cancellations", 0) >= 1
+            elif mode == "adaptive-refusal":
+                verified &= any(r["status"] == 403 for r in requests)
+                verified &= any(d["action"] == "rollback" and d["helpers"] == 0 for d in metrics.get("automatic_decisions", []))
+            elif mode == "short-primary":
+                verified &= metrics.get("primary_replacements") == 1
         row["verified"] = bool(verified)
         result["cases"].append(row)
         save()
