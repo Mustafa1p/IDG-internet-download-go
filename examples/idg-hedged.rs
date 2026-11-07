@@ -25,6 +25,15 @@ use std::{
 
 const GROUP_CHUNKS: usize = 4;
 
+#[derive(Debug)]
+struct NetworkStall;
+impl std::fmt::Display for NetworkStall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Response body stalled")
+    }
+}
+impl std::error::Error for NetworkStall {}
+
 async fn pump(
     response: reqwest::Response,
     start: u64,
@@ -46,7 +55,7 @@ async fn pump(
                 coverage.write(offset, buffered).await?;
                 return Err(match result {
                     Ok(Some(Err(error))) => anyhow::Error::new(error),
-                    Err(_) => anyhow::anyhow!("Response body stalled"),
+                    Err(_) => NetworkStall.into(),
                     _ => unreachable!(),
                 });
             }
@@ -85,10 +94,11 @@ struct Helpers {
     request: Arc<RequestContext>,
     url: String,
     etag: reqwest::header::HeaderValue,
-    claims: Vec<AtomicBool>,
+    next_group: AtomicUsize,
     primary_finished: AtomicBool,
     failures: AtomicUsize,
     requests: AtomicUsize,
+    reconnects: AtomicUsize,
 }
 
 impl Helpers {
@@ -98,30 +108,52 @@ impl Helpers {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
         while !self.coverage.complete() {
-            let choice = self.claims.iter().enumerate().find_map(|(group, claim)| {
-                // Keep a tiny final fragment together with earlier chunks.
-                let stop = self.coverage.chunk_count() - group * GROUP_CHUNKS;
-                let first = stop.saturating_sub(GROUP_CHUNKS);
-                let start = self.coverage.first_missing(first, stop)?;
-                claim
-                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-                    .ok()?;
-                Some((group, start, (stop as u64 * CHUNK).min(self.coverage.size)))
-            });
-            let Some((group, start, end)) = choice else {
+            // Claim each tail group once. Retry that group's acknowledged
+            // remainder locally, avoiding repeated scans of completed groups.
+            let group = self.next_group.fetch_add(1, Ordering::Relaxed);
+            if group >= self.coverage.chunk_count().div_ceil(GROUP_CHUNKS) {
                 break;
-            };
-            self.requests.fetch_add(1, Ordering::Relaxed);
-            let result = self.range(start, end).await;
-            self.claims[group].store(false, Ordering::Release);
-            if let Err(error) = result {
-                if error.is::<DiskFailure>() {
-                    return Err(error);
+            }
+            let stop = self.coverage.chunk_count() - group * GROUP_CHUNKS;
+            let first = stop.saturating_sub(GROUP_CHUNKS);
+            let end = (stop as u64 * CHUNK).min(self.coverage.size);
+            let mut consecutive = 0u32;
+            while let Some(start) = self.coverage.first_missing(first, stop) {
+                if self.coverage.complete() {
+                    return Ok(());
                 }
-                self.failures.fetch_add(1, Ordering::Relaxed);
-                eprintln!("[IDG diagnostic] optional helper stopped: {error}");
-                // Original response stays open. No blind size/authentication retries.
-                return Ok(());
+                self.requests.fetch_add(1, Ordering::Relaxed);
+                match self.range(start, end).await {
+                    Ok(()) => consecutive = 0,
+                    Err(error) => {
+                        if error.is::<DiskFailure>() {
+                            return Err(error);
+                        }
+                        if error.is::<reqwest::Error>() || error.is::<NetworkStall>() {
+                            let next = self.coverage.first_missing(first, stop).unwrap_or(end);
+                            let progressed = next > start;
+                            consecutive = if progressed { 0 } else { consecutive + 1 };
+                            if consecutive <= 10 {
+                                self.reconnects.fetch_add(1, Ordering::Relaxed);
+                                eprintln!(
+                                    "[IDG diagnostic] helper reconnect after acknowledged byte {next}, consecutive={consecutive}"
+                                );
+                                if !progressed {
+                                    tokio::time::sleep(Duration::from_millis(
+                                        (50_u64 << consecutive.saturating_sub(1).min(5)).min(1000),
+                                    ))
+                                    .await;
+                                }
+                                continue;
+                            }
+                        }
+                        self.failures.fetch_add(1, Ordering::Relaxed);
+                        eprintln!("[IDG diagnostic] optional helper stopped: {error}");
+                        // Refused/malformed representations never cause blind
+                        // retries. Keep the original response available.
+                        return Ok(());
+                    }
+                }
             }
         }
         Ok(())
@@ -256,12 +288,11 @@ async fn main() -> Result<()> {
             request,
             url,
             etag,
-            claims: (0..coverage.chunk_count().div_ceil(GROUP_CHUNKS))
-                .map(|_| AtomicBool::new(false))
-                .collect(),
+            next_group: AtomicUsize::new(0),
             primary_finished: AtomicBool::new(false),
             failures: AtomicUsize::new(0),
             requests: AtomicUsize::new(0),
+            reconnects: AtomicUsize::new(0),
         })
     });
     let mut tasks = tokio::task::JoinSet::new();
@@ -314,6 +345,7 @@ async fn main() -> Result<()> {
         serde_json::json!({"path":path,"bytes":coverage.bytes(),"requested_helpers":requested,
         "effective_helpers":effective,"helper_requests":helpers.as_ref().map_or(0,|h|h.requests.load(Ordering::Relaxed)),
         "optional_failures":helpers.as_ref().map_or(0,|h|h.failures.load(Ordering::Relaxed)),
+        "helper_reconnects":helpers.as_ref().map_or(0,|h|h.reconnects.load(Ordering::Relaxed)),
         "primary_or_task_failures":failures.len(),"headers_ms":headers_ms,"policy":"diagnostic_hedged_fixed_helpers"})
     );
     Ok(())

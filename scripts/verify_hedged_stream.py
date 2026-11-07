@@ -25,9 +25,12 @@ CASES = [
     ("wrong-range", "wrong-range", 4, True),
     ("changed-validator", "changed", 4, True),
     ("short-helper", "short-helper", 1, True),
+    ("changed-after-progress", "changed-after-progress", 1, True),
+    ("refused-after-progress", "refused-after-progress", 1, True),
     ("short-primary-recovered", "short-primary", 1, True),
     ("short-primary-alone", "short-primary", 0, False),
-    ("short-both", "short-both", 1, False),
+    ("short-both", "short-both", 1, True),
+    ("no-progress", "no-progress", 1, False),
     ("no-etag", "no-etag", 4, True),
     ("weak-etag", "weak-etag", 4, True),
     ("existing-file", "existing", 1, False),
@@ -111,13 +114,17 @@ def main():
                 if mode == "auth" and self.headers.get("Authorization") != "Basic OnBhc3M=":
                     status = 401
                 with lock:
+                    ranged_number = sum(bool(r["range"]) for r in requests) + bool(ranged)
+                    if ranged and mode == "refused-after-progress" and ranged_number > 1:
+                        status = 403
                     requests.append({
                         "range": ranged, "start": start, "end": end, "status": status,
                         "if_range": self.headers.get("If-Range"),
                         "authenticated": self.headers.get("Authorization") == "Basic OnBhc3M=",
                     })
                 content = payload[start:end + 1] if status < 400 else b""
-                if ranged and mode == "changed":
+                changed = bool(ranged and (mode == "changed" or mode == "changed-after-progress" and ranged_number > 1))
+                if changed:
                     content = bytes(value ^ 0xFF for value in content)
                 self.send_response(status)
                 self.send_header("Connection", "close")
@@ -129,16 +136,18 @@ def main():
                     self.send_header("Content-Length", str(len(content)))
                 if mode != "no-etag":
                     self.send_header("ETag", 'W/"fixed"' if mode == "weak-etag"
-                                     else '"changed"' if ranged and mode == "changed" else '"fixed"')
+                                     else '"changed"' if changed else '"fixed"')
                 if status == 206:
                     range_start = start + (1 if ranged and mode == "wrong-range" else 0)
                     self.send_header("Content-Range", f"bytes {range_start}-{end}/{len(payload)}")
                 self.end_headers()
-                if not ranged and mode in ("short-primary", "short-both"):
+                if not ranged and mode in ("short-primary", "short-both", "no-progress"):
                     self.wfile.write(content[:193])
                     return
-                if ranged and mode in ("short-helper", "short-both"):
-                    self.wfile.write(content[:31763])
+                if ranged and (mode in ("short-helper", "short-both", "no-progress")
+                               or mode in ("changed-after-progress", "refused-after-progress") and ranged_number == 1):
+                    if mode != "no-progress":
+                        self.wfile.write(content[:31763])
                     return
                 if chunked:
                     self.wfile.write(f"{len(content):x}\r\n".encode() + content + b"\r\n0\r\n\r\n")
@@ -196,6 +205,12 @@ def main():
             verified &= destination.read_bytes() == b"preserve existing user content"
         if mode in ("html", "partial-initial"):
             verified &= not destination.exists()
+        if mode == "no-progress":
+            verified &= sum(bool(r["range"]) for r in requests) == 11
+        if mode in ("short-helper", "short-both", "changed-after-progress", "refused-after-progress") and expected_success:
+            verified &= summary["helper_reconnects"] > 0
+        if mode in ("changed-after-progress", "refused-after-progress"):
+            verified &= summary["optional_failures"] == 1
         row["verified"] = bool(verified)
         result["cases"].append(row)
         save()
