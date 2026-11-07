@@ -3,7 +3,7 @@
 ; Produces the installer for AppVersion below.
 
 #define AppName      "IDG – Internet Download GO"
-#define AppVersion   "1.6.7"
+#define AppVersion   "1.6.8"
 #define AppPublisher "IDG Project"
 #define AppURL       "https://github.com/Mustafa1p/IDG-internet-download-go"
 #define AppExeName   "IDG.exe"

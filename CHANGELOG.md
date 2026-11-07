@@ -1,3 +1,11 @@
+## 1.6.8 - 2026-11-07
+
+- Reuse a validated initial 2 MiB response for eligible automatic and single-connection downloads, reducing startup requests while retaining fallback for incompatible sources.
+- Recover multiple stalled original ranges through idle workers from disk-acknowledged offsets.
+- Preserve pending response headers, brief healthy response gaps and tiny remaining tails. Avoid discarding a valid stream and triggering an unnecessary HTTP 403 on its replacement.
+- Retain validator, credential, origin-capacity, pause/cancel and single-use export safeguards.
+- Add real-server recovery regressions, browser feed/closed-tab checks and complete measured evidence. Experimental downloader strategies remain outside the desktop policy; no universal speed claim is made.
+
 ## 1.6.7 - 2026-11-07
 
 - Fix password-only URL authentication: an empty username no longer causes data ranges to lose credentials after the initial probe. Preserve explicit authorization overrides and source-origin credential boundaries.
