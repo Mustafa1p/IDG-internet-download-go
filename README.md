@@ -40,26 +40,38 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 
 ## Benchmarks
 
-Same files, same machine, successful transfers verified by SHA-256.
-**IDG 1.6.1 delivered 33.3% higher median throughput than Prism 1.1.7 in the
-2 GiB unlimited-localhost test**, and 28.3% higher median throughput with random
-connection drops. Server-limited tests were effectively tied; Prism was faster
-on the public HTTPS archive. See the [method, raw trials and full results](docs/benchmarks.md).
+Fresh **IDG 1.6.8 x64** production-engine measurements, 7 November 2026.
+IDG completed **21/21** transfers with exact size and SHA-256 verification.
+Median throughput was **27.2% higher than Prism 1.1.7** on the 2 GiB local test
+and **21.9% higher** with random connection drops. Server-limited tests were
+effectively tied. **Curl led all three public-download medians.**
 
-| Scenario | curl (n=1) | aria2c (n=3) | Prism 1.1.7 (n=3) | IDG 1.6.1 (n=3) |
+Local server fixtures (median MiB/s):
+
+| Scenario | curl (n=1) | aria2c (n=3) | Prism 1.1.7 (n=3) | IDG 1.6.8 (n=3) |
 | --- | ---: | ---: | ---: | ---: |
-| 1 GiB, 4 MiB/s per connection | 4.00 MiB/s | 63.04 MiB/s | 62.78 MiB/s | 62.96 MiB/s |
-| 2 GiB, unlimited localhost | 1,025.42 MiB/s | 377.33 MiB/s | 1,287.33 MiB/s | 1,716.14 MiB/s |
-| 256 MiB, four connections at 2 MiB/s | 2.00 MiB/s | 7.98 MiB/s | 7.99 MiB/s | 7.99 MiB/s |
-| 256 MiB, 2% random drops per chunk | Failed (1/1) | Failed (3/3) | 30.27 MiB/s | 38.85 MiB/s |
-| 76.2 MiB public Rust archive over HTTPS | 52.48 MiB/s | 39.51 MiB/s | 23.62 MiB/s | 16.14 MiB/s |
+| 1 GiB, 4 MiB/s per connection | 4.00 MiB/s | 63.00 MiB/s | 62.77 MiB/s | 62.79 MiB/s |
+| 2 GiB, unlimited localhost | 874.38 MiB/s | 370.69 MiB/s | 1,326.28 MiB/s | 1,687.07 MiB/s |
+| 256 MiB, four connections at 2 MiB/s | 2.00 MiB/s | 7.98 MiB/s | 7.99 MiB/s | 7.98 MiB/s |
+| 256 MiB, 2% random drops per chunk | Failed (1/1) | Failed (3/3) | 34.49 MiB/s | 42.04 MiB/s |
 
-Windows 11, Ryzen 9 9950X3D, NVMe SSD. IDG/Prism/aria2: three trials per
-scenario; curl: one reference trial. Timing includes process startup and file
-sync, with hashing outside the timed interval. Internet results depend on the
-source and network; these measurements do not establish universal superiority.
+Public HTTPS files (three runs per tool; median MiB/s):
 
-![Same-machine IDG vs Prism throughput](docs/benchmarks/comparison.png)
+| Scenario | curl (n=3) | aria2c (n=3) | Prism 1.1.7 (n=3) | IDG 1.6.8 (n=3) |
+| --- | ---: | ---: | ---: | ---: |
+| 76.2 MiB public Rust archive over HTTPS | 51.52 MiB/s | 43.05 MiB/s | 40.01 MiB/s | 48.39 MiB/s |
+| 34.7 MiB official Node ZIP over HTTPS | 48.03 MiB/s | 43.01 MiB/s | 35.70 MiB/s | 42.75 MiB/s |
+| 26.9 MiB official Python installer over HTTPS | 32.90 MiB/s | 23.06 MiB/s | 19.49 MiB/s | 31.87 MiB/s |
+
+Windows 11, Ryzen 9 9950X3D, NVMe SSD. Requested connections match across
+IDG/Prism/aria2: 16 for A/C/D and public files, 8 for B; curl uses one.
+These are engine-CLI tests with explicit connection counts. Timing includes
+client startup and file sync; hashing is outside the timed interval. Three
+rotating runs are a small sample, and internet results vary by source and network.
+Failed attempts remain in the results. See the [method, raw trials, ranges,
+resource counters and complete evidence](docs/benchmarks.md).
+
+![IDG 1.6.8 throughput relative to Prism](docs/benchmarks/v1.6.8/comparison.png)
 
 ## Desktop and download safety
 

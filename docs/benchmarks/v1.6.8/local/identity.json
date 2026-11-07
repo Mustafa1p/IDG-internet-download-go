@@ -1,0 +1,80 @@
+{
+  "idg_commit": "777ab94d8b733477acf9dcbd1dddfbe43b94849c",
+  "prism_commit": "c25f3c795c962323982effcb0220fcbbe75ee2a3",
+  "binary_sha256": {
+    "curl": "73d24149ff289afc49ec41f08918ef9faa727d39ad993e929757dc2ddafab805",
+    "aria2c": "be2099c214f63a3cb4954b09a0becd6e2e34660b886d4c898d260febfe9d70c2",
+    "Prism": "f0d9fd30019aea71a979cbc1ea2d5fc422969a434cf73f2a87d9c458a1f19774",
+    "IDG": "a751aa585f2cacc727db02cdcb8fb9349d283b20234d1f2b829e5da126332408"
+  },
+  "production_sources": {
+    "src\\download\\bandwidth.rs": "ee1c9999e15da6b468ab179f84c718b2162e20dd26c49f986d60ae4e27ebed68",
+    "src\\download\\connections.rs": "4dc626b220e1bc048f9547a47955394e8dec0766c5a0c85f7c29abb0b2344859",
+    "src\\download\\engine.rs": "f27872b05e0c3aa8a1e208426125319377ed7b4728c5d4f585f96cc5b234d4b2",
+    "src\\download\\gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+    "src\\download\\history.rs": "7e95ff7a00f0a5d98913725c3d9caceb9282a406ead6f6ac7ad6d45c1144319e",
+    "src\\download\\media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+    "src\\download\\mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+    "src\\download\\music.rs": "de6ca86d10064bc8b6fb8578771d167e3195dedaad2b2d90f81d53c4e51b2101",
+    "src\\download\\probe.rs": "a1843f2dfac601d132ab7a5b0ecdc5f60e6345fa6def5f039667f706b6dbfffa",
+    "src\\download\\request.rs": "ec716ffba3e44b0868a22c6e6115c9ee19f540de86ffed62d1fd0e2a7523cde2",
+    "src\\download\\segment.rs": "dc0bed3167a428d16e9ad22a86b4b6795aebcad1ae751fe507021f87f8f2486e",
+    "src\\download\\types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+    "src\\download\\writer.rs": "bd9525e1426f1d54798b5612934308f9f97dc86e513e09bc19124581d986d6a1"
+  },
+  "harness_sha256": "b48263c7377d4ff635328884d9baf5c7412c082267c6117fae36daf023ba332e",
+  "started_utc": "2026-11-07T02:29:59Z",
+  "finished_utc": "2026-11-07T02:45:38Z",
+  "source_snapshot": "benchmark-v168-standard-20261107-files\\source-snapshot",
+  "tracked_worktree_changes": [],
+  "publisher_references": {},
+  "workloads": {
+    "A": {
+      "size": 1073741824,
+      "seed": 101,
+      "requested_connections": 16,
+      "server_options": [
+        "--throttle",
+        "4M"
+      ],
+      "source": null
+    },
+    "B": {
+      "size": 2147483648,
+      "seed": 202,
+      "requested_connections": 8,
+      "server_options": [],
+      "source": null
+    },
+    "C": {
+      "size": 268435456,
+      "seed": 303,
+      "requested_connections": 16,
+      "server_options": [
+        "--throttle",
+        "2M",
+        "--max-conn",
+        "4",
+        "--limit-mode",
+        "503"
+      ],
+      "source": null
+    },
+    "D": {
+      "size": 268435456,
+      "seed": 404,
+      "requested_connections": 16,
+      "server_options": [
+        "--throttle",
+        "3M",
+        "--drop-prob",
+        "0.02"
+      ],
+      "source": null
+    }
+  },
+  "connection_overrides": {
+    "IDG": null,
+    "IDG-baseline": null
+  }
+}

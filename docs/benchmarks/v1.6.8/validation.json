@@ -1,0 +1,18 @@
+{
+  "verified": true,
+  "version": "1.6.8",
+  "source_revision": "777ab94d8b733477acf9dcbd1dddfbe43b94849c",
+  "attempts": 76,
+  "verified_transfers": 72,
+  "IDG_verified": 21,
+  "IDG_attempts": 21,
+  "checks": [
+    "Raw JSON semantics and original-byte archives",
+    "Strict per-trial summary validation",
+    "Source/driver/harness SHA-256 in archived snapshots",
+    "Failed payloads retained with matching recorded hashes",
+    "README tables match generated results",
+    "Local documentation links and three PNG files"
+  ],
+  "scope": "Benchmark documentation only; feature work remains paused."
+}

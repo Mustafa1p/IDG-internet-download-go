@@ -1,0 +1,16 @@
+{
+  "cpu": {
+    "Name": "AMD Ryzen 9 9950X3D 16-Core Processor          ",
+    "NumberOfCores": 16,
+    "NumberOfLogicalProcessors": 32
+  },
+  "ram_bytes": 134876127232,
+  "volume": {
+    "DriveLetter": "X",
+    "FileSystem": "NTFS"
+  },
+  "disk": {
+    "FriendlyName": "Samsung SSD 990 PRO 4TB",
+    "BusType": "NVMe"
+  }
+}
