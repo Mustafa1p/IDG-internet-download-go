@@ -34,9 +34,17 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
       <header><div class="art">&#9829;</div><div><span>Playlist</span><h1>Liked Songs</h1><strong>7 songs</strong></div></header><div class="controls">&#9654; &nbsp; &#8644;</div><div class="list"><div class="head"><span>#</span><span>Title</span><span>Album</span><span>Date added</span><span>Duration</span></div>${rows}</div>
       <script>window.rowClicks=0;document.querySelectorAll('[role=row]').forEach(row=>row.addEventListener('click',()=>window.rowClicks++));</script>` }));
     const page = await context.newPage();
-    const waitForHandoff = async button => page.waitForFunction(
-      element => !element.disabled && element.title.startsWith('Opened in IDG.'),
-      await button.elementHandle(), { timeout: 5000 });
+    const waitForHandoff = async (button, expectedCount) => {
+      await worker.evaluate(async expected => {
+        const deadline = Date.now() + 5000;
+        while (requests.length < expected && Date.now() < deadline) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        if (requests.length !== expected) throw new Error(`Expected ${expected} delivered requests, received ${requests.length}`);
+      }, expectedCount);
+      await page.waitForFunction(element => !element.disabled,
+        await button.elementHandle(), { timeout: 5000 });
+    };
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto('https://open.spotify.com/collection/tracks');
     await page.getByRole('button', { name: 'Download I LOVE YOU FUNK - Slowed with IDG', exact: true }).waitFor();
@@ -54,7 +62,7 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
       assert.ok(box.x + box.width <= menu.x - 4, title + ': before native menu');
       assert.ok(Math.abs(box.y + box.height / 2 - (duration.y + duration.height / 2)) < 3, title + ': vertically aligned');
       await button.click();
-      await waitForHandoff(button);
+      await waitForHandoff(button, index + 1);
       const delivered = await worker.evaluate(() => requests);
       assert.equal(delivered.length, index + 1);
       assert.equal(delivered.at(-1)[0], `https://open.spotify.com/track/${id}`);
@@ -69,7 +77,7 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
     await page.getByRole('button', { name: 'Download I LOVE YOU FUNK - Slowed with IDG', exact:true }).click();
     const reused = page.getByRole('button', { name: 'Download Reused row track with IDG', exact: true });
     await reused.waitFor();
-    await waitForHandoff(reused);
+    await waitForHandoff(reused, songs.length + 1);
     assert.equal((await worker.evaluate(() => requests)).length, songs.length + 1);
     assert.equal((await worker.evaluate(() => requests)).at(-1)[0], 'https://open.spotify.com/track/0000000000000000000008');
     assert.equal(await page.locator('[data-idg-spotify-row]').count(), 7);
