@@ -416,7 +416,8 @@ async fn main() -> Result<()> {
             tokio::select! {
                 result = tasks.join_next_with_id() => result,
                 _ = tokio::time::sleep_until(controller.deadline()) => {
-                    if let Some(target) = controller.observe(coverage.bytes(), size) {
+                    let optional_failed = helpers.as_ref().is_some_and(|helpers| helpers.failures.load(Ordering::Acquire) > 0);
+                    if let Some(target) = controller.observe(coverage.bytes(), size, optional_failed) {
                         // Cancel optional trial workers only. The original
                         // stream and its valid response are never sacrificed.
                         helper_handles.retain(|(index, handle)| {

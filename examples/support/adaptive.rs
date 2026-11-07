@@ -34,7 +34,7 @@ impl Adaptive {
         tokio::time::Instant::from_std(self.sampled + self.window)
     }
 
-    pub fn observe(&mut self, bytes: u64, total: u64) -> Option<usize> {
+    pub fn observe(&mut self, bytes: u64, total: u64, optional_failed: bool) -> Option<usize> {
         let now = Instant::now();
         let elapsed = now.duration_since(self.sampled).as_secs_f64();
         let rate = bytes.saturating_sub(self.previous_bytes) as f64 / elapsed;
@@ -42,6 +42,14 @@ impl Adaptive {
         self.previous_bytes = bytes;
         if self.settled || bytes >= total {
             return None;
+        }
+        if optional_failed {
+            // A coincidental improvement in the original stream does not
+            // authorize more requests after a terminal helper refusal.
+            self.target = self.accepted;
+            self.settled = true;
+            self.decisions.push(serde_json::json!({"action":"rollback","reason":"optional_failure","helpers":self.target,"bytes":bytes,"bytes_per_second":rate}));
+            return Some(self.target);
         }
         if self.trial {
             if rate <= self.baseline * 1.10 {

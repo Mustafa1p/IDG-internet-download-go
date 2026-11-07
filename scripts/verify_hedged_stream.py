@@ -16,6 +16,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 DATA = hashlib.shake_256(b"IDG full stream optional helper fixture v1").digest(8 * 1024 * 1024 + 19)
 CASES = [
+    ("adaptive-refusal-accelerates", "adaptive-refusal-accelerates", 4, True),
     ("adaptive-rollback-groups", "adaptive-rollback-groups", 15, True),
     ("adaptive-small", "adaptive-small", 4, True),
     ("adaptive-growth", "adaptive-growth", 4, True),
@@ -148,8 +149,8 @@ def main():
                     start, end = map(int, ranged.removeprefix("bytes=").split("-"))
                     assert 0 <= start <= end < len(payload)
                 status = 206 if ranged or mode == "partial-initial" else 200
-                if ranged and mode in ("403", "413", "adaptive-refusal"):
-                    status = 403 if mode == "adaptive-refusal" else int(mode)
+                if ranged and mode in ("403", "413", "adaptive-refusal", "adaptive-refusal-accelerates"):
+                    status = 403 if mode in ("adaptive-refusal", "adaptive-refusal-accelerates") else int(mode)
                 if ranged and mode == "ignore":
                     status, start, end = 200, 0, len(payload) - 1
                 if mode == "auth" and self.headers.get("Authorization") != "Basic OnBhc3M=":
@@ -227,7 +228,7 @@ def main():
                                 # handler whose response is already complete.
                                 self.release_admission()
                         self.wfile.write(content[at:at + step])
-                        time.sleep(0 if mode == "adaptive-rollback-groups" else 0.03125 if mode in ("adaptive-growth", "adaptive-refusal") else 0.01 if mode == "slow-front" else 0.001)
+                        time.sleep(0.01 if mode == "adaptive-refusal-accelerates" and helper_ready.is_set() else 0.03125 if mode == "adaptive-refusal-accelerates" else 0 if mode == "adaptive-rollback-groups" else 0.03125 if mode in ("adaptive-growth", "adaptive-refusal") else 0.01 if mode == "slow-front" else 0.001)
 
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         server.daemon_threads = True
@@ -323,6 +324,10 @@ def main():
                 verified &= any(r["range"] and r["status"] == 206 for r in requests)
                 verified &= any(d["action"] == "rollback" for d in metrics.get("automatic_decisions", []))
                 verified &= metrics.get("trial_cancellations", 0) >= 1
+            elif mode == "adaptive-refusal-accelerates":
+                verified &= sum(bool(r["range"]) for r in requests) == 3
+                verified &= all(r["status"] == 403 for r in requests if r["range"])
+                verified &= any(d["action"] == "rollback" and d["helpers"] == 0 for d in metrics.get("automatic_decisions", []))
             elif mode == "adaptive-refusal":
                 verified &= any(r["status"] == 403 for r in requests)
                 verified &= any(d["action"] == "rollback" and d["helpers"] == 0 for d in metrics.get("automatic_decisions", []))
