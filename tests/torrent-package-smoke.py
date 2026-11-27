@@ -3,8 +3,10 @@
 Run with tools/torrent/python.exe -I tests/torrent-package-smoke.py.
 All torrents and their peers are created locally for this test.
 """
+import ctypes
 import http.server
 import json
+import os
 from pathlib import Path
 import socket
 import struct
@@ -16,6 +18,34 @@ import time
 from urllib.parse import parse_qs, urlsplit
 
 import libtorrent as lt
+
+
+def encode_metainfo(value):
+    if isinstance(value, dict):
+        pairs = sorted(value.items())
+        return b"d" + b"".join(encode_metainfo(key) + encode_metainfo(item) for key, item in pairs) + b"e"
+    if isinstance(value, list):
+        return b"l" + b"".join(map(encode_metainfo, value)) + b"e"
+    if isinstance(value, int):
+        return f"i{value}e".encode()
+    assert isinstance(value, bytes), type(value)
+    return f"{len(value)}:".encode() + value
+
+
+def check_cpp_runtime():
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+    kernel.GetModuleHandleW.restype = wintypes.HMODULE
+    kernel.GetModuleFileNameW.argtypes = [wintypes.HMODULE, wintypes.LPWSTR, wintypes.DWORD]
+    kernel.GetModuleFileNameW.restype = wintypes.DWORD
+    for name in ["msvcp140.dll", "vcruntime140.dll"]:
+        handle = kernel.GetModuleHandleW(name)
+        path = ctypes.create_unicode_buffer(32768)
+        assert handle and kernel.GetModuleFileNameW(handle, path, len(path)), name
+        assert Path(path.value).samefile(Path(sys.executable).with_name(name)), path.value
+    print("PASS BitTorrent loaded the bundled Microsoft C++ runtime")
 
 
 def wait_for(predicate, timeout=20):
@@ -65,7 +95,7 @@ def smoke(root):
         def do_GET(self):
             requester = parse_qs(urlsplit(self.path).query).get("port", ["0"])[0]
             peers = b"" if requester == str(port) else socket.inet_aton("127.0.0.1") + struct.pack("!H", port)
-            reply = lt.bencode({b"interval": 60, b"peers": peers})
+            reply = f"d8:intervali60e5:peers{len(peers)}:".encode() + peers + b"e"
             self.send_response(200)
             self.send_header("Content-Length", str(len(reply)))
             self.end_headers()
@@ -85,9 +115,9 @@ def smoke(root):
                 source_dir = root / "seed"
                 source_dir.mkdir(exist_ok=True)
                 if name.endswith("single"):
-                    payloads = {Path(name + ".bin"): bytes(range(251)) * 256}
+                    payloads = {Path(name + ".bin"): bytes(range(251)) * 256 + os.urandom(8)}
                 else:
-                    payloads = {Path(name) / "one.bin": bytes(range(251)) * 256,
+                    payloads = {Path(name) / "one.bin": bytes(range(251)) * 256 + os.urandom(8),
                                 Path(name) / "بيانات.bin": b"second torrent file" * 885}
                 files = []
                 for rel, data in payloads.items():
@@ -99,8 +129,7 @@ def smoke(root):
                 torrent.add_tracker(f"http://127.0.0.1:{tracker.server_port}/announce")
                 lt.set_piece_hashes(torrent, str(source_dir))
                 metainfo = root / f"{name}.torrent"
-                metainfo.write_bytes(lt.bencode(torrent.generate()))
-                info = lt.torrent_info(str(metainfo))
+                metainfo.write_bytes(encode_metainfo(torrent.generate()))
                 params = lt.load_torrent_file(str(metainfo))
                 params.save_path = str(source_dir)
                 params.flags &= ~lt.torrent_flags.auto_managed
@@ -126,5 +155,6 @@ def smoke(root):
 
 
 if __name__ == "__main__":
+    check_cpp_runtime()
     with tempfile.TemporaryDirectory(prefix="idg-torrent-smoke-") as directory:
         smoke(Path(directory))

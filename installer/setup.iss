@@ -67,6 +67,7 @@ Name: "startupicon"; Description: "Start IDG when Windows starts"; GroupDescript
 [Files]
 Source: "{#BuildDir}\IDG-native.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\IDG.exe";   DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\tools\torrent\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\extension\*";              DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\music\*.py"; DestDir: "{app}\music"; Flags: ignoreversion
 Source: "..\music\*.txt"; DestDir: "{app}\music"; Flags: ignoreversion

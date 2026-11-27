@@ -1,8 +1,10 @@
 """Fetch pinned upstream media tools, verify SHA-256, and preserve their notices."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import urllib.request
 from zipfile import ZipFile
@@ -27,6 +29,40 @@ def fetch(url, path):
     request = urllib.request.Request(url, headers={"User-Agent": "IDG-media-tools"})
     with urllib.request.urlopen(request, timeout=120) as response, path.open("wb") as target:
         shutil.copyfileobj(response, target)
+
+
+def stage_cpp_runtime():
+    # Use Microsoft's redistributable files from the installed Visual Studio toolchain.
+    vswhere = Path(os.environ["ProgramFiles(x86)"]) / "Microsoft Visual Studio/Installer/vswhere.exe"
+    if not vswhere.is_file():
+        raise SystemExit("Install the Visual Studio C++ build tools and VC++ Redistributable component.")
+    installs = subprocess.check_output(
+        [str(vswhere), "-products", "*", "-format", "json", "-utf8"], encoding="utf-8-sig"
+    )
+    candidates = [
+        runtime
+        for installation in json.loads(installs)
+        for runtime in (Path(installation["installationPath"]) / "VC/Redist/MSVC")
+        .glob(f"*/{arch}/Microsoft.VC*.CRT")
+        if (runtime / "msvcp140.dll").is_file()
+    ]
+    if not candidates:
+        raise SystemExit(f"Install the Visual Studio C++ Redistributable component for {arch}.")
+    runtime = max(candidates, key=lambda path: tuple(map(int, path.parent.parent.name.split("."))))
+    files = ["msvcp140.dll", "vcruntime140.dll"]
+    if arch == "x64":
+        files.append("vcruntime140_1.dll")
+    hashes = {}
+    for name in files:
+        shutil.copyfile(runtime / name, torrent_runtime / name)
+        with (torrent_runtime / name).open("rb") as source:
+            hashes[name] = hashlib.file_digest(source, "sha256").hexdigest()
+    (notices / "vc-runtime.json").write_text(json.dumps({
+        "architecture": arch,
+        "toolchain_redistributable_directory": runtime.parent.parent.name,
+        "source": "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files",
+        "sha256": hashes,
+    }, indent=2) + "\n", encoding="utf-8")
 
 
 for tool in lock["tools"]:
@@ -71,6 +107,7 @@ for tool in lock["tools"]:
         fetch(url, notices / f"{tool['name']}-{index}-{url.rsplit('/', 1)[-1]}.txt")
     print(f"Verified {tool['name']} {tool['tag']}", flush=True)
 
+stage_cpp_runtime()
 shutil.copyfile(root / "torrent/worker.py", torrent_runtime / "worker.py")
 if not (torrent_runtime / "python.exe").is_file() or not any((torrent_runtime / "libtorrent").glob("*.pyd")):
     raise SystemExit("Missing bundled BitTorrent runtime or module")

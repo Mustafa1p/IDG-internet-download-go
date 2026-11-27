@@ -32,7 +32,9 @@ tools = build / "tools"
 torrent_abi = "win32" if arch == "x86" else "win_amd64"
 for name in (
     "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "node.exe" if arch == "x86" else "deno.exe",
-    "licenses/upstream-sources.json", "torrent/python.exe", "torrent/worker.py",
+    "licenses/upstream-sources.json", "licenses/vc-runtime.json",
+    "torrent/python.exe", "torrent/worker.py", "torrent/msvcp140.dll", "torrent/vcruntime140.dll",
+    *(() if arch == "x86" else ("torrent/vcruntime140_1.dll",)),
     f"torrent/libtorrent/__init__.cp312-{torrent_abi}.pyd",
 ):
     if not (tools / name).is_file():
@@ -65,6 +67,7 @@ portable_zip = root / f"dist/IDG-portable-{tag}{suffix}.zip"
 with ZipFile(portable_zip, "w", ZIP_DEFLATED) as archive:
     for binary in ("IDG.exe", "IDG-native.exe"):
         archive.write(build / binary, binary)
+    archive.write(tools / "torrent/vcruntime140.dll", "vcruntime140.dll")
     for path in extension_files:
         archive.write(path, path.relative_to(root))
     for path in sorted(tools.rglob("*")):
