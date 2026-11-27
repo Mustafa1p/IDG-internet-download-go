@@ -1,0 +1,286 @@
+{
+  "scope": "Experimental adaptive helper coordinator with cancellation-safe group return. Not integrated into the desktop and not accepted as a general speed improvement.",
+  "identity": {
+    "x64_binary": "target/perf-idg-hedged-adaptive-returned.exe",
+    "x64_sha256": "8181601fce9c3912ec2288039ca3d666a1e37b07ad39ee03d235fa374419e165",
+    "x86_binary": "target/perf-idg-hedged-adaptive-returned-x86.exe",
+    "x86_sha256": "432a06375596885990570124a8ba9676ba0816af06c058c8590f14482392f043",
+    "source_sha256": {
+      "examples/idg-hedged.rs": "ee551091158b90913f10796c105b8819c677cf301da615832141b6afd4df4146",
+      "examples/support/coverage.rs": "4d0045e85af6faeb36d681be4a4fa7d51fda8f4701d07d4633d44dc9f2ba5b87",
+      "examples/support/adaptive.rs": "b0f1569435d9ec65575529decbe2d2e058f3697ebfb7570c9f1690f3ffaaf2b4",
+      "scripts/verify_hedged_stream.py": "2164c4ed86f9546aa97901657b16e00276375217c2c58a58d845221fe14236e5",
+      "Cargo.toml": "5362b5a28b99cc46030fb8e1bdaab6e231443e27b9d63c875860c7d7244ec283",
+      "Cargo.lock": "15291ecc1b9c78697c4ada74f4cc07b73a02b7d18294a6df69d8b70f4542a2b5",
+      "build.rs": "0d2f20945ac0abe069ec10fcec784f15fca9cf5a0a3c795567e33134dbdea38d",
+      "src/download/bandwidth.rs": "3c2722482fd14337ea65a97318654872d5d8c828857858b97119c29c7f9cef50",
+      "src/download/connections.rs": "f2bc349a17c538f1b02b069814385c36ff29214d2be72baeaf22303d7fa15d6f",
+      "src/download/engine.rs": "f27872b05e0c3aa8a1e208426125319377ed7b4728c5d4f585f96cc5b234d4b2",
+      "src/download/gate.rs": "7e7bb11381514c2699c561af05ced1854025f5a6d54ed7b8a2f76f5b80c05bf4",
+      "src/download/history.rs": "1a335c7c567631c3bcb3ec142763329d4b85d191610a9df86a51a67a14fb5a8c",
+      "src/download/media.rs": "23f93f3019bd136f73bfd00e347418fdf9bf96eea14bfaabe3a24c9ffc79e6ac",
+      "src/download/mod.rs": "7bbd3f821c9e956c4d6569144333c66c557aca87d1d4073c5c8cadb20ae5454b",
+      "src/download/music.rs": "2c95830a1113d4d704c68bc86f0ce2c54dfd4661325f5c9159571888bd8449ab",
+      "src/download/probe.rs": "3a58cfcbe6487d050291963b4c24149be1fa35495b591b7a0ed99a7f2aa41e52",
+      "src/download/request.rs": "34bda79c58e45e5f39cadcd06d5d6a52c5e65956f39fe6b4884cef42217cc55b",
+      "src/download/segment.rs": "c7b681f8cb2cae2e81c07b47e5af7dc41de34c999badab32f2b02fa1f00982cd",
+      "src/download/types.rs": "d052781420d59a4b1966a4da7145b47739e7296595eb3ef21c3b49134daeb16c",
+      "src/download/writer.rs": "2f6d70c25726ae97e1146bb295401922ce728d119f5023e6b5c97324e2de507e"
+    }
+  },
+  "checks": [
+    {
+      "path": "target/perf-hedged-adaptive-returned-fixed-clippy.log",
+      "sha256": "dacd1505d187c5c322c0c74c4b28accd7c60c47beb818f28074f3c3c0b28977f",
+      "tail": "    Checking idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.88s\n"
+    },
+    {
+      "path": "target/perf-hedged-adaptive-returned-x86-clippy.log",
+      "sha256": "b8d842556651e2d461834a88b47de370e991befa93cab76ba8996d563e5de61c",
+      "tail": "    Checking idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.99s\n"
+    },
+    {
+      "path": "target/perf-hedged-adaptive-returned-example-tests.log",
+      "sha256": "9fdd089a81d3179cac12b5cd4e16da6c6d8cae737cf9ce7f54acf0ae3c5b23ce",
+      "tail": "ross_origin_redirects ... ok\ntest download::request::tests::malformed_http_does_not_infer_capacity_and_closed_forms_are_not_replayed ... ok\ntest download::engine::regression_tests::speed_limit_is_shared_across_segments_and_preserves_exact_bytes ... ok\ntest download::engine::regression_tests::redirects_keep_credentials_on_the_source_origin_and_preserve_file_bytes ... ok\ntest download::probe::tests::reused_full_stream_outlives_the_probe_deadline_without_replay ... ok\ntest download::probe::tests::retained_partial_headers_are_strict_and_do_not_time_the_file_body ... ok\ntest download::engine::regression_tests::concurrent_files_queue_when_another_file_occupies_the_server_slots ... ok\ntest download::segment::tests::pause_releases_ranges_at_acknowledged_offsets_but_keeps_one_use_streams ... ok\ntest download::request::tests::redirects_release_old_origin_and_exclude_capacity_wait_from_network_time ... ok\ntest download::engine::regression_tests::range_download_pauses_resumes_and_preserves_exact_bytes ... ok\ntest download::engine::regression_tests::url_credentials_authenticate_probe_and_all_resolved_ranges ... ok\ntest download::engine::regression_tests::range_handoff_preserves_validator_cancel_and_pause ... ok\ntest download::engine::regression_tests::productive_reconnects_exceed_retry_budget_without_discarding_short_buffers ... ok\ntest download::media::tests::expired_media_url_reextracts_once_and_preserves_partial_output ... ok\ntest download::engine::regression_tests::authenticated_files_reuse_transport_without_reusing_each_others_headers ... ok\ntest download::engine::regression_tests::concurrent_files_survive_servers_that_close_excess_tcp_connections ... ok\ntest download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... ok\ntest download::segment::tests::idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits ... ok\n\ntest result: ok. 68 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 7.54s\n\n"
+    },
+    {
+      "path": "target/perf-hedged-adaptive-returned-x86-example-tests.log",
+      "sha256": "a9d24688321eaa432d2c3c8d68f8db1f6c1f3200f69859533a8896a1ed9b42d8",
+      "tail": "ross_origin_redirects ... ok\ntest download::engine::regression_tests::speed_limit_is_shared_across_segments_and_preserves_exact_bytes ... ok\ntest download::request::tests::malformed_http_does_not_infer_capacity_and_closed_forms_are_not_replayed ... ok\ntest download::engine::regression_tests::redirects_keep_credentials_on_the_source_origin_and_preserve_file_bytes ... ok\ntest download::probe::tests::reused_full_stream_outlives_the_probe_deadline_without_replay ... ok\ntest download::probe::tests::retained_partial_headers_are_strict_and_do_not_time_the_file_body ... ok\ntest download::engine::regression_tests::concurrent_files_queue_when_another_file_occupies_the_server_slots ... ok\ntest download::request::tests::redirects_release_old_origin_and_exclude_capacity_wait_from_network_time ... ok\ntest download::segment::tests::pause_releases_ranges_at_acknowledged_offsets_but_keeps_one_use_streams ... ok\ntest download::engine::regression_tests::range_download_pauses_resumes_and_preserves_exact_bytes ... ok\ntest download::engine::regression_tests::url_credentials_authenticate_probe_and_all_resolved_ranges ... ok\ntest download::engine::regression_tests::productive_reconnects_exceed_retry_budget_without_discarding_short_buffers ... ok\ntest download::engine::regression_tests::range_handoff_preserves_validator_cancel_and_pause ... ok\ntest download::media::tests::expired_media_url_reextracts_once_and_preserves_partial_output ... ok\ntest download::engine::regression_tests::authenticated_files_reuse_transport_without_reusing_each_others_headers ... ok\ntest download::engine::regression_tests::concurrent_files_survive_servers_that_close_excess_tcp_connections ... ok\ntest download::engine::regression_tests::retained_initial_range_is_written_once_resumes_and_respects_capacity ... ok\ntest download::segment::tests::idle_reconnects_preserve_short_buffers_credentials_and_intentional_waits ... ok\n\ntest result: ok. 68 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 7.52s\n\n"
+    },
+    {
+      "path": "target/perf-hedged-adaptive-returned-build.log",
+      "sha256": "b4015251d3004b1db98d4378861d211c20a033ff8c1a2f50d648308f6f8d664d",
+      "tail": "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)\n    Finished `release` profile [optimized] target(s) in 10.20s\n"
+    },
+    {
+      "path": "target/perf-hedged-adaptive-returned-x86-build.log",
+      "sha256": "0e3aad86a168705c1fec3a8901d6eb8234f33c49b01e37592f232634e198f402",
+      "tail": "   Compiling idg v1.6.7 (X:\\github projects\\IDG-internet-download-go)\n    Finished `release` profile [optimized] target(s) in 10.66s\n"
+    }
+  ],
+  "excluded_test_iterations": [
+    {
+      "paths": [
+        "target/perf-20261107-hedged-adaptive-abandoned-reproduction.json",
+        "target/perf-20261107-hedged-adaptive-returned-targeted-runtime.json"
+      ],
+      "reason": "Initial capped fixture held server slots through a final sleep after its body had already completed. Spurious refusals made both variants wait for the original, so this does not isolate the scheduling defect."
+    },
+    {
+      "paths": [
+        "target/perf-20261107-hedged-adaptive-abandoned-corrected-reproduction.json",
+        "target/perf-20261107-hedged-adaptive-returned-corrected-runtime.json"
+      ],
+      "reason": "Corrected final-write capacity release, but the first ordering assertion included single-chunk tail hedges. Both passed. The final regression checks the first later multi-chunk group, failing the preserved old executable and passing the fix."
+    }
+  ],
+  "limitations": [
+    "The initial three-helper trial and doubling policy remain experimental. The original valid stream is preserved. Cancelled group leases return unfinished work; terminal helper failures disarm the lease to avoid blind retries.",
+    "All 75 timed files across the two stages verify. Latest 51-file cohort has median desktop/adaptive C 4.117/4.245, D 6.065/6.761 and B 1.334/1.259 seconds. The adaptive policy still loses C and D.",
+    "Latest public adaptive/zero/curl medians: Rust 1.654/1.343/1.438, Node .779/.739/.778, Python 1.036/1.116/1.137. Rust and Node losses are retained; network variation remains material.",
+    "Three repetitions cover all positions for three-tool cohorts and both positions for two-tool cohorts. They do not eliminate network variation or pair independently random D faults.",
+    "C is an explicitly scaled 32 MiB exploration. B and D are standard sizes. Downloaded publisher artifacts are never executed.",
+    "64 real-wire expected outcomes pass on the actual x64/x86 binaries; 68 example tests pass per architecture, seven external cases ignored each. Latest clippy passes both architectures.",
+    "Windows Computer Use native pipe remains unavailable. No packaged GUI/tray/cold-start verification or new release is implied.",
+    "CI run 42323276820 passes both architectures for earlier 06e3801, before this adaptive work."
+  ],
+  "raw_bundle": {
+    "path": "hedged-stream-cancelled-groups.raw.json.gz",
+    "format": "gzip-compressed UTF-8 JSON",
+    "sha256": "5a6f050647ffdec3daba1da99925b3cf3ed7c8c7223065162fd72dd281369d84",
+    "uncompressed_sha256": "14ea119bbcd311c1ceb14ca286c2175532c321767473d7e748e8c137b620df93",
+    "uncompressed_bytes": 764887
+  },
+  "runtime": [
+    {
+      "path": "target/perf-20261107-hedged-adaptive-returned-full-runtime.json",
+      "sha256": "1f53d5241742bf21e721dab753cc2f3a6f48161a09aec0b039b0230fb67895bc",
+      "binary_sha256": "8181601fce9c3912ec2288039ca3d666a1e37b07ad39ee03d235fa374419e165",
+      "cases": 32,
+      "verified": 32
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-returned-x86-full-runtime.json",
+      "sha256": "7dbaf66c5e945abd67c3210af764e98b7c980759147d6b524f6e591248323e53",
+      "binary_sha256": "432a06375596885990570124a8ba9676ba0816af06c058c8590f14482392f043",
+      "cases": 32,
+      "verified": 32
+    }
+  ],
+  "cohorts": [
+    {
+      "path": "target/perf-20261107-hedged-adaptive-trial3-c-cap.json",
+      "sha256": "91f39af2a8137e15216338db2d5aaf89c0c136606087ec7887ad8d65d88aac31",
+      "summary": {
+        "C": {
+          "IDG": {
+            "count": 3,
+            "median_seconds": 4.117187900003046
+          },
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 5.542353400029242
+          },
+          "IDG-hedged-4": {
+            "count": 3,
+            "median_seconds": 4.035313800093718
+          }
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-trial3-d-manual.json",
+      "sha256": "e9a48a4387f2b344248e3ae204ed94c30aa9846ec556e323419a0efb8c7e4894",
+      "summary": {
+        "D": {
+          "IDG": {
+            "count": 3,
+            "median_seconds": 6.0067335000494495
+          },
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 6.772796600009315
+          }
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-trial3-b-counts.json",
+      "sha256": "3f1515ee51892b66bf866af329b9f51712d310033c8dcbda300675d029bf753d",
+      "summary": {
+        "B": {
+          "IDG": {
+            "count": 3,
+            "median_seconds": 1.3055778000270948
+          },
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 1.2620850000530481
+          },
+          "IDG-hedged-4": {
+            "count": 3,
+            "median_seconds": 1.1092923000687733
+          }
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-returned-c-cap.json",
+      "sha256": "42e24194d30a033e9213dd139fb26456ed69b489ed8ae05e018b4959b0ee2051",
+      "summary": {
+        "C": {
+          "IDG": {
+            "count": 3,
+            "median_seconds": 4.117154400097206
+          },
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 4.245071900077164
+          },
+          "IDG-hedged-4": {
+            "count": 3,
+            "median_seconds": 4.038289800053462
+          }
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-returned-d-manual.json",
+      "sha256": "950427bd3eb8e8b6140a724a1b8945df8d42de0b87c81969e5c16a8746b98e18",
+      "summary": {
+        "D": {
+          "IDG": {
+            "count": 3,
+            "median_seconds": 6.065323299961165
+          },
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 6.761178299901076
+          }
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-returned-b-counts.json",
+      "sha256": "db3ef9e70801a2d6ade4897ea6ef4453b858ae593b971262693059ab8c54530c",
+      "summary": {
+        "B": {
+          "IDG": {
+            "count": 3,
+            "median_seconds": 1.3336893999949098
+          },
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 1.2586482999613509
+          },
+          "IDG-hedged-4": {
+            "count": 3,
+            "median_seconds": 1.201303799985908
+          }
+        }
+      }
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-returned-public.json",
+      "sha256": "589eb37938e67dd9d6517e61cac6ddda257a9d3cdb55d90cccfd8ac552b9d02c",
+      "summary": {
+        "E": {
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 1.653701200033538
+          },
+          "IDG-hedged-0": {
+            "count": 3,
+            "median_seconds": 1.3434938000282273
+          },
+          "curl": {
+            "count": 3,
+            "median_seconds": 1.4384387000463903
+          }
+        },
+        "F": {
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 0.7788005999755114
+          },
+          "IDG-hedged-0": {
+            "count": 3,
+            "median_seconds": 0.7389460999984294
+          },
+          "curl": {
+            "count": 3,
+            "median_seconds": 0.7778025000588968
+          }
+        },
+        "G": {
+          "IDG-adaptive": {
+            "count": 3,
+            "median_seconds": 1.0360766999656335
+          },
+          "IDG-hedged-0": {
+            "count": 3,
+            "median_seconds": 1.1162706000031903
+          },
+          "curl": {
+            "count": 3,
+            "median_seconds": 1.1368999000405893
+          }
+        }
+      }
+    }
+  ],
+  "reproduction": [
+    {
+      "path": "target/perf-20261107-hedged-adaptive-abandoned-order-reproduction.json",
+      "sha256": "5509e731006cbd1c1ce633901d8088c09ccb2d2111181639e7e85ba9217125ec",
+      "verified": false
+    },
+    {
+      "path": "target/perf-20261107-hedged-adaptive-returned-order-runtime.json",
+      "sha256": "e46dc5c36505b7cb2edfb439a9ea72c828fd4cc02e23a8737e6cc4fe08e7f5f2",
+      "verified": true
+    }
+  ]
+}

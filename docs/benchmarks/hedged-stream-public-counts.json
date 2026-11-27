@@ -1,0 +1,116 @@
+{
+  "scope": "Same-cohort public helper-count diagnostic; no desktop policy or universal ranking.",
+  "raw_path": "target/perf-20261107-hedged-admission-public-counts.json",
+  "raw_sha256": "6487e7ff37e11118017fa1bd225d4bcbde84fe699b34f1c761f1e59d561e3a90",
+  "summary": {
+    "E": {
+      "IDG": {
+        "count": 5,
+        "median_seconds": 1.463823200087063,
+        "minimum_seconds": 1.425152999931015,
+        "maximum_seconds": 5.951089999987744
+      },
+      "IDG-hedged-0": {
+        "count": 5,
+        "median_seconds": 1.3419374000513926,
+        "minimum_seconds": 1.3140516000567004,
+        "maximum_seconds": 1.6620587999932468
+      },
+      "IDG-hedged-1": {
+        "count": 5,
+        "median_seconds": 1.5430036999750882,
+        "minimum_seconds": 1.3574575999518856,
+        "maximum_seconds": 1.6865271999267861
+      },
+      "IDG-hedged-4": {
+        "count": 5,
+        "median_seconds": 1.4957800999982283,
+        "minimum_seconds": 1.3089642999693751,
+        "maximum_seconds": 1.663018099963665
+      },
+      "curl": {
+        "count": 5,
+        "median_seconds": 1.4924989000428468,
+        "minimum_seconds": 1.3492311000591144,
+        "maximum_seconds": 1.683912199921906
+      }
+    },
+    "F": {
+      "IDG": {
+        "count": 5,
+        "median_seconds": 0.9254594000522047,
+        "minimum_seconds": 0.735025400063023,
+        "maximum_seconds": 1.0612283000955358
+      },
+      "IDG-hedged-0": {
+        "count": 5,
+        "median_seconds": 0.7641419999999925,
+        "minimum_seconds": 0.7520775999873877,
+        "maximum_seconds": 0.8215900999493897
+      },
+      "IDG-hedged-1": {
+        "count": 5,
+        "median_seconds": 0.7828872998943552,
+        "minimum_seconds": 0.748053599963896,
+        "maximum_seconds": 0.8146025999449193
+      },
+      "IDG-hedged-4": {
+        "count": 5,
+        "median_seconds": 0.7958136000670493,
+        "minimum_seconds": 0.7606153000378981,
+        "maximum_seconds": 0.8408224999438971
+      },
+      "curl": {
+        "count": 5,
+        "median_seconds": 0.8105419999919832,
+        "minimum_seconds": 0.797712399973534,
+        "maximum_seconds": 0.8169253000523895
+      }
+    },
+    "G": {
+      "IDG": {
+        "count": 5,
+        "median_seconds": 0.8741546999663115,
+        "minimum_seconds": 0.8256414999486879,
+        "maximum_seconds": 1.0319973999867216
+      },
+      "IDG-hedged-0": {
+        "count": 5,
+        "median_seconds": 0.8622782999882475,
+        "minimum_seconds": 0.8109107000054792,
+        "maximum_seconds": 0.8759878999553621
+      },
+      "IDG-hedged-1": {
+        "count": 5,
+        "median_seconds": 0.9790927999420092,
+        "minimum_seconds": 0.7764556999318302,
+        "maximum_seconds": 1.0236501999897882
+      },
+      "IDG-hedged-4": {
+        "count": 5,
+        "median_seconds": 0.877402100013569,
+        "minimum_seconds": 0.8162204000400379,
+        "maximum_seconds": 1.025826600030996
+      },
+      "curl": {
+        "count": 5,
+        "median_seconds": 0.8478104000678286,
+        "minimum_seconds": 0.7763021000428125,
+        "maximum_seconds": 0.8987513999454677
+      }
+    }
+  },
+  "limitations": [
+    "Five repetitions cover every position of the five-tool rotation per source, but cannot eliminate network variation.",
+    "Public source sizes and hashes were checked against official publisher metadata over HTTPS before timing. Downloaded files were not executed.",
+    "No optional helper is the fastest IDG median on these three sources; curl still leads Python. The large local B workload previously favored four helpers, so one fixed connection count is not accepted universally.",
+    "No new release, package or GUI verification."
+  ],
+  "raw_bundle": {
+    "path": "hedged-stream-public-counts.raw.json.gz",
+    "format": "gzip-compressed UTF-8 JSON",
+    "sha256": "77744aec85e693b593fcebe415c4b10cd4384a311f4ceccee856da309a809367",
+    "uncompressed_sha256": "b119797921548671c091406cd37a8dbb4003d2a2aa79aa4503cbb6d8f525207a",
+    "uncompressed_bytes": 147329
+  }
+}
