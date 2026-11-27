@@ -575,7 +575,9 @@ pub fn filename_from_url(url: &str) -> String {
         }
         .into();
     }
-    if let Some(name) = super::media::default_filename(url) {
+    if let Some(name) =
+        super::media::default_filename(url).or_else(|| super::torrent::magnet_filename(url))
+    {
         return name;
     }
     let Ok(url) = reqwest::Url::parse(url) else {

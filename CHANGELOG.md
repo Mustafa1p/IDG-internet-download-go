@@ -1,3 +1,9 @@
+## 1.6.9 - 2026-11-27
+
+- Route Vimeo video pages and embedded players to Vimeo's player URL while retaining unlisted access hashes and the embedding page's referrer.
+- Refresh the bundled yt-dlp builds. Retry YouTube format lookup or download without browser cookies when they yield no compatible format or player response. Keep the selected format and resolution.
+- Download BitTorrent v1, v2, and hybrid torrents from magnet links and local or browser-provided .torrent files. Save the verified payload into a dedicated folder.
+
 ## 1.6.8 - 2026-11-07
 
 - Reuse a validated initial 2 MiB response for eligible automatic and single-connection downloads, reducing startup requests while retaining fallback for incompatible sources.

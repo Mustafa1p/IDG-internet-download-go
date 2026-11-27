@@ -49,6 +49,8 @@ pub struct AddDownloadRequest {
     pub url: String,
     #[serde(default)]
     pub show_dialog: bool,
+    #[serde(default)]
+    pub torrent: bool,
     pub filename: Option<String>,
     pub save_dir: Option<String>,
     pub segments: Option<usize>,
@@ -83,7 +85,7 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
         build: env!("IDG_BUILD_ID"),
-        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "x": crate::download::media::tools_available(), "social_media": crate::download::media::tools_available(), "music": crate::download::music::ready(), "post_downloads": true}),
+        capabilities: serde_json::json!({"youtube": crate::download::media::tools_available(), "vimeo": crate::download::media::tools_available(), "torrent": crate::download::torrent::tools_available(), "x": crate::download::media::tools_available(), "social_media": crate::download::media::tools_available(), "music": crate::download::music::ready(), "post_downloads": true}),
     })
 }
 
@@ -97,10 +99,12 @@ async fn add_download(
             Json(serde_json::json!({"error": reason})),
         );
     }
-    if !reqwest::Url::parse(&req.url).is_ok_and(|url| matches!(url.scheme(), "http" | "https")) {
+    if !reqwest::Url::parse(&req.url).is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
+        && !crate::download::torrent::magnet(&req.url)
+    {
         return (
             StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": "Use an HTTP or HTTPS download URL"})),
+            Json(serde_json::json!({"error": "Use an HTTP, HTTPS, or BitTorrent magnet link"})),
         );
     }
     if crate::download::media::video_url(&req.url).is_some()
@@ -143,6 +147,16 @@ async fn add_download(
         .filter(|f| !f.is_empty())
         .unwrap_or_else(|| filename_from_url(&req.url));
 
+    if (req.torrent || crate::download::torrent::matches(&req.url, &filename))
+        && !crate::download::torrent::tools_available()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                serde_json::json!({"error": "Torrent tools are missing. Install the complete IDG package."}),
+            ),
+        );
+    }
     let save_path = PathBuf::from(&save_dir).join(safe_filename(&filename));
     let segments = req
         .segments
@@ -150,6 +164,7 @@ async fn add_download(
         .min(32);
 
     let mut item = DownloadItem::new(req.url, save_path, segments);
+    item.torrent_source |= req.torrent;
     item.bandwidth = Arc::new(crate::download::bandwidth::BandwidthLimiter::new(
         state
             .connection_settings

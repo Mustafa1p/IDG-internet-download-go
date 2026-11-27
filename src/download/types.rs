@@ -68,6 +68,7 @@ pub struct DownloadItem {
     pub post_data: Option<String>,
     pub bandwidth: Arc<super::bandwidth::BandwidthLimiter>,
     pub awaiting_confirmation: bool,
+    pub torrent_source: bool,
     pub media_cookies: Option<String>,
     pub media_options: super::media::MediaOptions,
     /// Resolved filename (from `Content-Disposition` or URL path).
@@ -126,6 +127,7 @@ impl DownloadItem {
 
         Self {
             id: Uuid::new_v4().to_string(),
+            torrent_source: super::torrent::matches(&url, &filename),
             url,
             headers: reqwest::header::HeaderMap::new(),
             post_data: None,
@@ -153,7 +155,9 @@ impl DownloadItem {
     }
 
     pub fn supports_pause(&self) -> bool {
-        super::media::video_url(&self.url).is_none() && super::music::source(&self.url).is_none()
+        super::media::video_url(&self.url).is_none()
+            && super::music::source(&self.url).is_none()
+            && !self.torrent_source
     }
 
     /// Download progress as a value in `[0.0, 1.0]`.

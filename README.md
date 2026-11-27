@@ -12,7 +12,7 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 <br/>
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Mustafa1p/IDG-internet-download-go/release.yml?branch=main&style=for-the-badge&logo=github&label=Build)](https://github.com/Mustafa1p/IDG-internet-download-go/actions)
-[![Release](https://img.shields.io/badge/Latest_Release-v1.6.8-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
+[![Release](https://img.shields.io/badge/Latest_Release-v1.6.9-00bcd4?style=for-the-badge)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078d4?style=for-the-badge&logo=windows)](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest)
 
@@ -20,11 +20,11 @@ Developed by **Mustafa Ali**. Supports multiple parallel connections — just li
 
 ## ⬇️ Download
 
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.6.8.exe">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-Setup-v1.6.9.exe">
   <img src="https://img.shields.io/badge/Download%20Installer-Windows%20x64-1976d2?style=for-the-badge&logo=windows&logoColor=white" height="42"/>
 </a>
 &nbsp;&nbsp;
-<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.6.8.zip">
+<a href="https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.6.9.zip">
   <img src="https://img.shields.io/badge/Download%20Extension-Chrome%20%2F%20Edge-F4B400?style=for-the-badge&logo=googlechrome&logoColor=white" height="42"/>
 </a>
 
@@ -95,7 +95,7 @@ is MIT. See [music setup and limitations](docs/music-backend.md).
 
 ## Current desktop
 
-Windows setup: [**x64 (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.8/IDG-Setup-v1.6.8.exe) | [**x86 (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.8/IDG-Setup-v1.6.8-x86.exe).
+Windows setup: [**x64 (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.9/IDG-Setup-v1.6.9.exe) | [**x86 (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.9/IDG-Setup-v1.6.9-x86.exe).
 
 ![IDG Windows 11 Fluent desktop interface](docs/screenshot.png)
 
@@ -137,7 +137,7 @@ It works the same way as **IDM (Internet Download Manager)** — it splits every
 
 ### Step 1 — Download the installer
 
-Choose [**x64 setup (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.8/IDG-Setup-v1.6.8.exe) or [**x86 setup (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.8/IDG-Setup-v1.6.8-x86.exe).
+Choose [**x64 setup (64-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.9/IDG-Setup-v1.6.9.exe) or [**x86 setup (32-bit)**](https://github.com/Mustafa1p/IDG-internet-download-go/releases/download/v1.6.9/IDG-Setup-v1.6.9-x86.exe).
 
 ### Step 2 — Run the installer
 
@@ -178,7 +178,7 @@ start a fresh export from Mail.
 
 ### Step 1 — Download the extension
 
-👉 **[Download IDG-extension-v1.6.8.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.6.8.zip)**
+👉 **[Download IDG-extension-v1.6.9.zip](https://github.com/Mustafa1p/IDG-internet-download-go/releases/latest/download/IDG-extension-v1.6.9.zip)**
 
 ### Step 2 — Extract the ZIP
 
@@ -198,7 +198,7 @@ Use the updated installer, then remove the old extension and load the new `exten
 
 Open the extension popup to see **IDG is connected**, **IDG is ready**, or **IDG is not connected**. To stop IDG on the current website, click **Pause on this website**. Its download overlays disappear immediately and downloads stay with the browser; other websites keep working. Click **Resume on this website** to restore IDG. Site preferences survive browser restarts and apply to all open tabs for that hostname (`www.youtube.com` and `youtube.com` share a preference). The toolbar shows an amber **!** for a paused site, a green check when integration is active and available, or **OFF** when disconnected or disabled. Browser downloads are forwarded automatically on active sites; use the page's YouTube download overlay or the browser context menu for media links. Confirm filenames, formats, and save locations in the desktop app.
 
-If IDG cannot accept a request, the original browser download resumes. YouTube watch pages, Shorts, X/Twitter status videos, Instagram Reels/video posts and TikTok videos are sent to the bundled video downloader, including players that use blob URLs. Paste a post URL into New download or use its Download with IDG button. TikTok formats marked as watermarked are excluded; availability varies by post and region, and embedded creator logos are preserved. Instagram carousels download the first video. Sign in to the source website and use the extension for posts that require your session. Stable 1.4.8 does not export Spotify music. The 1.5.2 preview adds an optional original-service music backend with account setup; see the preview section above. On X, click Download with IDG on the video or paste the post URL into New download; /video/1 selection is preserved. Install both the v1.6.8 desktop app and extension, then reload existing X tabs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
+If IDG cannot accept a request, the original browser download resumes. YouTube watch pages, Shorts, Vimeo video pages and embeds, X/Twitter status videos, Instagram Reels/video posts and TikTok videos are sent to the bundled video downloader, including players that use blob URLs. Paste a post URL into New download or use its Download with IDG button. TikTok formats marked as watermarked are excluded; availability varies by post and region, and embedded creator logos are preserved. Instagram carousels download the first video. Sign in to the source website and use the extension for posts that require your session. Stable 1.4.8 does not export Spotify music. The 1.5.2 preview adds an optional original-service music backend with account setup; see the preview section above. On X, click Download with IDG on the video or paste the post URL into New download; /video/1 selection is preserved. Install both the v1.6.9 desktop app and extension, then reload existing X tabs. Generic blob streams, protected media, and downloads Chrome cannot pause remain in the browser.
 
 For source builds or portable integration, keep `IDG.exe` and `IDG-native.exe` together and run:
 
@@ -244,13 +244,17 @@ Settings includes a GitHub source link beside **Developed by Mustafa Ali**.
 
 Downloads already written to disk remain intact. Download history now persists across restarts. Interrupted transfers remain listed with an explanation; live paused workers are not restored after the application exits. Cookies and authorization headers are excluded from saved history. The Windows folder chooser remains the native OS dialog. Changing the default folder affects manual downloads immediately; the existing browser server takes a fresh default-folder snapshot after restarting IDG.
 
-## YouTube downloads
+## BitTorrent downloads
+
+In **New download**, paste a magnet or a direct .torrent link, or choose **Open .torrent file…** for a file already on your PC. The browser extension can hand off .torrent downloads. IDG downloads single-file and multi-file BitTorrent v1, v2, and hybrid torrents into a new folder. Torrents need a reachable peer or web seed. Closing or cancelling a transfer may require starting it again. This version downloads the whole torrent and stops sharing when it finishes.
+
+## YouTube and Vimeo downloads
 
 Install the **complete v1.4.8 package** and reload **IDG Integration Module**. Quit any older IDG through its tray menu first. Opening the new app repairs Chrome/Edge native-host registration for your Windows account; Settings also has **Repair Chrome / Edge integration**.
 
-Open a YouTube video and click **Download with IDG** over the player, use its browser context menu, or paste a watch/Shorts/youtu.be link into IDG. Choose the video format and quality or an audio format in the desktop chooser. Radio and playlist parameters are removed so the selected video is downloaded once. IDG uses bundled yt-dlp and FFmpeg/FFprobe, plus Deno on x64 or Node.js on x86. Cancel through **Remove**; pause/resume is available for regular direct-file downloads.
+Open a YouTube or Vimeo video and click **Download with IDG** over the player, use its browser context menu, or paste its video link into IDG. Choose the video format and quality or an audio format in the desktop chooser. Radio and playlist parameters are removed so the selected video is downloaded once. IDG uses bundled yt-dlp and FFmpeg/FFprobe, plus Deno on x64 or Node.js on x86. Cancel through **Remove**; pause/resume is available for regular direct-file downloads.
 
-The media tools are pinned and checksum-verified at build time. Their licenses, versions, and source locations are included in `tools/licenses`. Keep the `tools` folder beside `IDG.exe` for portable use. A standalone EXE alone cannot download YouTube videos. Some videos may require an authenticated session or be unavailable; the extension passes the selected site's cookies in a temporary file that is removed when the media job ends. Errors now explain missing registration or an outdated app instead of only showing “IDG unavailable”.
+The media tools are pinned and checksum-verified at build time. Their licenses, versions, and source locations are included in `tools/licenses`. Keep the `tools` folder beside `IDG.exe` for portable use. A standalone EXE alone cannot download YouTube videos. YouTube format lookup and download can retry using a public session when the signed-in extractor returns no matching format. Some videos may require an authenticated session or be unavailable; the extension passes the selected site's cookies in a temporary file that is removed when the media job ends. Errors now explain missing registration or an outdated app instead of only showing “IDG unavailable”.
 
 ## Automatic parallel connections
 

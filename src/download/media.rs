@@ -1,4 +1,4 @@
-//! YouTube and X page downloads through the bundled yt-dlp/FFmpeg/Deno toolchain.
+//! Video page downloads through the bundled yt-dlp/FFmpeg/Deno toolchain.
 use super::types::{Downloads, Status, safe_filename, with_item};
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
@@ -110,7 +110,7 @@ fn cookie_file(contents: Option<&str>) -> Result<Option<tempfile::TempPath>> {
     use std::io::Write;
     if let Some(contents) = contents {
         let mut file = tempfile::Builder::new()
-            .prefix("idg-youtube-")
+            .prefix("idg-video-")
             .suffix(".txt")
             .tempfile()?;
         file.write_all(contents.as_bytes())?;
@@ -119,16 +119,36 @@ fn cookie_file(contents: Option<&str>) -> Result<Option<tempfile::TempPath>> {
         Ok(None)
     }
 }
-pub async fn inspect(url: &str, cookies: Option<&str>) -> Result<MediaInfo> {
-    let tools = tools_dir();
-    inspect_with_tools(url, cookies, &tools).await
+pub async fn inspect(url: &str, cookies: Option<&str>, referer: Option<&str>) -> Result<MediaInfo> {
+    inspect_with_tools(url, cookies, referer, &tools_dir()).await
 }
-async fn inspect_with_tools(url: &str, cookies: Option<&str>, tools: &Path) -> Result<MediaInfo> {
+
+async fn inspect_with_tools(
+    url: &str,
+    cookies: Option<&str>,
+    referer: Option<&str>,
+    tools: &Path,
+) -> Result<MediaInfo> {
+    let url = video_url(url).context("Invalid video URL")?;
+    let result = inspect_attempt(&url, cookies, referer, tools).await;
+    if let Err(error) = &result
+        && retry_without_cookies(&url, cookies.is_some(), &error.to_string())
+    {
+        return inspect_attempt(&url, None, referer, tools).await;
+    }
+    result
+}
+
+async fn inspect_attempt(
+    url: &str,
+    cookies: Option<&str>,
+    referer: Option<&str>,
+    tools: &Path,
+) -> Result<MediaInfo> {
     anyhow::ensure!(
         available_at(tools),
         "Video tools are missing. Install the complete IDG package."
     );
-    let url = video_url(url).context("Invalid video URL")?;
     let cookies = cookie_file(cookies)?;
     let mut command = Command::new(tools.join("yt-dlp.exe"));
     #[cfg(windows)]
@@ -149,6 +169,7 @@ async fn inspect_with_tools(url: &str, cookies: Option<&str>, tools: &Path) -> R
             "--js-runtimes",
         ])
         .arg(js_runtime(tools));
+    add_vimeo_referer(&mut command, url, referer);
     if let Some(cookies) = cookies.as_deref() {
         command.arg("--cookies").arg(cookies);
     }
@@ -164,9 +185,9 @@ async fn inspect_with_tools(url: &str, cookies: Option<&str>, tools: &Path) -> R
         output.status.success(),
         "Could not list formats: {}",
         String::from_utf8_lossy(&output.stderr)
-            .chars()
-            .take(700)
-            .collect::<String>()
+            .lines()
+            .rfind(|line| line.contains("ERROR:"))
+            .unwrap_or("Video downloader exited without listing formats")
     );
     Ok(info_from_json(&serde_json::from_slice(&output.stdout)?))
 }
@@ -251,6 +272,30 @@ pub fn video_url(value: &str) -> Option<String> {
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
     };
+    if matches!(host, "vimeo.com" | "www.vimeo.com" | "player.vimeo.com") {
+        let (id, path_hash) = match parts.as_slice() {
+            ["video", id] if host == "player.vimeo.com" => (*id, None),
+            [id] if host != "player.vimeo.com" => (*id, None),
+            [id, hash] if host != "player.vimeo.com" && safe_id(hash) => (*id, Some(*hash)),
+            _ => return None,
+        };
+        if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let mut player =
+            reqwest::Url::parse(&format!("https://player.vimeo.com/video/{id}")).ok()?;
+        let query_hash = url
+            .query_pairs()
+            .find(|(key, _)| key == "h")
+            .map(|(_, h)| h);
+        if let Some(hash) = path_hash.or(query_hash.as_deref()) {
+            if !safe_id(hash) {
+                return None;
+            }
+            player.query_pairs_mut().append_pair("h", hash);
+        }
+        return Some(player.into());
+    }
     if matches!(
         host,
         "instagram.com" | "www.instagram.com" | "m.instagram.com"
@@ -364,6 +409,27 @@ pub fn video_url(value: &str) -> Option<String> {
     Some(format!("https://www.youtube.com/watch?v={id}"))
 }
 
+fn add_vimeo_referer(command: &mut Command, url: &str, referer: Option<&str>) {
+    let Some(id) = url.strip_prefix("https://player.vimeo.com/video/") else {
+        return;
+    };
+    let referer = referer
+        .and_then(|value| reqwest::Url::parse(value).ok())
+        .filter(|url| {
+            matches!(url.scheme(), "http" | "https")
+                && url.host_str() != Some("player.vimeo.com")
+                && url.username().is_empty()
+                && url.password().is_none()
+        })
+        .map(|mut url| {
+            url.set_fragment(None);
+            url.set_query(None);
+            url.to_string()
+        })
+        .unwrap_or_else(|| format!("https://vimeo.com/{}", id.split('?').next().unwrap_or(id)));
+    command.arg("--referer").arg(referer);
+}
+
 pub fn default_filename(url: &str) -> Option<String> {
     let canonical = video_url(url)?;
     let parsed = reqwest::Url::parse(&canonical).ok()?;
@@ -377,6 +443,9 @@ pub fn default_filename(url: &str) -> Option<String> {
             "{site}-{}.mp4",
             parsed.path().trim_end_matches('/').rsplit('/').next()?
         ));
+    }
+    if parsed.host_str()? == "player.vimeo.com" {
+        return Some(format!("Vimeo-{}.mp4", parsed.path().rsplit('/').next()?));
     }
     if canonical.starts_with("https://x.com/") {
         let id = canonical.split("/status/").nth(1)?.replace('/', "-");
@@ -498,8 +567,6 @@ fn command(
         command.arg("--limit-rate").arg(speed_limit_bps.to_string());
     }
     command
-        .arg("--")
-        .arg(url)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -528,24 +595,57 @@ pub async fn download(downloads: Downloads, id: String) -> Result<()> {
 }
 
 async fn download_with_tools(downloads: Downloads, id: String, tools: PathBuf) -> Result<()> {
-    let result = download_attempt(downloads.clone(), id.clone(), tools.clone()).await;
-    if let Err(error) = &result
-        && refreshable_media_error(&error.to_string())
-    {
-        let cancelled = downloads
+    let mut anonymous = false;
+    let mut refreshed = false;
+    loop {
+        let result =
+            download_attempt(downloads.clone(), id.clone(), tools.clone(), anonymous).await;
+        let Err(error) = &result else { return result };
+        let item = downloads
             .lock()
             .unwrap()
             .iter()
             .find(|item| item.id == id)
-            .is_none_or(|item| item.cancel_flag.load(Ordering::Relaxed));
-        if !cancelled {
-            // A CDN URL may expire after extraction. Run the extractor again,
-            // retaining yt-dlp's partial files and the user's format selection.
+            .cloned();
+        let Some(item) = item else { return result };
+        if item.cancel_flag.load(Ordering::Relaxed) {
+            return result;
+        }
+        let message = error.to_string();
+        if !anonymous && retry_without_cookies(&item.url, item.media_cookies.is_some(), &message) {
+            anonymous = true;
+        } else if !refreshed && refreshable_media_error(&message) {
+            refreshed = true;
             tokio::time::sleep(Duration::from_secs(1)).await;
-            return download_attempt(downloads, id, tools).await;
+        } else {
+            return result.map_err(|error| {
+                if is_youtube(&item.url) && format_unavailable(&message) {
+                    error.context("YouTube did not expose a playable stream for this selection. Try Best available, refresh the browser session, or update IDG")
+                } else {
+                    error
+                }
+            });
         }
     }
-    result
+}
+
+fn is_youtube(url: &str) -> bool {
+    video_url(url).is_some_and(|url| url.starts_with("https://www.youtube.com/watch?"))
+}
+
+fn format_unavailable(message: &str) -> bool {
+    message
+        .to_ascii_lowercase()
+        .contains("requested format is not available")
+}
+
+fn retry_without_cookies(url: &str, has_cookies: bool, message: &str) -> bool {
+    has_cookies
+        && is_youtube(url)
+        && (format_unavailable(message)
+            || message
+                .to_ascii_lowercase()
+                .contains("failed to extract any player response"))
 }
 
 fn refreshable_media_error(message: &str) -> bool {
@@ -566,7 +666,12 @@ fn refreshable_media_error(message: &str) -> bool {
     .any(|reason| message.contains(reason))
 }
 
-async fn download_attempt(downloads: Downloads, id: String, tools: PathBuf) -> Result<()> {
+async fn download_attempt(
+    downloads: Downloads,
+    id: String,
+    tools: PathBuf,
+    anonymous: bool,
+) -> Result<()> {
     let item = downloads
         .lock()
         .unwrap()
@@ -590,18 +695,18 @@ async fn download_attempt(downloads: Downloads, id: String, tools: PathBuf) -> R
         "A file with this name already exists. Choose another filename."
     );
 
-    // Close the handle before yt-dlp opens it. TempPath removes session cookies on every exit path.
-    let cookies = if let Some(contents) = &item.media_cookies {
-        use std::io::Write;
-        let mut file = tempfile::Builder::new()
-            .prefix("idg-youtube-")
-            .suffix(".txt")
-            .tempfile()?;
-        file.write_all(contents.as_bytes())?;
-        Some(file.into_temp_path())
-    } else {
+    if item.cancel_flag.load(Ordering::Relaxed) {
+        with_item(&downloads, &id, |item| {
+            item.status = Status::Cancelled;
+            item.speed_bps = 0.0;
+        });
+        return Ok(());
+    }
+    let cookies = cookie_file(if anonymous {
         None
-    };
+    } else {
+        item.media_cookies.as_deref()
+    })?;
     with_item(&downloads, &id, |item| {
         item.status = Status::Probing;
         item.num_segments = if item.bandwidth.rate() > 0 {
@@ -623,7 +728,16 @@ async fn download_attempt(downloads: Downloads, id: String, tools: PathBuf) -> R
         &item.media_options,
         item.bandwidth.rate(),
     );
+    add_vimeo_referer(
+        &mut downloader,
+        &url,
+        item.headers
+            .get(reqwest::header::REFERER)
+            .and_then(|value| value.to_str().ok()),
+    );
     let mut child = downloader
+        .arg("--")
+        .arg(&url)
         .spawn()
         .context("Could not start the bundled video downloader")?;
     let process_id = child.id();
@@ -771,6 +885,95 @@ mod tests {
         );
         assert!(!output.exists());
         assert_ne!(downloads.lock().unwrap()[0].status, Status::Completed);
+        std::fs::remove_file(tools.join("always-fail")).unwrap();
+        std::fs::remove_file(tools.join("attempts")).unwrap();
+        std::fs::write(tools.join("youtube-cookie-fail"), []).unwrap();
+        let url = "https://www.youtube.com/watch?v=KE0aEBW2syw";
+        let cookies = "# Netscape HTTP Cookie File\\n";
+        let info = inspect_with_tools(url, Some(cookies), None, &tools)
+            .await
+            .unwrap();
+        assert_eq!(info.title, "Recovered YouTube video");
+        assert_eq!(info.heights, [480]);
+        let output = directory.path().join("anonymous.m4a");
+        let mut item = super::super::types::DownloadItem::new(url.into(), output.clone(), 0);
+        item.media_cookies = Some(cookies.into());
+        item.media_options.format = MediaFormat::M4a;
+        let id = item.id.clone();
+        let downloads = Arc::new(Mutex::new(vec![item]));
+        download_with_tools(downloads.clone(), id, tools.clone())
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(output).unwrap(), b"anonymous audio bytes");
+        assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+        assert_eq!(
+            std::fs::read_to_string(tools.join("attempts")).unwrap(),
+            "4"
+        );
+    }
+
+    #[test]
+    fn vimeo_routes_public_and_unlisted_links_to_the_player() {
+        for url in [
+            "https://vimeo.com/1242476309/abc123?share=copy",
+            "https://player.vimeo.com/video/1242476309?h=abc123&autoplay=1",
+        ] {
+            assert_eq!(
+                video_url(url).as_deref(),
+                Some("https://player.vimeo.com/video/1242476309?h=abc123")
+            );
+            assert_eq!(
+                default_filename(url).as_deref(),
+                Some("Vimeo-1242476309.mp4")
+            );
+        }
+        assert!(video_url("https://vimeo.com.evil.test/1242476309").is_none());
+        assert!(video_url("https://vimeo.com/channels").is_none());
+    }
+
+    #[tokio::test]
+    #[ignore = "Live Vimeo download and FFprobe verification"]
+    async fn supplied_vimeo_video_downloads_with_audio_and_video() {
+        let tools = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/tools");
+        let url = "https://vimeo.com/1242476309";
+        let info = inspect_with_tools(url, None, None, &tools).await.unwrap();
+        assert!(info.heights.contains(&240));
+        let folder = tempfile::tempdir().unwrap();
+        let output = folder.path().join("Vimeo sample.mp4");
+        let mut item = super::super::types::DownloadItem::new(url.into(), output.clone(), 8);
+        item.media_options.height = Some(240);
+        let id = item.id.clone();
+        let downloads = Arc::new(Mutex::new(vec![item]));
+        download_with_tools(downloads.clone(), id, tools.clone())
+            .await
+            .unwrap();
+        assert_eq!(downloads.lock().unwrap()[0].status, Status::Completed);
+        let result = Command::new(tools.join("ffprobe.exe"))
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_type,height",
+                "-of",
+                "json",
+            ])
+            .arg(&output)
+            .output()
+            .await
+            .unwrap();
+        assert!(result.status.success());
+        let value: Value = serde_json::from_slice(&result.stdout).unwrap();
+        let streams = value["streams"].as_array().unwrap();
+        assert!(
+            streams
+                .iter()
+                .any(|s| s["codec_type"] == "video" && s["height"] == 240)
+        );
+        assert!(streams.iter().any(|s| s["codec_type"] == "audio"));
+        println!(
+            "Vimeo 240p with audio: {} bytes",
+            std::fs::metadata(output).unwrap().len()
+        );
     }
 
     #[test]
@@ -871,7 +1074,7 @@ mod tests {
                 "https://www.tiktok.com/@patroxofficial/video/6742501081818877190",
             ),
         ] {
-            let info = inspect_with_tools(url, None, &tools).await.unwrap();
+            let info = inspect_with_tools(url, None, None, &tools).await.unwrap();
             assert!(!info.heights.is_empty());
             if site == "tiktok" {
                 let mut inspect = Command::new(tools.join("yt-dlp.exe"));
@@ -1018,7 +1221,7 @@ mod tests {
     async fn supplied_x_video_downloads_with_audio_and_video() {
         let tools = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/tools");
         let url = "https://x.com/Talal1/status/2113571139595510128/video/1";
-        let info = inspect_with_tools(url, None, &tools).await.unwrap();
+        let info = inspect_with_tools(url, None, None, &tools).await.unwrap();
         assert!(!info.heights.is_empty());
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("x-video.mp4");
@@ -1136,7 +1339,7 @@ mod tests {
         let test_url = std::env::var("IDG_MEDIA_TEST_URL")
             .unwrap_or_else(|_| "https://www.youtube.com/watch?v=5TBlPQrcweQ".into());
         let url = test_url.as_str();
-        let info = inspect_with_tools(url, None, &tools).await.unwrap();
+        let info = inspect_with_tools(url, None, None, &tools).await.unwrap();
         println!("Available video qualities: {:?}", info.heights);
         assert!(!info.heights.is_empty());
         let directory = tempfile::tempdir().unwrap();
@@ -1227,7 +1430,7 @@ mod tests {
         assert!(args.iter().any(|arg| arg == "--no-playlist"));
         assert!(args.iter().any(|arg| arg.contains("100%% video")));
         assert!(!args.iter().any(|arg| arg == "--limit-rate"));
-        let limited = command(
+        let mut limited = command(
             Path::new("tools"),
             "https://youtu.be/5TBlPQrcweQ",
             Path::new("video.mp4"),
@@ -1236,6 +1439,7 @@ mod tests {
             &MediaOptions::default(),
             1024,
         );
+        limited.args(["--", "https://youtu.be/5TBlPQrcweQ"]);
         let limited: Vec<_> = limited
             .as_std()
             .get_args()

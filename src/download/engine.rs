@@ -56,7 +56,17 @@ pub async fn start_download(
     id: String,
 ) -> Result<()> {
     // ── Read the configuration from shared state ─────────────────────────────
-    let (url, save_path, num_segments, cancel, pause, headers, post_data, bandwidth) = {
+    let (
+        url,
+        save_path,
+        num_segments,
+        cancel,
+        pause,
+        headers,
+        post_data,
+        bandwidth,
+        torrent_source,
+    ) = {
         let guard = downloads
             .lock()
             .map_err(|_| anyhow::anyhow!("lock poisoned"))?;
@@ -73,6 +83,7 @@ pub async fn start_download(
             item.headers.clone(),
             item.post_data.clone(),
             item.bandwidth.clone(),
+            item.torrent_source,
         )
     };
 
@@ -84,6 +95,10 @@ pub async fn start_download(
     }
     if super::media::video_url(&url).is_some() {
         return super::media::download(downloads, id).await;
+    }
+
+    if torrent_source {
+        return super::torrent::download(client, downloads, id).await;
     }
 
     // ── Step 1: Probe ─────────────────────────────────────────────────────────

@@ -1,12 +1,7 @@
-IDG v1.6.8 - safer stalled-download recovery
+IDG v1.6.9 — Vimeo, YouTube recovery, and BitTorrent
 
-- Recover several stalled download ranges using idle connections, resuming from bytes acknowledged by the disk writer.
-- Preserve valid responses while their first headers are pending, during brief healthy gaps and when only a small tail remains. This avoids an unnecessary replacement request that some servers reject with HTTP 403.
-- Reuse the initial validated response for eligible downloads to reduce startup requests. Keep source compatibility fallbacks, credentials, capacity queues, validators and pause/cancel safeguards.
-- Preserve single-use generated exports without replaying their request. Add real-server recovery cases and browser checks for YouTube feed churn and closed-tab races.
+- Download a Vimeo video from its page or embedded player. The link's unlisted access hash is preserved when present.
+- YouTube uses refreshed yt-dlp builds. If a signed-in session yields no compatible format, IDG can retry using the public session while keeping the selected output format and resolution.
+- Paste a magnet or direct .torrent link into New download, use Open .torrent file…, or hand off a .torrent download from the browser. IDG downloads BitTorrent v1, v2, and hybrid torrents into a new folder. This release stops sharing when the transfer finishes and does not offer per-file selection or persistent torrent resume.
 
-Includes the previous responsive format/quality dialog, colored interface, YouTube homepage, media-link refresh and updater fixes. Experimental automatic-helper work remains outside the desktop downloader. Throughput varies by source and workload; no universal speed or all-hardware claim is made.
-
-Install the matching desktop app and extension, then reload website tabs. This package uses extension ID blmjnmockbofpnipcniflmalfmiaolcj and contains no background/*.svg assets. The reported omiebabagdcfedkhfmjlndcpocnafcpb ID should be checked for an old or conflicting installation.
-
-Windows x64/x86 installers, portable packages, extension ZIP and SHA-256 checksums are included. Actual packaged GUI/tray/cold-start verification remains incomplete because Windows desktop automation was unavailable. Persistent source refusals remain visible errors.
+Install the matching desktop app and browser extension, then reload existing video tabs. Windows x64 and x86 installers, portable packages, extension ZIP, and SHA-256 checksums are included. Legacy Windows versions and native ARM64 packages are outside this release.

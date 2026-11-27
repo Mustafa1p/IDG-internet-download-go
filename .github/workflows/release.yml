@@ -117,8 +117,11 @@ jobs:
         with:
           path: target/media-cache
           key: media-tools-${{ hashFiles('installer/media-tools*.json') }}
-      - name: Fetch pinned YouTube tools
+      - name: Fetch pinned media and BitTorrent tools
         run: python installer/fetch-media-tools.py ${{ matrix.arch }}
+      - name: Verify BitTorrent v1, v2 and hybrid transfers with bundled tools
+        run: |
+          & '${{ matrix.build_dir }}/tools/torrent/python.exe' -I -X utf8 tests/torrent-package-smoke.py
       - name: Verify music output protocol and cancellation
         run: cargo test --locked ${{ matrix.cargo_args }} --bin IDG worker_protocol_requires_verified_audio_and_honors_cancel -- --ignored
       - name: Package portable app and extension

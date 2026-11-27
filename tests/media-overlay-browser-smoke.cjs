@@ -19,6 +19,8 @@ const { chromium } = require(require.resolve('playwright-core', { paths: [proces
     });
     const cases = [
       ['YouTube', 'https://www.youtube.com/watch?v=5TBlPQrcweQ', 'https://www.youtube.com/watch?v=BaW_jenozKc'],
+      ['Vimeo', 'https://vimeo.com/1242476309', 'https://vimeo.com/1244858801'],
+      ['Vimeo player', 'https://player.vimeo.com/video/1242476309', 'https://player.vimeo.com/video/1244858801?h=abc123'],
       ['X', 'https://x.com/Talal1/status/2113571139595510128/video/1', 'https://x.com/other/status/123/video/1'],
       ['Instagram', 'https://www.instagram.com/reel/Chunk8-jurw/', 'https://www.instagram.com/reel/OtherPost/'],
       ['TikTok', 'https://www.tiktok.com/@patroxofficial/video/6742501081818877190', 'https://www.tiktok.com/@other/video/123'],

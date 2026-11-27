@@ -204,9 +204,13 @@ async function updateServerStatus() {
   return { interceptEnabled, serverOnline, installed, serverVersion: lastHealth?.version, youtubeReady: lastHealth?.capabilities?.youtube === true, error: connectionError };
 }
 
+function torrentMime(mime) {
+  return ["application/x-bittorrent", "application/torrent"].includes(mime?.split(";")[0].trim().toLowerCase());
+}
+
 function shouldIntercept(url, mime, filesize, filename = "") {
   if (!interceptEnabled || !validUrl(url)) return false;
-  if (isMailExport(url) || mime?.split(";")[0].trim().toLowerCase() === "message/rfc822") return true;
+  if (torrentMime(mime) || isMailExport(url) || mime?.split(";")[0].trim().toLowerCase() === "message/rfc822") return true;
   if (mime && INTERCEPT_MIME.has(mime.split(";")[0].trim().toLowerCase()) &&
       (!filesize || filesize < 0 || filesize >= MIN_SIZE_BYTES)) return true;
   return [new URL(url).pathname, filename].some(name => INTERCEPT_EXT.has(name.split(".").pop().toLowerCase()));
@@ -246,6 +250,16 @@ function xVideoUrl(value) {
     return `https://x.com${url.pathname.replace(/\/$/, "")}`;
   } catch { return null; }
 }
+function vimeoVideoUrl(value) {
+  try {
+    if (!validUrl(value)) return null;
+    const url = new URL(value);
+    if (url.hostname === "player.vimeo.com" && /^\/video\/\d+\/?$/.test(url.pathname)) return url.href;
+    if (["vimeo.com", "www.vimeo.com"].includes(url.hostname) && /^\/\d+(?:\/[A-Za-z0-9_-]+)?\/?$/.test(url.pathname)) return url.href;
+  } catch {}
+  return null;
+}
+
 function socialVideoUrl(value) {
   try {
     const url = new URL(value);
@@ -291,24 +305,34 @@ function musicPageUrl(value) {
     return url.href;
   } catch { return null; }
 }
-async function sendDownloadRequest(url, filename, referrer, userAgent, postData) {
-  if (!validUrl(url)) return { ok: false, error: "Only HTTP and HTTPS links can be sent to IDG." };
+function magnetUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "magnet:" && url.searchParams.getAll("xt").some(xt => /^urn:bt(?:ih|mh):/.test(xt));
+  } catch { return false; }
+}
+
+async function sendDownloadRequest(url, filename, referrer, userAgent, postData, knownTorrent = false) {
+  const magnet = magnetUrl(url);
+  if (!magnet && !validUrl(url)) return { ok: false, error: "Use an HTTP, HTTPS, or BitTorrent magnet link." };
+  const torrent = knownTorrent || magnet || /\.torrent$/i.test(filename || "") || /\.torrent$/i.test(new URL(url).pathname);
   if (isTokenDownload(url) && (typeof postData !== "string" || !new URLSearchParams(postData).get("token"))) return { ok: false, error: "This download requires a fresh website token. Open the source page and click its download button with the updated IDG extension enabled." };
   const music = musicPageUrl(url);
   if (spotifyPage(url) && !music) return { ok: false, error: "Use a Spotify track, album or playlist link." };
   const youtube = youtubeVideoUrl(url);
   const x = xVideoUrl(url);
   const social = socialVideoUrl(url);
+  const vimeo = vimeoVideoUrl(url);
   if (youtube || x || social) url = youtube || x || social;
   if (music) { url = music; referrer = music; }
   let cookies = null, media_cookies = null;
   try {
     const cookieUrl = social && new URL(url).hostname.endsWith("tiktok.com") ? "https://www.tiktok.com/" : url;
     // Music accounts belong to the encrypted music profile, not browser cookies.
-    const jar = music ? [] : await chrome.cookies.getAll({ url: cookieUrl });
+    const jar = music || magnet ? [] : await chrome.cookies.getAll({ url: cookieUrl });
     if (jar.length) {
       cookies = jar.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
-      if (youtube || x || social) {
+      if (youtube || x || social || vimeo) {
         const field = value => String(value ?? "").replace(/[\t\r\n]/g, "");
         media_cookies = "# Netscape HTTP Cookie File\n" + jar.map(cookie => [
           (cookie.httpOnly ? "#HttpOnly_" : "") + field(cookie.domain),
@@ -319,6 +343,7 @@ async function sendDownloadRequest(url, filename, referrer, userAgent, postData)
     }
   } catch {}
   const download = { url, filename, referrer, cookies, media_cookies, user_agent: userAgent, show_dialog: true };
+  if (torrent) download.torrent = true;
   if (typeof postData === "string") {
     if (postData.length > 65536) return { ok: false, error: "Download form is too large." };
     download.post_data = postData;
@@ -331,6 +356,10 @@ async function sendDownloadRequest(url, filename, referrer, userAgent, postData)
   // Never retry a POST using another transport: a lost response could duplicate it.
   const online = await pingServer();
   try {
+    if (torrent) {
+      const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
+      if (!capability?.capabilities?.torrent) return { ok: false, error: "Install the complete IDG package to download torrents." };
+    }
     if (music) {
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
       if (!capability?.capabilities?.music) return { ok: false, error: "Open IDG Settings > Music to install the original-service backend and connect your account. Update IDG if Music settings are missing." };
@@ -339,8 +368,9 @@ async function sendDownloadRequest(url, filename, referrer, userAgent, postData)
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
       if (!capability?.capabilities?.post_downloads) return { ok: false, error: "POST downloads require IDG 1.4.4 or newer." };
     }
-    if (youtube || x || social) {
+    if (youtube || x || social || vimeo) {
       const capability = online ? lastHealth : await nativeRequest({ type: "ping" });
+      if (vimeo && !capability?.capabilities?.vimeo) return { ok: false, error: "Vimeo requires the complete IDG v1.6.9 package or newer." };
       if (social && !capability?.capabilities?.social_media) return { ok: false, error: "Instagram and TikTok require the complete IDG v1.4.8 package or newer. Update IDG and reopen it." };
       if (x && !capability?.capabilities?.x) {
         return { ok: false, error: "X videos require the complete IDG v1.4.7 package or newer. Quit IDG in the tray, install the update, then reopen IDG." };
@@ -387,7 +417,7 @@ async function interceptDownload(item) {
   // Leave the original browser download intact if IDG cannot be reached.
   let paused = false;
   try { await chrome.downloads.pause(item.id); paused = true; } catch { return; }
-  const result = await sendDownloadToIDG(url, item.filename || null, item.referrer || null, navigator.userAgent);
+  const result = await sendDownloadToIDG(url, item.filename || null, item.referrer || null, navigator.userAgent, undefined, torrentMime(item.mime));
   if (result.ok) {
     try {
       await chrome.downloads.cancel(item.id);
@@ -420,8 +450,8 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   await settingsReady;
   if (!interceptEnabled || isSitePaused(tab?.url) || isSitePaused(info.pageUrl) || isSitePaused(info.frameUrl)) return;
-  const url = musicPageUrl(info.linkUrl) || youtubeVideoUrl(info.linkUrl) || xVideoUrl(info.linkUrl) || socialVideoUrl(info.linkUrl) ||
-    (info.menuItemId === "idg-download-video" ? musicPageUrl(tab?.url) || youtubeVideoUrl(tab?.url) || xVideoUrl(tab?.url) || socialVideoUrl(tab?.url) : null) || info.linkUrl || info.srcUrl;
+  const url = musicPageUrl(info.linkUrl) || vimeoVideoUrl(info.linkUrl) || youtubeVideoUrl(info.linkUrl) || xVideoUrl(info.linkUrl) || socialVideoUrl(info.linkUrl) ||
+    (info.menuItemId === "idg-download-video" ? vimeoVideoUrl(info.frameUrl) || vimeoVideoUrl(tab?.url) || musicPageUrl(tab?.url) || youtubeVideoUrl(tab?.url) || xVideoUrl(tab?.url) || socialVideoUrl(tab?.url) : null) || info.linkUrl || info.srcUrl;
   if (!url || isSitePaused(url)) return;
   const result = await sendDownloadToIDG(url, null, info.pageUrl || tab?.url || null, navigator.userAgent);
   if (!result.ok) {
@@ -460,7 +490,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "download":
         if (isSitePaused(sender.tab?.url) || isSitePaused(sender.url) || isSitePaused(message.referrer) || isSitePaused(message.url)) return { ok: false, error: "IDG is paused on this site." };
         if (sender.tab && !interceptEnabled) return { ok: false, error: "IDG interception is disabled." };
-        return sendDownloadToIDG(message.url, typeof message.filename === "string" ? message.filename : null, sender.tab ? sender.url : message.referrer, navigator.userAgent, message.post_data);
+        return sendDownloadToIDG(message.url, typeof message.filename === "string" ? message.filename : null, sender.tab ? (vimeoVideoUrl(sender.url) ? sender.tab.url || sender.url : sender.url) : message.referrer, navigator.userAgent, message.post_data);
       case "list": {
         // Polling must not start the desktop app.
         if (!await pingServer()) return { ok: false, error: "Open IDG to view your downloads." };

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, music = false, reload = false, diskVersion = "1.3.1", items = [], pausedSites = [], tabs = [], postDownloads = true, closedBadge = false } = {}) {
+function worker({ online = true, accepts = true, enabled = true, migrated = true, native = true, youtube = true, x = true, social = true, vimeo = true, torrent = true, music = false, reload = false, diskVersion = "1.3.1", items = [], pausedSites = [], tabs = [], postDownloads = true, closedBadge = false } = {}) {
   const events = {}, calls = [], reports = [];
   const event = name => ({ addListener: listener => { events[name] = listener; } });
   const chrome = {
@@ -14,7 +14,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
       sendNativeMessage(name, message, callback) {
         calls.push(['native', message]);
         if (!native) this.lastError = { message: 'Native host missing' };
-        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, x, social_media: social, music, post_downloads: postDownloads } } : undefined);
+        callback(native ? { ok: accepts, installed: true, serverOnline: online, capabilities: { youtube, x, social_media: social, vimeo, torrent, music, post_downloads: postDownloads } } : undefined);
         delete this.lastError;
       },
     },
@@ -44,7 +44,7 @@ function worker({ online = true, accepts = true, enabled = true, migrated = true
     if (url.startsWith('chrome-extension://')) return { ok: true, json: async () => ({ version: diskVersion }) };
     if (url.endsWith('/health')) {
       if (!online) throw new Error('Offline');
-      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, x, social_media: social, music, post_downloads: postDownloads } }) };
+      return { ok: true, json: async () => ({ status: 'ok', version: '1.2.0', capabilities: { youtube, x, social_media: social, vimeo, torrent, music, post_downloads: postDownloads } }) };
     }
     calls.push(['post', JSON.parse(options.body)]);
     return { ok: accepts, status: accepts ? 201 : 500 };
@@ -807,4 +807,34 @@ test('YouTube homepage hover previews never hand off expiring CDN URLs', async (
   page.location.pathname = '/watch'; page.location.href = 'https://www.youtube.com/watch?v=KE0aEBW2syw';
   page.navigate();
   assert.equal(page.parent.children.length, 1);
+});
+
+
+test('Vimeo iframe handoff preserves its hash and supplies the embedding page', async () => {
+  const { events, calls } = worker();
+  const frame = 'https://player.vimeo.com/video/1242476309?h=abc123';
+  const page = 'https://example.com/watch';
+  const response = await new Promise(resolve =>
+    events.message({ type: 'download', url: frame }, { tab: { url: page }, url: frame }, resolve)
+  );
+  assert.equal(response.ok, true);
+  const payload = calls.find(call => call[0] === 'post')[1];
+  assert.equal(payload.url, frame);
+  assert.equal(payload.referrer, page);
+  assert.match(payload.media_cookies, /test-cookie/);
+  const old = worker({ vimeo: false });
+  assert.match((await old.message({ type: 'download', url: frame })).error, /1.6.9/);
+});
+
+test('tiny extensionless torrent downloads and magnet links go to the torrent engine', async () => {
+  const { events, calls, message } = worker();
+  await events.created({ ...download, url: 'https://example.com/get?id=1',
+    filename: 'metadata', mime: 'application/x-bittorrent', fileSize: 150 });
+  assert.equal(calls.find(call => call[0] === 'post')[1].torrent, true);
+  const url = 'magnet:?xt=urn:btmh:1220' + 'ab'.repeat(32);
+  assert.equal((await message({ type: 'download', url })).ok, true);
+  const payload = calls.filter(call => call[0] === 'post').at(-1)[1];
+  assert.equal(payload.url, url);
+  assert.equal(payload.cookies, null);
+  assert.equal(payload.torrent, true);
 });

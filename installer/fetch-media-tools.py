@@ -17,6 +17,8 @@ destination.mkdir(parents=True, exist_ok=True)
 cache.mkdir(parents=True, exist_ok=True)
 notices = destination / "licenses"
 notices.mkdir(exist_ok=True)
+torrent_runtime = destination / "torrent"
+torrent_runtime.mkdir(exist_ok=True)
 lock_path = root / ("installer/media-tools-x86.json" if arch == "x86" else "installer/media-tools.json")
 lock = json.loads(lock_path.read_text(encoding="utf-8"))
 
@@ -44,6 +46,20 @@ for tool in lock["tools"]:
                 path = Path(member.filename)
                 if member.is_dir():
                     continue
+                if tool["format"] == "torrent-python":
+                    if len(path.parts) == 1:
+                        target = torrent_runtime / path.name
+                        with package.open(member) as source, target.open("wb") as output:
+                            shutil.copyfileobj(source, output)
+                    continue
+                if tool["format"] == "torrent-wheel":
+                    # Keep the extension in its wheel package; importlib loads its .pyd.
+                    if len(path.parts) == 2 and path.parts[0] == "libtorrent" and path.suffix == ".pyd":
+                        target = torrent_runtime / path
+                        target.parent.mkdir(exist_ok=True)
+                        with package.open(member) as source, target.open("wb") as output:
+                            shutil.copyfileobj(source, output)
+                    continue
                 is_binary = (path.suffix.lower() in {".exe", ".dll"} and path.name != "ffplay.exe"
                              and (tool["format"] == "zip" or "bin" in path.parts))
                 is_notice = "license" in path.name.lower() or "copying" in path.name.lower()
@@ -54,6 +70,10 @@ for tool in lock["tools"]:
     for index, url in enumerate(tool["licenses"]):
         fetch(url, notices / f"{tool['name']}-{index}-{url.rsplit('/', 1)[-1]}.txt")
     print(f"Verified {tool['name']} {tool['tag']}", flush=True)
+
+shutil.copyfile(root / "torrent/worker.py", torrent_runtime / "worker.py")
+if not (torrent_runtime / "python.exe").is_file() or not any((torrent_runtime / "libtorrent").glob("*.pyd")):
+    raise SystemExit("Missing bundled BitTorrent runtime or module")
 
 # The complete GPLv3 text was already fetched from FFmpeg's pinned source revision.
 # Reuse it rather than making release packaging depend on another host's uptime.

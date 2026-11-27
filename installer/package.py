@@ -29,11 +29,16 @@ for name in ("bridge.py", "setup.py", "upstream.json", "requirements-lock.txt", 
     if not (root / "music" / name).is_file():
         raise SystemExit(f"Missing music backend source or license: {name}")
 tools = build / "tools"
-for name in ("yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "node.exe" if arch == "x86" else "deno.exe", "licenses/upstream-sources.json"):
+torrent_abi = "win32" if arch == "x86" else "win_amd64"
+for name in (
+    "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "node.exe" if arch == "x86" else "deno.exe",
+    "licenses/upstream-sources.json", "torrent/python.exe", "torrent/worker.py",
+    f"torrent/libtorrent/__init__.cp312-{torrent_abi}.pyd",
+):
     if not (tools / name).is_file():
         raise SystemExit("Run python installer/fetch-media-tools.py before packaging; media tools must be included.")
 # Reject mislabeled packages, including incompatible helper executables and DLLs.
-for path in [build / "IDG.exe", build / "IDG-native.exe", *tools.rglob("*.exe"), *tools.rglob("*.dll")]:
+for path in [build / "IDG.exe", build / "IDG-native.exe", *tools.rglob("*.exe"), *tools.rglob("*.dll"), *tools.rglob("*.pyd")]:
     with path.open("rb") as source:
         if source.read(2) != b"MZ": raise SystemExit(f"Invalid Windows binary: {path}")
         source.seek(0x3c)

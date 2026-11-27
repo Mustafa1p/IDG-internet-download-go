@@ -10,6 +10,8 @@ use std::{
 struct Record {
     id: String,
     url: String,
+    #[serde(default)]
+    torrent_source: bool,
     path: PathBuf,
     filename: String,
     total: Option<u64>,
@@ -38,6 +40,7 @@ fn load(path: &Path) -> anyhow::Result<Vec<DownloadItem>> {
     Ok(records.into_iter().map(|r| {
         let mut item = DownloadItem::new(r.url, r.path, 0);
         item.id = r.id;
+        item.torrent_source |= r.torrent_source;
         item.filename = r.filename;
         item.total_bytes = r.total;
         item.downloaded_bytes = r.downloaded;
@@ -59,6 +62,7 @@ fn save(path: &Path, items: &[DownloadItem]) -> anyhow::Result<()> {
         .map(|i| Record {
             id: i.id.clone(),
             url: i.url.clone(),
+            torrent_source: i.torrent_source,
             path: i.save_path.clone(),
             filename: i.filename.clone(),
             total: i.total_bytes,
