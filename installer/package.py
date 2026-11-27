@@ -29,11 +29,18 @@ for name in ("bridge.py", "setup.py", "upstream.json", "requirements-lock.txt", 
     if not (root / "music" / name).is_file():
         raise SystemExit(f"Missing music backend source or license: {name}")
 tools = build / "tools"
-for name in ("yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "node.exe" if arch == "x86" else "deno.exe", "licenses/upstream-sources.json"):
+torrent_abi = "win32" if arch == "x86" else "win_amd64"
+for name in (
+    "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "node.exe" if arch == "x86" else "deno.exe",
+    "licenses/upstream-sources.json", "licenses/vc-runtime.json",
+    "torrent/python.exe", "torrent/worker.py", "torrent/msvcp140.dll", "torrent/vcruntime140.dll",
+    *(() if arch == "x86" else ("torrent/vcruntime140_1.dll",)),
+    f"torrent/libtorrent/__init__.cp312-{torrent_abi}.pyd",
+):
     if not (tools / name).is_file():
         raise SystemExit("Run python installer/fetch-media-tools.py before packaging; media tools must be included.")
 # Reject mislabeled packages, including incompatible helper executables and DLLs.
-for path in [build / "IDG.exe", build / "IDG-native.exe", *tools.rglob("*.exe"), *tools.rglob("*.dll")]:
+for path in [build / "IDG.exe", build / "IDG-native.exe", *tools.rglob("*.exe"), *tools.rglob("*.dll"), *tools.rglob("*.pyd")]:
     with path.open("rb") as source:
         if source.read(2) != b"MZ": raise SystemExit(f"Invalid Windows binary: {path}")
         source.seek(0x3c)
@@ -60,6 +67,7 @@ portable_zip = root / f"dist/IDG-portable-{tag}{suffix}.zip"
 with ZipFile(portable_zip, "w", ZIP_DEFLATED) as archive:
     for binary in ("IDG.exe", "IDG-native.exe"):
         archive.write(build / binary, binary)
+    archive.write(tools / "torrent/vcruntime140.dll", "vcruntime140.dll")
     for path in extension_files:
         archive.write(path, path.relative_to(root))
     for path in sorted(tools.rglob("*")):

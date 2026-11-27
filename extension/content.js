@@ -299,9 +299,16 @@
     state.notice.textContent = message;
     state.surface.appendChild(state.notice);
   }
+  function vimeoPage() {
+    if (location.hostname === "player.vimeo.com" && /^\/video\/\d+\/?$/.test(location.pathname)) return location.href;
+    if (["vimeo.com", "www.vimeo.com"].includes(location.hostname) && /^\/\d+(?:\/[A-Za-z0-9_-]+)?\/?$/.test(location.pathname)) return location.href;
+    return null;
+  }
   function mediaKey(media) {
     if (spotifyRows.has(media)) return "spotify-row:" + spotifyRows.get(media).url;
     if (musicSite()) return "music:" + (musicPage() || location.href);
+    const vimeo = vimeoPage();
+    if (vimeo) return vimeo;
     const social = socialPage(media);
     if (social) return social;
     const x = xPage(media);
@@ -528,10 +535,10 @@
         return;
       }
       const youtube = youtubePage();
-      const url = socialPage(media) || xPage(media) || (youtube ? location.href : media.currentSrc || media.src || media.querySelector("source[src]")?.src);
+      const url = vimeoPage() || socialPage(media) || xPage(media) || (youtube ? location.href : media.currentSrc || media.src || media.querySelector("source[src]")?.src);
       if (!url || !/^https?:/.test(url)) {
         button.textContent = "No direct link";
-        button.title = "Open the X, Instagram or TikTok post containing this video, or use an HTTP/HTTPS media link.";
+        button.title = "Open the Vimeo, X, Instagram or TikTok page containing this video, or use an HTTP/HTTPS media link.";
         showMediaNotice(state, button.title);
         return;
       }

@@ -2,15 +2,15 @@
   "tools": [
     {
       "name": "yt-dlp",
-      "tag": "2026.10.10.233141",
-      "url": "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.10.10.233141/yt-dlp_x86.exe",
-      "sha256": "b0e81e90dd1dd2ed5750175ee6db600fcc6111cfb08fdedbf49b0071f0765aad",
+      "tag": "2026.11.24.232653",
+      "url": "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.11.24.232653/yt-dlp_x86.exe",
+      "sha256": "515e5c20bbef4237f6897e6e35b366fb0ace1d08818675454a1cfa09fdafcc3f",
       "format": "exe",
       "licenses": [
-        "https://raw.githubusercontent.com/yt-dlp/yt-dlp/897341241f2bfb2439fe0367f4c7c9ccd29a3828/LICENSE",
-        "https://raw.githubusercontent.com/yt-dlp/yt-dlp/897341241f2bfb2439fe0367f4c7c9ccd29a3828/THIRD_PARTY_LICENSES.txt"
+        "https://raw.githubusercontent.com/yt-dlp/yt-dlp/da452a569fb3d04091468d920f9b9e68512e0373/LICENSE",
+        "https://raw.githubusercontent.com/yt-dlp/yt-dlp/da452a569fb3d04091468d920f9b9e68512e0373/THIRD_PARTY_LICENSES.txt"
       ],
-      "source": "https://github.com/yt-dlp/yt-dlp/tree/897341241f2bfb2439fe0367f4c7c9ccd29a3828"
+      "source": "https://github.com/yt-dlp/yt-dlp/tree/da452a569fb3d04091468d920f9b9e68512e0373"
     },
     {
       "name": "ffmpeg",
@@ -32,6 +32,26 @@
       "licenses": [
         "https://raw.githubusercontent.com/nodejs/node/v22.23.4/LICENSE"
       ]
+    },
+    {
+      "name": "python-torrent",
+      "tag": "3.12.10",
+      "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-win32.zip",
+      "sha256": "084b9eb24cb848605c895d05b738fbc2572efc8b4c18c415a824065864a2b853",
+      "format": "torrent-python",
+      "licenses": [],
+      "source": "https://github.com/python/cpython/tree/v3.12.10"
+    },
+    {
+      "name": "libtorrent",
+      "tag": "2.1.3",
+      "url": "https://files.pythonhosted.org/packages/23/da/71a34bdb0026d26364b2badeec2ddfac07dbb9d27b8377cab774426730ec/libtorrent-2.1.3-cp312-cp312-win32.whl",
+      "sha256": "2ee784b1a4354da04d6f1e28a9b00ecb12beefdc15e0a74afbeb7376c14d8308",
+      "format": "torrent-wheel",
+      "licenses": [
+        "https://raw.githubusercontent.com/arvidn/libtorrent/v2.1.3/COPYING"
+      ],
+      "source": "https://github.com/arvidn/libtorrent/tree/v2.1.3"
     }
   ]
 }

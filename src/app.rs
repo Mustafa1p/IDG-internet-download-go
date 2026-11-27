@@ -725,7 +725,10 @@ impl IDGApp {
             && let Ok(text) = cb.get_text()
         {
             let t = text.trim().to_string();
-            if t.starts_with("http://") || t.starts_with("https://") {
+            if t.starts_with("http://")
+                || t.starts_with("https://")
+                || crate::download::torrent::magnet(&t)
+            {
                 self.dialog.filename = filename_from_url(&t);
                 self.dialog.url = t;
             }
@@ -813,6 +816,22 @@ impl IDGApp {
                     }
                 });
 
+                if ui.small_button("Open .torrent file…").clicked()
+                    && let Some(file) = rfd::FileDialog::new().add_filter("BitTorrent", &["torrent"]).pick_file()
+                    && let Ok(url) = reqwest::Url::from_file_path(file)
+                {
+                    self.dialog.url = url.into();
+                    self.dialog.filename = filename_from_url(&self.dialog.url);
+                    self.dialog.filename_edited = false;
+                }
+                let torrent = crate::download::torrent::matches(self.dialog.url.trim(), &self.dialog.filename)
+                    || self.pending_browser_id.as_ref().is_some_and(|id| self.downloads.lock().unwrap().iter().any(|item| {
+                        &item.id == id && item.url == self.dialog.url.trim() && item.torrent_source
+                    }));
+                if torrent {
+                    ui.label("Torrent files will be saved in a new folder.");
+                }
+
                 if let Some(source) = crate::download::music::source(&self.dialog.url) {
                     let old_format = self.dialog.media_options.format;
                     ui.separator();
@@ -836,7 +855,7 @@ impl IDGApp {
                 ui.horizontal(|ui| {
                     ui.add_sized(
                         [62.0, 22.0],
-                        egui::Label::new(RichText::new("Filename").color(TEXT_DIM)),
+                        egui::Label::new(RichText::new(if torrent { "Folder name" } else { "Filename" }).color(TEXT_DIM)),
                     );
                     if ui
                         .add(
@@ -888,8 +907,8 @@ impl IDGApp {
                         if cancel.clicked() {
                             should_close = true;
                         }
-                        let can = reqwest::Url::parse(self.dialog.url.trim())
-                            .is_ok_and(|u| matches!(u.scheme(), "http" | "https"))
+                        let can = (reqwest::Url::parse(self.dialog.url.trim())
+                            .is_ok_and(|u| matches!(u.scheme(), "http" | "https")) || torrent)
                             && media::unsupported_reason(self.dialog.url.trim()).is_none();
                         ui.add_enabled_ui(can, |ui| {
                             if ui
@@ -914,6 +933,7 @@ impl IDGApp {
                                     let mut downloads = self.downloads.lock().unwrap();
                                     if let Some(item) = downloads.iter_mut().find(|i| i.id == id) {
                                         item.url = url;
+                                        item.torrent_source = torrent;
                                         item.filename = safe_filename(&name);
                                         item.save_path = save_path;
                                         item.preserve_filename = self.dialog.filename_edited;
@@ -1092,20 +1112,32 @@ impl IDGApp {
             task.abort();
         }
         let url = self.dialog.url.clone();
-        let cookies = self.pending_browser_id.as_ref().and_then(|id| {
-            self.downloads
-                .lock()
-                .unwrap()
-                .iter()
-                .find(|i| &i.id == id)
-                .and_then(|i| i.media_cookies.clone())
-        });
+        let (cookies, referer) = self
+            .pending_browser_id
+            .as_ref()
+            .and_then(|id| {
+                self.downloads
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .find(|i| &i.id == id)
+                    .map(|i| {
+                        (
+                            i.media_cookies.clone(),
+                            i.headers
+                                .get(reqwest::header::REFERER)
+                                .and_then(|value| value.to_str().ok())
+                                .map(str::to_owned),
+                        )
+                    })
+            })
+            .unwrap_or_default();
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.dialog.media_rx = Some(rx);
         self.dialog.media_error = None;
         let ctx = ctx.clone();
         self.dialog.media_task = Some(self.rt.spawn(async move {
-            let result = media::inspect(&url, cookies.as_deref())
+            let result = media::inspect(&url, cookies.as_deref(), referer.as_deref())
                 .await
                 .map_err(|e| e.to_string());
             let _ = tx.send(result);
@@ -1439,7 +1471,11 @@ impl IDGApp {
             }
             "OpenFolder" => {
                 if let Some(i) = items.iter().find(|i| i.id == id)
-                    && let Some(d) = i.save_path.parent()
+                    && let Some(d) = if i.torrent_source && i.status == Status::Completed {
+                        Some(i.save_path.as_path())
+                    } else {
+                        i.save_path.parent()
+                    }
                 {
                     open_path(d);
                 }

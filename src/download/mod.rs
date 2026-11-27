@@ -16,6 +16,7 @@ pub mod music;
 pub mod probe;
 pub mod request;
 pub mod segment;
+pub mod torrent;
 pub mod types;
 pub mod writer;
 

@@ -23,7 +23,7 @@ $files = @($Path | ForEach-Object {
     $item = Get-Item -LiteralPath $_
     if ($item.PSIsContainer) {
         Get-ChildItem -LiteralPath $item.FullName -Recurse -File |
-            Where-Object Extension -In '.exe', '.dll', '.ps1'
+            Where-Object Extension -In '.exe', '.dll', '.pyd', '.ps1'
     } else { $item }
 } | Sort-Object FullName -Unique)
 if ($files.Count -eq 0) { throw 'No executable files found to sign or verify.' }

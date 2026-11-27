@@ -1,8 +1,10 @@
 """Fetch pinned upstream media tools, verify SHA-256, and preserve their notices."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import urllib.request
 from zipfile import ZipFile
@@ -17,6 +19,8 @@ destination.mkdir(parents=True, exist_ok=True)
 cache.mkdir(parents=True, exist_ok=True)
 notices = destination / "licenses"
 notices.mkdir(exist_ok=True)
+torrent_runtime = destination / "torrent"
+torrent_runtime.mkdir(exist_ok=True)
 lock_path = root / ("installer/media-tools-x86.json" if arch == "x86" else "installer/media-tools.json")
 lock = json.loads(lock_path.read_text(encoding="utf-8"))
 
@@ -25,6 +29,40 @@ def fetch(url, path):
     request = urllib.request.Request(url, headers={"User-Agent": "IDG-media-tools"})
     with urllib.request.urlopen(request, timeout=120) as response, path.open("wb") as target:
         shutil.copyfileobj(response, target)
+
+
+def stage_cpp_runtime():
+    # Use Microsoft's redistributable files from the installed Visual Studio toolchain.
+    vswhere = Path(os.environ["ProgramFiles(x86)"]) / "Microsoft Visual Studio/Installer/vswhere.exe"
+    if not vswhere.is_file():
+        raise SystemExit("Install the Visual Studio C++ build tools and VC++ Redistributable component.")
+    installs = subprocess.check_output(
+        [str(vswhere), "-products", "*", "-format", "json", "-utf8"], encoding="utf-8-sig"
+    )
+    candidates = [
+        runtime
+        for installation in json.loads(installs)
+        for runtime in (Path(installation["installationPath"]) / "VC/Redist/MSVC")
+        .glob(f"*/{arch}/Microsoft.VC*.CRT")
+        if (runtime / "msvcp140.dll").is_file()
+    ]
+    if not candidates:
+        raise SystemExit(f"Install the Visual Studio C++ Redistributable component for {arch}.")
+    runtime = max(candidates, key=lambda path: tuple(map(int, path.parent.parent.name.split("."))))
+    files = ["msvcp140.dll", "vcruntime140.dll"]
+    if arch == "x64":
+        files.append("vcruntime140_1.dll")
+    hashes = {}
+    for name in files:
+        shutil.copyfile(runtime / name, torrent_runtime / name)
+        with (torrent_runtime / name).open("rb") as source:
+            hashes[name] = hashlib.file_digest(source, "sha256").hexdigest()
+    (notices / "vc-runtime.json").write_text(json.dumps({
+        "architecture": arch,
+        "toolchain_redistributable_directory": runtime.parent.parent.name,
+        "source": "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files",
+        "sha256": hashes,
+    }, indent=2) + "\n", encoding="utf-8")
 
 
 for tool in lock["tools"]:
@@ -44,6 +82,20 @@ for tool in lock["tools"]:
                 path = Path(member.filename)
                 if member.is_dir():
                     continue
+                if tool["format"] == "torrent-python":
+                    if len(path.parts) == 1:
+                        target = torrent_runtime / path.name
+                        with package.open(member) as source, target.open("wb") as output:
+                            shutil.copyfileobj(source, output)
+                    continue
+                if tool["format"] == "torrent-wheel":
+                    # Keep the extension in its wheel package; importlib loads its .pyd.
+                    if len(path.parts) == 2 and path.parts[0] == "libtorrent" and path.suffix == ".pyd":
+                        target = torrent_runtime / path
+                        target.parent.mkdir(exist_ok=True)
+                        with package.open(member) as source, target.open("wb") as output:
+                            shutil.copyfileobj(source, output)
+                    continue
                 is_binary = (path.suffix.lower() in {".exe", ".dll"} and path.name != "ffplay.exe"
                              and (tool["format"] == "zip" or "bin" in path.parts))
                 is_notice = "license" in path.name.lower() or "copying" in path.name.lower()
@@ -54,6 +106,11 @@ for tool in lock["tools"]:
     for index, url in enumerate(tool["licenses"]):
         fetch(url, notices / f"{tool['name']}-{index}-{url.rsplit('/', 1)[-1]}.txt")
     print(f"Verified {tool['name']} {tool['tag']}", flush=True)
+
+stage_cpp_runtime()
+shutil.copyfile(root / "torrent/worker.py", torrent_runtime / "worker.py")
+if not (torrent_runtime / "python.exe").is_file() or not any((torrent_runtime / "libtorrent").glob("*.pyd")):
+    raise SystemExit("Missing bundled BitTorrent runtime or module")
 
 # The complete GPLv3 text was already fetched from FFmpeg's pinned source revision.
 # Reuse it rather than making release packaging depend on another host's uptime.
